@@ -161,20 +161,30 @@ namespace BackupCore
             // 20 (hash) + 256 (data) = 276
             byte[] buffer = new byte[readinblocksize + 20];
             byte[] hash = new byte[20];
-
             try
             {
-                for (int i = 0; i < reader.Length; i+= readinblocksize)
+                for (int i = 0; i < reader.Length; i += readinblocksize)
                 {
                     // Read into buffer leaving 20 bytes for previous hash
                     reader.Read(buffer, 20, readinblocksize);
                     hash = hasher.ComputeHash(buffer);
                     hash.CopyTo(buffer, 0);
-                    newblock.Write(buffer, 20, readinblocksize);
+                    // If we reach the end of the file and file.length % readinblocksize != 0
+                    // the last block we read in will be < readinblocksize bytes, so we need to 
+                    // not write the whole buffer to newblock
+                    if (i + readinblocksize > reader.Length)
+                    {
+                        newblock.Write(buffer, 20, (int)(reader.Length % readinblocksize));
+                    }
+                    else
+                    {
+                        newblock.Write(buffer, 20, readinblocksize);
+                    }
                     // Last byte is 0
                     if (hash[hash.Length - 1] == 0)
                     {
                         hashes_blocks.Add(new HashBlockPair(hash, newblock.ToArray()));
+                        newblock.Dispose();
                         newblock = new MemoryStream();
                         buffer = new byte[readinblocksize + 20];
                     }
