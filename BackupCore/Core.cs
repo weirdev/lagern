@@ -183,7 +183,9 @@ namespace BackupCore
                     // Last byte is 0
                     if (hash[hash.Length - 1] == 0)
                     {
-                        hashes_blocks.Add(new HashBlockPair(hash, newblock.ToArray()));
+                        // Hash the 20 byte hash itself because forcing the last two bytes to 0
+                        // may cause balancing issues later
+                        hashes_blocks.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
                         newblock.Dispose();
                         newblock = new MemoryStream();
                         buffer = new byte[readinblocksize + 20];
@@ -191,7 +193,8 @@ namespace BackupCore
                 }
                 if (newblock.Length != 0)
                 {
-                    hashes_blocks.Add(new HashBlockPair(hash, newblock.ToArray()));
+                    // Hash the hash again for consistency with above
+                    hashes_blocks.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
                 }
             }
             finally
