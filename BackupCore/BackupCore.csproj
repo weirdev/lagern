@@ -43,15 +43,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BackupLocation.cs" />
-    <Compile Include="BTNode.cs" />
+    <Compile Include="BPlusTree.cs" />
+    <Compile Include="BPlusTreeNode.cs" />
     <Compile Include="Core.cs" />
-    <Compile Include="CukooFilter.cs" />
     <Compile Include="HashBin.cs" />
     <Compile Include="HashBlockPair.cs" />
     <Compile Include="HashIndexStore.cs" />
     <Compile Include="HashTools.cs" />
     <Compile Include="BasicMetadata.cs" />
-    <Compile Include="IMemberFilter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SerializableKeyValuePair.cs" />
   </ItemGroup>

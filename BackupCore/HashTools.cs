@@ -33,5 +33,25 @@ namespace BackupCore
             }
             return new string(result);
         }
+
+        public static bool ByteArrayLessThan(byte[] left, byte[] right)
+        {
+            if (left.Length != right.Length)
+            {
+                throw new ArgumentException("The bytes to be compared must be equal");
+            }
+            for (int i = 0; i < left.Length; i++)
+            {
+                if (left[i] < right[i])
+                {
+                    return true;
+                }
+                else if (left[i] > right[i])
+                {
+                    return false;
+                }
+            }
+            return false;
+        }
     }
 }
