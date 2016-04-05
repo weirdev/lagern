@@ -21,11 +21,12 @@ namespace BackupCore
         protected SHA1 hasher { get { return _hasher; } }
 
         // Key = filepath, Value = list of hashes of blocks
-        protected IDictionary<string, IList<string>> FileBlocks = new Dictionary<string, IList<string>>();
+        protected IDictionary<string, IList<byte[]>> FileBlocks = new Dictionary<string, IList<byte[]>>();
         // Key = filepath, Value = File's metadata
         protected IDictionary<string, BasicMetadata> BasicMetaIndex = new Dictionary<string, BasicMetadata>();
-        // Key = hash, Value = Backup location (relative path, position in file and size of block in file)
-        protected IDictionary<string, BackupLocation> LocationDict = new Dictionary<string, BackupLocation>();
+
+        // HashIndexStore holding BackupLocations indexed by hashes (in bytes)
+        HashIndexStore hashstore = new HashIndexStore();
 
         public Core(string src, string dst)
         {
@@ -63,17 +64,19 @@ namespace BackupCore
                 metaserializer.WriteObject(writer, BasicMetaIndex);
             }
 
-            DataContractSerializer locdictserializer = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
-            using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "hashindex"), settings))
-            {
-                locdictserializer.WriteObject(writer, LocationDict);
-            }
+            // TODO : Ability to read in HashIndexStore
+            //DataContractSerializer locdictserializer = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
+            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "hashindex"), settings))
+            //{
+            //    locdictserializer.WriteObject(writer, LocationDict);
+            //}
 
-            DataContractSerializer fileblockserializer = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
-            using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "fileblocks"), settings))
-            {
-                fileblockserializer.WriteObject(writer, FileBlocks);
-            }
+            // TODO : Ability to serialize Dict with byte[]
+            //DataContractSerializer fileblockserializer = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
+            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "fileblocks"), settings))
+            //{
+            //    fileblockserializer.WriteObject(writer, FileBlocks);
+            //}
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -88,10 +91,11 @@ namespace BackupCore
             FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, relfilepath));
             foreach (var hash in FileBlocks[filepath])
             {
-                reader = File.OpenRead(Path.Combine(backuppath_dst, LocationDict[hash].RelativeFilePath));
+                BackupLocation blocation = hashstore.GetBackupLocation(hash);
+                reader = File.OpenRead(Path.Combine(backuppath_dst, blocation.RelativeFilePath));
                 buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, LocationDict[hash].ByteLength);
-                writer.Write(buffer, 0, LocationDict[hash].ByteLength);
+                reader.Read(buffer, 0, blocation.ByteLength);
+                writer.Write(buffer, 0, blocation.ByteLength);
                 reader.Close();
             }
             writer.Close();
@@ -216,19 +220,15 @@ namespace BackupCore
 
             foreach (HashBlockPair block in fileblocks)
             {
-                string hash = HashTools.ByteArrayToHexViaLookup32(block.Hash);
-                if (!LocationDict.ContainsKey(hash))
-                {
-                    SaveBlock(hash, block.Block);
-                }
+                SaveBlock(block.Hash, block.Block);
                 try
                 {
-                    FileBlocks[filepath].Add(hash);
+                    FileBlocks[filepath].Add(block.Hash);
                 }
                 catch (KeyNotFoundException)
                 {
-                    FileBlocks.Add(filepath, new List<string>());
-                    FileBlocks[filepath].Add(hash);
+                    FileBlocks.Add(filepath, new List<byte[]>());
+                    FileBlocks[filepath].Add(block.Hash);
                 }
             }
         }
@@ -239,16 +239,18 @@ namespace BackupCore
             BasicMetaIndex.Add(filepath, bm);
         }
 
-        protected void SaveBlock(string hash, byte[] block)
+        protected void SaveBlock(byte[] hash, byte[] block)
         {
-            string relpath = hash;
+            string relpath = HashTools.ByteArrayToHexViaLookup32(hash);
             string path = Path.Combine(backuppath_dst, relpath);
-
-            FileStream writer = File.OpenWrite(path);
-            writer.Write(block, 0, block.Length);
-            writer.Close();
-            
-            LocationDict.Add(hash, new BackupLocation(relpath, 0, block.Length));
+            BackupLocation posblocation = new BackupLocation(relpath, 0, block.Length);
+            // Have we already stored this 
+            if (!hashstore.AddHash(hash, posblocation))
+            {
+                FileStream writer = File.OpenWrite(path);
+                writer.Write(block, 0, block.Length);
+                writer.Close();
+            }
         }
 
         public string GetRelativePath(string fullpath, string basepath)

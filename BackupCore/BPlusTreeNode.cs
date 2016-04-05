@@ -26,8 +26,23 @@ namespace BackupCore
             Parent = parent;
             NodeSize = nodesize;
             IsLeafNode = isleafnode;
+            Keys = new List<byte[]>();
+            if (IsLeafNode)
+            {
+                Values = new List<BackupLocation>();
+            }
+            else
+            {
+                Children = new List<BPlusTreeNode>();
+            }
         }
 
+        /// <summary>
+        /// Adds a key/value to a leaf node
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <param name="value"></param>
+        /// <returns>True if the key already exists in this node. False otherwise.</returns>
         public bool AddKey(byte[] hash, BackupLocation value)
         {
             if (IsLeafNode != true)
@@ -37,11 +52,11 @@ namespace BackupCore
             }
             // Look for key in node
             int position = 0;
-            for (; !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
-            // Hash already exists in BPlusTree, return false (saving data block not necessary)
-            if (Keys[position].SequenceEqual(hash))
+            for (; position < Keys.Count && !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
+            // Hash already exists in BPlusTree, return true
+            if (position < Keys.Count && Keys[position].SequenceEqual(hash))
             {
-                return false;
+                return true;
             }
             // Hash not in tree, belongs in position "value"
             else
@@ -58,14 +73,19 @@ namespace BackupCore
                     newnode.Keys = Keys.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
                     newnode.Values = Values.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
                     Keys.RemoveRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
-                    Values.RemoveRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
+                    Values.RemoveRange(Values.Count / 2, Values.Count - (Values.Count / 2));
                     // Add the new node to its parent
                     Parent.AddKey(newnode.Keys[0], newnode);
                 }
-                return true;
+                return false;
             }
         }
 
+        /// <summary>
+        /// Adds a key to this internal node connecting this node with child.
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <param name="child"></param>
         public void AddKey(byte[] hash, BPlusTreeNode child)
         {
             if (IsLeafNode == true)
@@ -75,19 +95,20 @@ namespace BackupCore
             }
             // Look for where to put key in node
             int position = 0;
-            for (; !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
+            for (; position < Keys.Count && !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
             // Key "can't" already be in node because it was split from a lower node
             Keys.Insert(position, hash);
             Children.Insert(position + 1, child);
             // Is this node full?
             if (Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
             {
-                // Create a new node and add half of this node's keys/ values to it
+                // Create a new node and add half of this node's keys/ children to it
                 BPlusTreeNode newnode = new BPlusTreeNode(Parent, true, NodeSize);
                 newnode.Keys = Keys.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
-                newnode.Values = Values.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
-                Keys.RemoveRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
-                Values.RemoveRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
+                newnode.Children = Children.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
+                int keycount = Keys.Count;
+                Keys.RemoveRange(keycount / 2, keycount - (keycount / 2));
+                Children.RemoveRange(keycount / 2, keycount - (keycount / 2));
                 byte[] split = Keys[Keys.Count - 1];
                 Keys.RemoveAt(Keys.Count - 1);
 

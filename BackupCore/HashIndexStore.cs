@@ -15,7 +15,7 @@ namespace BackupCore
 
         public HashIndexStore()
         {
-            TreeIndexStore = new BPlusTree(100);
+            TreeIndexStore = new BPlusTree(10);
         }
         
         /// <summary>

@@ -16,8 +16,19 @@ namespace BackupCore
         {
             NodeSize = nodesize;
             Root = new BPlusTreeNode(null, false, NodeSize);
+            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize);
+            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
+            Root.Children.Add(rootchild1);
+            Root.Children.Add(rootchild2);
+            Root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
         }
 
+        /// <summary>
+        /// Adds a hash and backuplocation to the tree
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <param name="blocation"></param>
+        /// <returns>True if hash already exists in tree, False otherwise.</returns>
         public bool AddHash(byte[] hash, BackupLocation blocation)
         {
             // Traverse down the tree
@@ -38,7 +49,7 @@ namespace BackupCore
             while (!node.IsLeafNode)
             {
                 int child = 0;
-                for (; !HashTools.ByteArrayLessThan(node.Keys[child], hash); child++) { }
+                for (; child < node.Keys.Count && !HashTools.ByteArrayLessThan(node.Keys[child], hash); child++) { }
                 node = node.Children[child];
             }
             return node;
