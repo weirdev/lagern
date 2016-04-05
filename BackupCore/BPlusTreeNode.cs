@@ -39,7 +39,7 @@ namespace BackupCore
             int position = 0;
             for (; !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
             // Hash already exists in BPlusTree, return false (saving data block not necessary)
-            if (Keys[position] == hash)
+            if (Keys[position].SequenceEqual(hash))
             {
                 return false;
             }
@@ -109,6 +109,27 @@ namespace BackupCore
                     Parent.Children.Add(newnode);
                 }
             }
+        }
+
+        /// <summary>
+        /// Pulls a record stored in this leaf node. If not found, returns null.
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <returns></returns>
+        public BackupLocation GetRecord(byte[] hash)
+        {
+            if (IsLeafNode != true)
+            {
+                throw new ArgumentException("Get Record only works on interior nodes.");
+            }
+            for (int i = 0; i < Keys.Count; i++)
+            {
+                if (Keys[i].SequenceEqual(hash))
+                {
+                    return Values[i];
+                }
+            }
+            return null;
         }
     }
 }
