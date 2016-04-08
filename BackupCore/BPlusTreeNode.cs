@@ -9,6 +9,9 @@ namespace BackupCore
     class BPlusTreeNode
     {
         public BPlusTreeNode Parent { get; set; }
+        // Only for leaf nodes makes a linked list for efficient in-order traversal
+        public BPlusTreeNode Next { get; set; }
+
         public int NodeSize { get; set; }
 
         public List<byte[]> Keys { get; set; }
@@ -21,7 +24,7 @@ namespace BackupCore
         // Size 99
         public List<BackupLocation> Values { get; set; }
 
-        public BPlusTreeNode(BPlusTreeNode parent, bool isleafnode, int nodesize)
+        public BPlusTreeNode(BPlusTreeNode parent, bool isleafnode, int nodesize, BPlusTreeNode next=null)
         {
             Parent = parent;
             NodeSize = nodesize;
@@ -30,6 +33,7 @@ namespace BackupCore
             if (IsLeafNode)
             {
                 Values = new List<BackupLocation>();
+                Next = next;
             }
             else
             {
@@ -71,7 +75,8 @@ namespace BackupCore
                 if (Keys.Count > (NodeSize-1)) // Nodesize-1 for keys
                 {
                     // Create a new node and add half of this node's keys/ values to it
-                    BPlusTreeNode newnode = new BPlusTreeNode(Parent, true, NodeSize);
+                    BPlusTreeNode newnode = new BPlusTreeNode(Parent, true, NodeSize, Next);
+                    Next = newnode;
                     newnode.Keys = Keys.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
                     newnode.Values = Values.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
                     Keys.RemoveRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));

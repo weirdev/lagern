@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,9 +7,12 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    class BPlusTree
+    class BPlusTree : IEnumerable<KeyValuePair<byte[], BackupLocation>>
     {
         public BPlusTreeNode Root { get; set; }
+
+        // Head of linked list allowing for efficient in order traversal of leaf nodes
+        private BPlusTreeNode Head { get; set; }
 
         public int NodeSize { get; set; }
 
@@ -16,11 +20,12 @@ namespace BackupCore
         {
             NodeSize = nodesize;
             Root = new BPlusTreeNode(null, false, NodeSize);
-            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize);
             BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
+            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2);
             Root.Children.Add(rootchild1);
             Root.Children.Add(rootchild2);
             Root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
+            Head = rootchild1;
         }
 
         /// <summary>
@@ -98,6 +103,24 @@ namespace BackupCore
         public BackupLocation GetRecord(byte[] hash)
         {
             return FindLeafNode(hash).GetRecord(hash);
+        }
+
+        public IEnumerator<KeyValuePair<byte[], BackupLocation>> GetEnumerator()
+        {
+            BPlusTreeNode node = Head;
+            while (node != null)
+            {
+                for (int i = 0; i < node.Keys.Count; i++)
+                {
+                    yield return new KeyValuePair<byte[], BackupLocation>(node.Keys[i], node.Values[i]);
+                }
+                node = node.Next;
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 }
