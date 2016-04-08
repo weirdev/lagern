@@ -31,6 +31,10 @@ namespace BackupCore
         /// <returns>True if hash already exists in tree, False otherwise.</returns>
         public bool AddHash(byte[] hash, BackupLocation blocation)
         {
+            if (hash[0] == 60)
+            {
+                
+            }
             // Traverse down the tree
             BPlusTreeNode node = FindLeafNode(hash);
             bool dosave = node.AddKey(hash, blocation);
@@ -38,6 +42,14 @@ namespace BackupCore
             if (Root.Parent != null)
             {
                 Root = Root.Parent;
+            }
+            if (Root.Children.Count == 9)
+            {
+
+            }
+            if (!dosave)
+            {
+                //PrintTree();
             }
             return dosave;
         }
@@ -49,10 +61,38 @@ namespace BackupCore
             while (!node.IsLeafNode)
             {
                 int child = 0;
-                for (; child < node.Keys.Count && !HashTools.ByteArrayLessThan(node.Keys[child], hash); child++) { }
+                for (; child < node.Keys.Count && !HashTools.ByteArrayLessThan(hash, node.Keys[child]); child++) { }
                 node = node.Children[child];
             }
             return node;
+        }
+
+        private void PrintTree()
+        {
+            using (System.IO.StreamWriter file =
+            new System.IO.StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
+            {
+                Queue<BPlusTreeNode> printqueue = new Queue<BPlusTreeNode>();
+                printqueue.Enqueue(Root);
+                file.WriteLine('*');
+                while (printqueue.Count > 0)
+                {
+                    var node = printqueue.Dequeue();
+                    foreach (var key in node.Keys)
+                    {
+                        file.WriteLine(key[0]);
+                    }
+                    file.WriteLine('-');
+                    if (!node.IsLeafNode)
+                    {
+                        foreach (var child in node.Children)
+                        {
+                            printqueue.Enqueue(child);
+                        }
+                    }
+                }
+            }
+
         }
 
         public BackupLocation GetRecord(byte[] hash)

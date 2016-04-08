@@ -52,15 +52,17 @@ namespace BackupCore
             }
             // Look for key in node
             int position = 0;
-            for (; position < Keys.Count && !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
+            for (; position < Keys.Count && !HashTools.ByteArrayLessThanEqualTo(hash, Keys[position]); position++) { }
             // Hash already exists in BPlusTree, return true
             if (position < Keys.Count && Keys[position].SequenceEqual(hash))
             {
                 return true;
             }
-            // Hash not in tree, belongs in position "value"
+            // Hash not in tree, belongs in position
             else
             {
+
+
                 // Go ahead and add the new key/value then split as normal
                 Keys.Insert(position, hash);
                 Values.Insert(position, value);
@@ -95,7 +97,7 @@ namespace BackupCore
             }
             // Look for where to put key in node
             int position = 0;
-            for (; position < Keys.Count && !HashTools.ByteArrayLessThan(Keys[position], hash); position++) { }
+            for (; position < Keys.Count && !HashTools.ByteArrayLessThan(hash, Keys[position]); position++) { }
             // Key "can't" already be in node because it was split from a lower node
             Keys.Insert(position, hash);
             Children.Insert(position + 1, child);
@@ -103,14 +105,20 @@ namespace BackupCore
             if (Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
             {
                 // Create a new node and add half of this node's keys/ children to it
-                BPlusTreeNode newnode = new BPlusTreeNode(Parent, true, NodeSize);
+                BPlusTreeNode newnode = new BPlusTreeNode(Parent, false, NodeSize);
                 newnode.Keys = Keys.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
-                newnode.Children = Children.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2));
+                newnode.Children = Children.GetRange(Keys.Count / 2, Keys.Count - (Keys.Count / 2) + 1);
                 int keycount = Keys.Count;
                 Keys.RemoveRange(keycount / 2, keycount - (keycount / 2));
-                Children.RemoveRange(keycount / 2, keycount - (keycount / 2));
+                Children.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
                 byte[] split = Keys[Keys.Count - 1];
                 Keys.RemoveAt(Keys.Count - 1);
+
+                // Make all newly split out Children refer to newnode as their parent
+                foreach (var nchild in newnode.Children)
+                {
+                    nchild.Parent = newnode;
+                }
 
                 // Are we !at the root
                 if (Parent != null)
@@ -128,6 +136,7 @@ namespace BackupCore
                     Parent.Children = new List<BPlusTreeNode>();
                     Parent.Children.Add(this);
                     Parent.Children.Add(newnode);
+                    newnode.Parent = Parent;
                 }
             }
         }
