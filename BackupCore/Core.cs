@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 using System.Xml.Serialization;
 using System.Xml;
 using System.Runtime.Serialization;
+using System.Collections.Concurrent;
+using System.Threading;
 
 namespace BackupCore
 {
@@ -37,11 +39,19 @@ namespace BackupCore
         
         public void RunBackup()
         {
-            IEnumerable<string> files = GetFiles();
-            foreach (var file in files)
+            BlockingCollection<string> filequeue = new BlockingCollection<string>();
+            Task getfilestask = Task.Run(() => GetFiles(filequeue));
+            
+            List<Task> backupops = new List<Task>();
+            while (!filequeue.IsCompleted)
             {
-                BackupFile(file);
+                string file;
+                if (filequeue.TryTake(out file))
+                {
+                    backupops.Add(Task.Run(() => BackupFile(file)));
+                }
             }
+            Task.WaitAll(backupops.ToArray());
 
             // Save "index"
             if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
@@ -145,20 +155,63 @@ namespace BackupCore
             }
         }
 
-        protected IEnumerable<string> GetFiles(string path=null)
+        protected void GetFiles(BlockingCollection<string> filequeue, string path=null)
         {
             if (path == null)
             {
                 path = backuppath_src;
             }
 
-            return Directory.EnumerateFiles(path);
+            Stack<string> dirs = new Stack<string>(20);
+
+            dirs.Push(path);
+
+            while (dirs.Count > 0)
+            {
+                string currentDir = dirs.Pop();
+                string[] subDirs;
+                try
+                {
+                    subDirs = Directory.GetDirectories(currentDir);
+                }
+                catch (UnauthorizedAccessException e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+                catch (DirectoryNotFoundException e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+
+                string[] files = null;
+                try
+                {
+                    files = Directory.GetFiles(currentDir);
+                }
+                catch (UnauthorizedAccessException e)
+                {
+
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+                catch (DirectoryNotFoundException e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+
+                foreach (var file in files)
+                {
+                    filequeue.Add(file);
+                }
+            }
+            filequeue.CompleteAdding();
         }
 
-        protected IEnumerable<HashBlockPair> GetFileBlocks(string filepath)
+        protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string filepath)
         {
-            List<HashBlockPair> hashes_blocks = new List<HashBlockPair>();
-
             MemoryStream newblock = new MemoryStream();
             FileStream reader = File.OpenRead(filepath);
             int readinblocksize = 256;
@@ -189,7 +242,7 @@ namespace BackupCore
                     {
                         // Hash the 20 byte hash itself because forcing the last two bytes to 0
                         // may cause balancing issues later
-                        hashes_blocks.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
+                        hashblockqueue.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
                         newblock.Dispose();
                         newblock = new MemoryStream();
                         buffer = new byte[readinblocksize + 20];
@@ -198,14 +251,14 @@ namespace BackupCore
                 if (newblock.Length != 0)
                 {
                     // Hash the hash again for consistency with above
-                    hashes_blocks.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
+                    hashblockqueue.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
                 }
             }
             finally
             {
                 reader.Close();
             }
-            return hashes_blocks;
+            hashblockqueue.CompleteAdding();
         }
 
         protected void BackupFile(string filepath)
@@ -216,19 +269,31 @@ namespace BackupCore
 
         protected void BackupFileData(string filepath)
         {
-            IEnumerable<HashBlockPair> fileblocks = GetFileBlocks(filepath);
+            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, filepath));
 
-            foreach (HashBlockPair block in fileblocks)
+            
+            while (!fileblockqueue.IsCompleted)
             {
-                SaveBlock(block.Hash, block.Block);
-                try
+                HashBlockPair block;
+                if (fileblockqueue.TryTake(out block))
                 {
-                    FileBlocks[filepath].Add(block.Hash);
-                }
-                catch (KeyNotFoundException)
-                {
-                    FileBlocks.Add(filepath, new List<byte[]>());
-                    FileBlocks[filepath].Add(block.Hash);
+                    SaveBlock(block.Hash, block.Block);
+                    try
+                    {
+                        lock (FileBlocks[filepath])
+                        {
+                            FileBlocks[filepath].Add(block.Hash);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        lock (FileBlocks)
+                        {
+                            FileBlocks.Add(filepath, new List<byte[]>());
+                            FileBlocks[filepath].Add(block.Hash);
+                        }
+                    }
                 }
             }
         }
@@ -244,12 +309,18 @@ namespace BackupCore
             string relpath = HashTools.ByteArrayToHexViaLookup32(hash);
             string path = Path.Combine(backuppath_dst, relpath);
             BackupLocation posblocation = new BackupLocation(relpath, 0, block.Length);
-            // Have we already stored this 
-            if (!hashstore.AddHash(hash, posblocation))
+            bool alreadystored;
+            lock (hashstore)
             {
-                FileStream writer = File.OpenWrite(path);
-                writer.Write(block, 0, block.Length);
-                writer.Close();
+                // Have we already stored this 
+                alreadystored = hashstore.AddHash(hash, posblocation);
+            }
+            if (!alreadystored)
+            {
+                using (FileStream writer = File.OpenWrite(path))
+                {
+                    writer.Write(block, 0, block.Length);
+                }
             }
         }
 
