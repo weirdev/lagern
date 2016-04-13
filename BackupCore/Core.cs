@@ -309,7 +309,7 @@ namespace BackupCore
             string relpath = HashTools.ByteArrayToHexViaLookup32(hash);
             string path = Path.Combine(backuppath_dst, relpath);
             BackupLocation posblocation = new BackupLocation(relpath, 0, block.Length);
-            bool alreadystored;
+            bool alreadystored = false;
             lock (hashstore)
             {
                 // Have we already stored this 
@@ -320,6 +320,8 @@ namespace BackupCore
                 using (FileStream writer = File.OpenWrite(path))
                 {
                     writer.Write(block, 0, block.Length);
+                    writer.Flush();
+                    writer.Close();
                 }
             }
         }
