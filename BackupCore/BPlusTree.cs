@@ -36,13 +36,11 @@ namespace BackupCore
         /// <returns>True if hash already exists in tree, False otherwise.</returns>
         public bool AddHash(byte[] hash, BackupLocation blocation)
         {
-            if (hash[0] == 60)
-            {
-                
-            }
             // Traverse down the tree
             BPlusTreeNode node = FindLeafNode(hash);
-            bool dosave = node.AddKey(hash, blocation);
+
+            bool dosave = AddKeyToNode(node, hash, blocation);
+
             // Was the root node split?
             if (Root.Parent != null)
             {
@@ -57,6 +55,116 @@ namespace BackupCore
                 //PrintTree();
             }
             return dosave;
+        }
+
+        private bool AddKeyToNode(BPlusTreeNode node, byte[] hash, BackupLocation blocation)
+        {
+            if (node.IsLeafNode != true)
+            {
+                throw new ArgumentException("A child node must be specified with the key"
+                    + " if the node to be added to is an interior node.");
+            }
+            // Look for key in node
+            int position = 0;
+            for (; position < node.Keys.Count && !HashTools.ByteArrayLessThanEqualTo(hash, node.Keys[position]); position++) { }
+            // Hash already exists in BPlusTree, return true
+            if (position < node.Keys.Count && node.Keys[position].SequenceEqual(hash))
+            {
+                return true;
+            }
+            // Hash not in tree, belongs in position
+            else
+            {
+
+
+                // Go ahead and add the new key/value then split as normal
+                node.Keys.Insert(position, hash);
+                node.Values.Insert(position, blocation);
+
+                // Is this node full?
+                if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
+                {
+                    // Create a new node and add half of this node's keys/ values to it
+                    BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, true, NodeSize, node.Next);
+                    node.Next = newnode;
+                    newnode.Keys = node.Keys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+                    newnode.Values = node.Values.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+                    node.Keys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+                    node.Values.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
+                    // Add the new node to its parent
+                    AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
+                }
+                return false;
+            }
+        }
+
+        public void AddKeyToNode(BPlusTreeNode node, byte[] hash, BPlusTreeNode child)
+        {
+            if (node.IsLeafNode == true)
+            {
+                throw new ArgumentException("A value must be specified with the key"
+                    + " if the node to be added to is a leaf node.");
+            }
+            // Look for where to put key in node
+            int position = 0;
+            for (; position < node.Keys.Count && !HashTools.ByteArrayLessThan(hash, node.Keys[position]); position++) { }
+            // Key "can't" already be in node because it was split from a lower node
+            node.Keys.Insert(position, hash);
+            node.Children.Insert(position + 1, child);
+            // Is this node full?
+            if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
+            {
+                // Create a new node and add half of this node's keys/ children to it
+                BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, false, NodeSize);
+                newnode.Keys = node.Keys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+                newnode.Children = node.Children.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1);
+                int keycount = node.Keys.Count;
+                node.Keys.RemoveRange(keycount / 2, keycount - (keycount / 2));
+                node.Children.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
+                byte[] split = node.Keys[node.Keys.Count - 1];
+                node.Keys.RemoveAt(node.Keys.Count - 1);
+
+                // Make all newly split out Children refer to newnode as their parent
+                foreach (var nchild in newnode.Children)
+                {
+                    nchild.Parent = newnode;
+                }
+
+                // Are we !at the root
+                if (node.Parent != null)
+                {
+                    // Add the new node to its parent
+                    AddKeyToNode(node.Parent, split, newnode);
+                }
+                else
+                {
+                    // We just split the root, so make a new one
+                    BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+                    node.Parent = root;
+                    node.Parent.Keys = new List<byte[]>();
+                    node.Parent.Keys.Add(split);
+                    node.Parent.Children = new List<BPlusTreeNode>();
+                    node.Parent.Children.Add(node);
+                    node.Parent.Children.Add(newnode);
+                    newnode.Parent = node.Parent;
+                }
+            }
+        }
+
+        private BackupLocation GetRecordFromNode(BPlusTreeNode node, byte[] hash)
+        {
+            if (node.IsLeafNode != true)
+            {
+                throw new ArgumentException("Get Record only works on interior nodes.");
+            }
+            for (int i = 0; i < node.Keys.Count; i++)
+            {
+                if (node.Keys[i].SequenceEqual(hash))
+                {
+                    return node.Values[i];
+                }
+            }
+            return null;
         }
 
         private BPlusTreeNode FindLeafNode(byte[] hash)
@@ -102,7 +210,7 @@ namespace BackupCore
 
         public BackupLocation GetRecord(byte[] hash)
         {
-            return FindLeafNode(hash).GetRecord(hash);
+            return GetRecordFromNode(FindLeafNode(hash), hash);
         }
 
         public IEnumerator<KeyValuePair<byte[], BackupLocation>> GetEnumerator()
