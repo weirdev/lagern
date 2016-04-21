@@ -15,7 +15,7 @@ namespace Testing
             var backupper = new BackupCore.Core(@"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
             backupper.RunBackup();
             Console.Out.WriteLine("Done.");
-            //Console.In.ReadLine();
+            Console.In.ReadLine();
             backupper.ReconstructFile("random.dat");            
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
