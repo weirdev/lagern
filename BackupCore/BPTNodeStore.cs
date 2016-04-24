@@ -54,12 +54,25 @@ namespace BackupCore
         private void OnRemoval(CacheEntryRemovedArguments arguments)
         {
             BPlusTreeNode node = (BPlusTreeNode)arguments.CacheItem.Value;
-            // Save needed
+            SaveIfDirty(node);
+        }
+
+        public void SynchronizeToDisk()
+        {
+            foreach (var cacheitem in NodeCache)
+            {
+                SaveIfDirty((BPlusTreeNode)cacheitem.Value);
+            }
+        }
+        
+        private void SaveIfDirty(BPlusTreeNode node)
+        {
+            // Save needed?
             if (node.Dirty)
             {
+                node.Dirty = false;
                 BPlusTree.SerializeNode(node, Path.Combine(NodeFolderPath, node.NodeID));
             }
         }
-
     }
 }

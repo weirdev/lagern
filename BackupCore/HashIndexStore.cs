@@ -48,5 +48,10 @@ namespace BackupCore
         {
             return TreeIndexStore.GetRecord(hash);
         }
+
+        public void SynchronizeCacheToDisk()
+        {
+            TreeIndexStore.SynchronizeCacheToDisk();
+        }
     }
 }

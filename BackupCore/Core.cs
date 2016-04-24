@@ -40,6 +40,17 @@ namespace BackupCore
         
         public void RunBackup()
         {
+            // Make sure we have an index folder to write to later
+            if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
+            {
+                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
+            }
+
+            if (!Directory.Exists(Path.Combine(backuppath_dst, "index", "hashindex")))
+            {
+                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index", "hashindex"));
+            }
+
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFiles(filequeue));
             
@@ -54,14 +65,10 @@ namespace BackupCore
             }
             Task.WaitAll(backupops.ToArray());
 
-            // Save "index"
-            if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
-            {
-                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
-            }
 
-            //BasicMetadataArray basicmetaarray = new BasicMetadataArray();
-            //basicmetaarray.basicmetadataarray = BasicMetaIndex.Values.ToArray();
+            // Save "index"
+            // Writeout all "dirty" cached index nodes
+            HashStore.SynchronizeCacheToDisk();
             
             XmlWriterSettings settings = new XmlWriterSettings();
             settings.WriteEndDocumentOnClose = true;

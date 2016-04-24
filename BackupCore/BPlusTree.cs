@@ -195,6 +195,11 @@ namespace BackupCore
             return node;
         }
 
+        public void SynchronizeCacheToDisk()
+        {
+            NodeCache.SynchronizeToDisk();
+        }
+
         public static void SerializeNode(BPlusTreeNode node, string writepath)
         {
             XmlWriterSettings settings = new XmlWriterSettings();
