@@ -13,9 +13,12 @@ namespace BackupCore
     {
         public BPlusTree TreeIndexStore { get; private set; }
 
-        public HashIndexStore()
+        public string IndexPath { get; set; }
+
+        public HashIndexStore(string indexpath)
         {
-            TreeIndexStore = new BPlusTree(100);
+            IndexPath = indexpath;
+            TreeIndexStore = new BPlusTree(100, IndexPath);
         }
         
         /// <summary>

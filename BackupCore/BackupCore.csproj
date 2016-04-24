@@ -32,6 +32,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Runtime.Serialization.Formatters.Soap" />
     <Reference Include="System.Xml.Linq" />
@@ -45,6 +46,7 @@
     <Compile Include="BackupLocation.cs" />
     <Compile Include="BPlusTree.cs" />
     <Compile Include="BPlusTreeNode.cs" />
+    <Compile Include="BPTNodeStore.cs" />
     <Compile Include="Core.cs" />
     <Compile Include="HashBin.cs" />
     <Compile Include="HashBlockPair.cs" />

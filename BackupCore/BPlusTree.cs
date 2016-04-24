@@ -1,29 +1,40 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
+using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
     class BPlusTree : IEnumerable<KeyValuePair<byte[], BackupLocation>>
     {
+        protected BPTNodeStore NodeCache { get; set; }
+
         public BPlusTreeNode Root { get; set; }
 
         // Head of linked list allowing for efficient in order traversal of leaf nodes
         private BPlusTreeNode Head { get; set; }
 
-        public int NodeSize { get; set; }
+        public int NodeSize { get; private set; }
 
-        public BPlusTree(int nodesize)
+        public string NodeStorePath { get; private set; }
+
+        public BPlusTree(int nodesize, string nodestorepath)
         {
+            NodeStorePath = nodestorepath;
+            NodeCache = new BPTNodeStore(NodeStorePath);
+
             NodeSize = nodesize;
             Root = new BPlusTreeNode(null, false, NodeSize);
-            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
-            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2);
-            Root.Children.Add(rootchild1);
-            Root.Children.Add(rootchild2);
+            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root.NodeID, true, NodeSize);
+            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root.NodeID, true, NodeSize, rootchild2.NodeID);
+            Root.Children.Add(rootchild1.NodeID);
+            Root.Children.Add(rootchild2.NodeID);
             Root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
             Head = rootchild1;
         }
@@ -44,11 +55,7 @@ namespace BackupCore
             // Was the root node split?
             if (Root.Parent != null)
             {
-                Root = Root.Parent;
-            }
-            if (Root.Children.Count == 9)
-            {
-
+                Root = NodeCache.GetNode(Root.Parent);
             }
             if (!dosave)
             {
@@ -86,19 +93,23 @@ namespace BackupCore
                 {
                     // Create a new node and add half of this node's keys/ values to it
                     BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, true, NodeSize, node.Next);
-                    node.Next = newnode;
-                    newnode.Keys = node.Keys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
-                    newnode.Values = node.Values.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
-                    node.Keys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
-                    node.Values.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
+                    node.Next = newnode.NodeID;
+                    List<byte[]> oldkeys = new List<byte[]>(node.Keys);
+                    List<BackupLocation> oldvalues = new List<BackupLocation>(node.Values);
+                    newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+                    newnode.Values = new ObservableCollection<BackupLocation>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+                    oldkeys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+                    node.Keys = new ObservableCollection<byte[]>(oldkeys);
+                    oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
+                    node.Values = new ObservableCollection<BackupLocation>(oldvalues);
                     // Add the new node to its parent
-                    AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
+                    AddKeyToNode(NodeCache.GetNode(node.Parent), newnode.Keys[0], newnode.NodeID);
                 }
                 return false;
             }
         }
 
-        public void AddKeyToNode(BPlusTreeNode node, byte[] hash, BPlusTreeNode child)
+        public void AddKeyToNode(BPlusTreeNode node, byte[] hash, string child)
         {
             if (node.IsLeafNode == true)
             {
@@ -116,36 +127,40 @@ namespace BackupCore
             {
                 // Create a new node and add half of this node's keys/ children to it
                 BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, false, NodeSize);
-                newnode.Keys = node.Keys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
-                newnode.Children = node.Children.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1);
+                List<byte[]> oldkeys = new List<byte[]>(node.Keys);
+                List<string> oldchildren = new List<string>(node.Children);
+                newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+                newnode.Children = new ObservableCollection<string>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
                 int keycount = node.Keys.Count;
-                node.Keys.RemoveRange(keycount / 2, keycount - (keycount / 2));
-                node.Children.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
+                oldkeys.RemoveRange(keycount / 2, keycount - (keycount / 2));
+                node.Keys = new ObservableCollection<byte[]>(oldkeys);
+                oldchildren.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
+                node.Children = new ObservableCollection<string>(oldchildren);
                 byte[] split = node.Keys[node.Keys.Count - 1];
                 node.Keys.RemoveAt(node.Keys.Count - 1);
 
                 // Make all newly split out Children refer to newnode as their parent
+                // TODO: This is very inefficient when reading all the children to/from disk
                 foreach (var nchild in newnode.Children)
                 {
-                    nchild.Parent = newnode;
+                    BPlusTreeNode ri_nchild = NodeCache.GetNode(nchild);
+                    ri_nchild.Parent = newnode.NodeID;
                 }
 
                 // Are we !at the root
                 if (node.Parent != null)
                 {
                     // Add the new node to its parent
-                    AddKeyToNode(node.Parent, split, newnode);
+                    AddKeyToNode(NodeCache.GetNode(node.Parent), split, newnode.NodeID);
                 }
                 else
                 {
                     // We just split the root, so make a new one
                     BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
-                    node.Parent = root;
-                    node.Parent.Keys = new List<byte[]>();
-                    node.Parent.Keys.Add(split);
-                    node.Parent.Children = new List<BPlusTreeNode>();
-                    node.Parent.Children.Add(node);
-                    node.Parent.Children.Add(newnode);
+                    node.Parent = root.NodeID;
+                    root.Keys.Add(split);
+                    root.Children.Add(node.NodeID);
+                    root.Children.Add(newnode.NodeID);
                     newnode.Parent = node.Parent;
                 }
             }
@@ -175,15 +190,46 @@ namespace BackupCore
             {
                 int child = 0;
                 for (; child < node.Keys.Count && !HashTools.ByteArrayLessThan(hash, node.Keys[child]); child++) { }
-                node = node.Children[child];
+                node = NodeCache.GetNode(node.Children[child]);
             }
             return node;
         }
 
+        public static void SerializeNode(BPlusTreeNode node, string writepath)
+        {
+            XmlWriterSettings settings = new XmlWriterSettings();
+            settings.WriteEndDocumentOnClose = true;
+            settings.Indent = true;
+            settings.NewLineOnAttributes = true;
+            settings.IndentChars = "    ";
+
+            DataContractSerializer metaserializer = new DataContractSerializer(typeof(BPlusTreeNode));
+            using (XmlWriter writer = XmlWriter.Create(writepath, settings))
+            {
+                metaserializer.WriteObject(writer, node);
+            }
+        }
+
+        public static BPlusTreeNode DeserializeNode(string path)
+        {
+            // Deserialize location dict
+            using (FileStream fs = new FileStream(path, FileMode.Open))
+            {
+                using (XmlDictionaryReader reader =
+                    XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
+                {
+                    DataContractSerializer ser = new DataContractSerializer(typeof(BPlusTreeNode));
+
+                    // Deserialize the data and read it from the instance.
+                    return (BPlusTreeNode)ser.ReadObject(reader, true);
+                }
+            }
+        }
+
         private void PrintTree()
         {
-            using (System.IO.StreamWriter file =
-            new System.IO.StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
+            using (StreamWriter file =
+            new StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
             {
                 Queue<BPlusTreeNode> printqueue = new Queue<BPlusTreeNode>();
                 printqueue.Enqueue(Root);
@@ -200,7 +246,7 @@ namespace BackupCore
                     {
                         foreach (var child in node.Children)
                         {
-                            printqueue.Enqueue(child);
+                            printqueue.Enqueue(NodeCache.GetNode(child));
                         }
                     }
                 }
@@ -222,7 +268,7 @@ namespace BackupCore
                 {
                     yield return new KeyValuePair<byte[], BackupLocation>(node.Keys[i], node.Values[i]);
                 }
-                node = node.Next;
+                node = NodeCache.GetNode(node.Next);
             }
         }
 

@@ -28,13 +28,14 @@ namespace BackupCore
         protected IDictionary<string, BasicMetadata> BasicMetaIndex = new Dictionary<string, BasicMetadata>();
 
         // HashIndexStore holding BackupLocations indexed by hashes (in bytes)
-        HashIndexStore hashstore = new HashIndexStore();
+        internal HashIndexStore HashStore { get; set; }
 
         public Core(string src, string dst)
         {
             backuppath_src = src;
             backuppath_dst = dst;
-            
+
+            HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
         }
         
         public void RunBackup()
@@ -101,7 +102,7 @@ namespace BackupCore
             FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, relfilepath));
             foreach (var hash in FileBlocks[filepath])
             {
-                BackupLocation blocation = hashstore.GetBackupLocation(hash);
+                BackupLocation blocation = HashStore.GetBackupLocation(hash);
                 reader = File.OpenRead(Path.Combine(backuppath_dst, blocation.RelativeFilePath));
                 buffer = new byte[reader.Length];
                 reader.Read(buffer, 0, blocation.ByteLength);
@@ -127,32 +128,32 @@ namespace BackupCore
                         (Dictionary<string, BasicMetadata>)ser.ReadObject(reader, true);
                 }
             }
-            // Deserialize location dict
-            using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "hashindex"), FileMode.Open))
-            {
-                using (XmlDictionaryReader reader =
-                    XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
-                {
-                    DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
+            //// Deserialize location dict
+            //using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "hashindex"), FileMode.Open))
+            //{
+            //    using (XmlDictionaryReader reader =
+            //        XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
+            //    {
+            //        DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
 
-                    // Deserialize the data and read it from the instance.
-                    Dictionary<string, BackupLocation> importedlocationdict =
-                        (Dictionary<string, BackupLocation>)ser.ReadObject(reader, true);
-                }
-            }
-            // Deserialize FileBlocks
-            using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "fileblocks"), FileMode.Open))
-            {
-                using (XmlDictionaryReader reader =
-                    XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
-                {
-                    DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
+            //        // Deserialize the data and read it from the instance.
+            //        Dictionary<string, BackupLocation> importedlocationdict =
+            //            (Dictionary<string, BackupLocation>)ser.ReadObject(reader, true);
+            //    }
+            //}
+            //// Deserialize FileBlocks
+            //using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "fileblocks"), FileMode.Open))
+            //{
+            //    using (XmlDictionaryReader reader =
+            //        XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
+            //    {
+            //        DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
 
-                    // Deserialize the data and read it from the instance.
-                    Dictionary<string, IList<string>> importedlocationdict =
-                        (Dictionary<string, IList<string>>)ser.ReadObject(reader, true);
-                }
-            }
+            //        // Deserialize the data and read it from the instance.
+            //        Dictionary<string, IList<string>> importedlocationdict =
+            //            (Dictionary<string, IList<string>>)ser.ReadObject(reader, true);
+            //    }
+            //}
         }
 
         protected void GetFiles(BlockingCollection<string> filequeue, string path=null)
@@ -310,10 +311,10 @@ namespace BackupCore
             string path = Path.Combine(backuppath_dst, relpath);
             BackupLocation posblocation = new BackupLocation(relpath, 0, block.Length);
             bool alreadystored = false;
-            lock (hashstore)
+            lock (HashStore)
             {
                 // Have we already stored this 
-                alreadystored = hashstore.AddHash(hash, posblocation);
+                alreadystored = HashStore.AddHash(hash, posblocation);
             }
             if (!alreadystored)
             {

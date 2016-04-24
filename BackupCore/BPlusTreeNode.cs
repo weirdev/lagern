@@ -3,42 +3,136 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.Serialization;
+using System.IO;
+using System.Xml;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    class BPlusTreeNode
+    [DataContract(Name = "BPlusTreeNode")]
+    class BPlusTreeNode : INotifyPropertyChanged
     {
-        public BPlusTreeNode Parent { get; set; }
-        // Only for leaf nodes makes a linked list for efficient in-order traversal
-        public BPlusTreeNode Next { get; set; }
+        public event PropertyChangedEventHandler PropertyChanged;
 
-        public int NodeSize { get; set; }
+        // Differs from/not saved to disk
+        [DataMember]
+        public bool Dirty { get; set; }
 
-        public List<byte[]> Keys { get; set; }
+        private string parent;
+        private string next;
 
-        public bool IsLeafNode { get; set; }
-        
-        // Size 100
-        public List<BPlusTreeNode> Children { get; set; }
-        
-        // Size 99
-        public List<BackupLocation> Values { get; set; }
+        private ObservableCollection<byte[]> keys;
+        private ObservableCollection<string> children;
+        private ObservableCollection<BackupLocation> values;
 
-        public BPlusTreeNode(BPlusTreeNode parent, bool isleafnode, int nodesize, BPlusTreeNode next=null)
+        [DataMember]
+        public string NodeID { get; private set; }
+
+        [DataMember]
+        public string Parent
         {
+            get { return parent; }
+            set
+            {
+                if (value != parent)
+                {
+                    parent = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        // Only for leaf nodes makes a linked list for efficient in-order traversal
+        [DataMember]
+        public string Next
+        {
+            get { return next; }
+            set
+            {
+                if (value != next)
+                {
+                    next = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        // m
+        [DataMember]
+        public int NodeSize { get; private set; }
+
+        [DataMember]
+        public ObservableCollection<byte[]> Keys
+        {
+            get { return keys; }
+            set
+            {
+                if (value != keys)
+                {
+                    keys = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        [DataMember]
+        public bool IsLeafNode { get; private set; }
+
+        // Size m
+        [DataMember]
+        public ObservableCollection<string> Children
+        {
+            get { return children; }
+            set
+            {
+                if (value != children)
+                {
+                    children = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        // Size m-1
+        [DataMember]
+        public ObservableCollection<BackupLocation> Values
+        {
+            get { return values; }
+            set
+            {
+                if (value != values)
+                {
+                    values = value;
+                    NotifyPropertyChanged();
+                }
+            }
+        }
+
+        public BPlusTreeNode(string parent, bool isleafnode, int nodesize, string next=null)
+        {
+            NodeID = (new Guid()).ToString();
             Parent = parent;
             NodeSize = nodesize;
             IsLeafNode = isleafnode;
-            Keys = new List<byte[]>();
+            Keys = new ObservableCollection<byte[]>();
             if (IsLeafNode)
             {
-                Values = new List<BackupLocation>();
+                Values = new ObservableCollection<BackupLocation>();
                 Next = next;
             }
             else
             {
-                Children = new List<BPlusTreeNode>();
+                Children = new ObservableCollection<string>();
             }
+        }
+
+        private void NotifyPropertyChanged([CallerMemberName] string propertyName="")
+        {
+            Dirty = true;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }
