@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.Caching;
 using System.IO;
+using System.Collections.Specialized;
 
 namespace BackupCore
 {
@@ -16,7 +17,12 @@ namespace BackupCore
 
         public BPTNodeStore(string nodefolderpath)
         {
-            NodeCache = MemoryCache.Default;
+            NameValueCollection CacheSettings = new NameValueCollection(2);
+            CacheSettings.Add("physicalMemoryLimitPercentage", Convert.ToString(70));  //set % here
+            CacheSettings.Add("pollingInterval", Convert.ToString("00:00:05"));
+
+            NodeCache = new MemoryCache("NodeCache", CacheSettings);
+            
             NodeFolderPath = nodefolderpath;
         }
 
@@ -26,9 +32,11 @@ namespace BackupCore
             if (ci_node == null)
             {
                 CacheItemPolicy policy = new CacheItemPolicy();
-                List<string> filepaths = new List<string>();
-                filepaths.Add(Path.Combine(NodeFolderPath, nodeid));
-                policy.ChangeMonitors.Add(new HostFileChangeMonitor(filepaths));
+
+                // NOTE: shouldn't need to monitor node files because nothing but this class modifies them
+                //List<string> filepaths = new List<string>();
+                //filepaths.Add(Path.Combine(NodeFolderPath, nodeid));
+                //policy.ChangeMonitors.Add(new HostFileChangeMonitor(filepaths));
 
                 policy.RemovedCallback = new CacheEntryRemovedCallback(OnRemoval);
 
@@ -38,10 +46,10 @@ namespace BackupCore
 
                 // TODO: Use something like the limit physical memory option on Memory cache itself
                 // instead of this
-                if (NodeCache.GetCount() > 2000)
-                {
-                    NodeCache.Trim(10);
-                }
+                //if (NodeCache.GetCount() > 2000)
+                //{
+                //    NodeCache.Trim(10);
+                //}
 
                 return node;
             }
@@ -49,6 +57,15 @@ namespace BackupCore
             {
                 return (BPlusTreeNode)ci_node.Value;
             }
+        }
+
+        public void AddNewNode(BPlusTreeNode node)
+        {
+            CacheItemPolicy policy = new CacheItemPolicy();
+
+            policy.RemovedCallback = new CacheEntryRemovedCallback(OnRemoval);
+
+            NodeCache.Set(node.NodeID, node, policy);
         }
 
         private void OnRemoval(CacheEntryRemovedArguments arguments)

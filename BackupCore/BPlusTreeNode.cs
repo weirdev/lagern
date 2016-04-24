@@ -113,7 +113,7 @@ namespace BackupCore
 
         public BPlusTreeNode(string parent, bool isleafnode, int nodesize, string next=null)
         {
-            NodeID = (new Guid()).ToString();
+            NodeID = (Guid.NewGuid()).ToString();
             Parent = parent;
             NodeSize = nodesize;
             IsLeafNode = isleafnode;

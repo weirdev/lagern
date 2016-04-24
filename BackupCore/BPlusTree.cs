@@ -15,10 +15,10 @@ namespace BackupCore
     {
         protected BPTNodeStore NodeCache { get; set; }
 
-        public BPlusTreeNode Root { get; set; }
+        public string Root { get; set; }
 
         // Head of linked list allowing for efficient in order traversal of leaf nodes
-        private BPlusTreeNode Head { get; set; }
+        private string Head { get; set; }
 
         public int NodeSize { get; private set; }
 
@@ -30,13 +30,18 @@ namespace BackupCore
             NodeCache = new BPTNodeStore(NodeStorePath);
 
             NodeSize = nodesize;
-            Root = new BPlusTreeNode(null, false, NodeSize);
-            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root.NodeID, true, NodeSize);
-            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root.NodeID, true, NodeSize, rootchild2.NodeID);
-            Root.Children.Add(rootchild1.NodeID);
-            Root.Children.Add(rootchild2.NodeID);
-            Root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
-            Head = rootchild1;
+            BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+            Root = root.NodeID;
+            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
+            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2.NodeID);
+            root.Children.Add(rootchild1.NodeID);
+            root.Children.Add(rootchild2.NodeID);
+            root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
+            Head = rootchild1.NodeID;
+
+            NodeCache.AddNewNode(root);
+            NodeCache.AddNewNode(rootchild1);
+            NodeCache.AddNewNode(rootchild2);
         }
 
         /// <summary>
@@ -51,12 +56,7 @@ namespace BackupCore
             BPlusTreeNode node = FindLeafNode(hash);
 
             bool dosave = AddKeyToNode(node, hash, blocation);
-
-            // Was the root node split?
-            if (Root.Parent != null)
-            {
-                Root = NodeCache.GetNode(Root.Parent);
-            }
+            
             if (!dosave)
             {
                 //PrintTree();
@@ -102,6 +102,7 @@ namespace BackupCore
                     node.Keys = new ObservableCollection<byte[]>(oldkeys);
                     oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
                     node.Values = new ObservableCollection<BackupLocation>(oldvalues);
+                    NodeCache.AddNewNode(newnode);
                     // Add the new node to its parent
                     AddKeyToNode(NodeCache.GetNode(node.Parent), newnode.Keys[0], newnode.NodeID);
                 }
@@ -131,6 +132,7 @@ namespace BackupCore
                 List<string> oldchildren = new List<string>(node.Children);
                 newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
                 newnode.Children = new ObservableCollection<string>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
+                NodeCache.AddNewNode(newnode);
                 int keycount = node.Keys.Count;
                 oldkeys.RemoveRange(keycount / 2, keycount - (keycount / 2));
                 node.Keys = new ObservableCollection<byte[]>(oldkeys);
@@ -158,10 +160,12 @@ namespace BackupCore
                     // We just split the root, so make a new one
                     BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
                     node.Parent = root.NodeID;
+                    newnode.Parent = root.NodeID;
                     root.Keys.Add(split);
                     root.Children.Add(node.NodeID);
                     root.Children.Add(newnode.NodeID);
-                    newnode.Parent = node.Parent;
+                    NodeCache.AddNewNode(root);
+                    Root = root.NodeID;
                 }
             }
         }
@@ -185,7 +189,7 @@ namespace BackupCore
         private BPlusTreeNode FindLeafNode(byte[] hash)
         {
             // Traverse down the tree
-            BPlusTreeNode node = Root;
+            BPlusTreeNode node = NodeCache.GetNode(Root);
             while (!node.IsLeafNode)
             {
                 int child = 0;
@@ -237,7 +241,7 @@ namespace BackupCore
             new StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
             {
                 Queue<BPlusTreeNode> printqueue = new Queue<BPlusTreeNode>();
-                printqueue.Enqueue(Root);
+                printqueue.Enqueue(NodeCache.GetNode(Root));
                 file.WriteLine('*');
                 while (printqueue.Count > 0)
                 {
@@ -266,7 +270,7 @@ namespace BackupCore
 
         public IEnumerator<KeyValuePair<byte[], BackupLocation>> GetEnumerator()
         {
-            BPlusTreeNode node = Head;
+            BPlusTreeNode node = NodeCache.GetNode(Head);
             while (node != null)
             {
                 for (int i = 0; i < node.Keys.Count; i++)
