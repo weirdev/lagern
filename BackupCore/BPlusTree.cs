@@ -28,20 +28,37 @@ namespace BackupCore
         {
             NodeStorePath = nodestorepath;
             NodeCache = new BPTNodeStore(NodeStorePath);
-
             NodeSize = nodesize;
-            BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
-            Root = root.NodeID;
-            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
-            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2.NodeID);
-            root.Children.Add(rootchild1.NodeID);
-            root.Children.Add(rootchild2.NodeID);
-            root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
-            Head = rootchild1.NodeID;
 
-            NodeCache.AddNewNode(root);
-            NodeCache.AddNewNode(rootchild1);
-            NodeCache.AddNewNode(rootchild2);
+            try
+            {
+                using (StreamReader reader = new StreamReader(Path.Combine(NodeStorePath, "root")))
+                {
+                    Root = reader.ReadLine();
+                }
+                using (StreamReader reader = new StreamReader(Path.Combine(NodeStorePath, "head")))
+                {
+                    Head = reader.ReadLine();
+                }
+            }
+            catch (Exception)
+            {
+                BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+                Root = root.NodeID;
+                BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
+                BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2.NodeID);
+                root.Children.Add(rootchild1.NodeID);
+                root.Children.Add(rootchild2.NodeID);
+                root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
+
+                Head = rootchild1.NodeID;
+                PersistHeadID();
+
+                NodeCache.AddNewNode(root);
+                PersistRootID();
+                NodeCache.AddNewNode(rootchild1);
+                NodeCache.AddNewNode(rootchild2);
+            }
         }
 
         /// <summary>
@@ -166,6 +183,7 @@ namespace BackupCore
                     root.Children.Add(newnode.NodeID);
                     NodeCache.AddNewNode(root);
                     Root = root.NodeID;
+                    PersistRootID();
                 }
             }
         }
@@ -232,6 +250,28 @@ namespace BackupCore
                     // Deserialize the data and read it from the instance.
                     return (BPlusTreeNode)ser.ReadObject(reader, true);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Save the the identifier of root node to ((hashindex))\root
+        /// </summary>
+        private void PersistRootID()
+        {
+            using (StreamWriter writer = new StreamWriter(Path.Combine(NodeStorePath, "root"), false))
+            {
+                writer.WriteLine(Root);
+            }
+        }
+
+        /// <summary>
+        /// Save the the identifier of head (leaf) node to ((hashindex))\root
+        /// </summary>
+        private void PersistHeadID()
+        {
+            using (StreamWriter writer = new StreamWriter(Path.Combine(NodeStorePath, "head"), false))
+            {
+                writer.WriteLine(Head);
             }
         }
 
