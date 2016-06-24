@@ -19,13 +19,13 @@ namespace BackupCore
 
         public string backuppath_dst { get; set; }
 
-        protected SHA1 _hasher = SHA1.Create();
-        protected SHA1 hasher { get { return _hasher; } }
+        protected static SHA1 _hasher = SHA1.Create();
+        protected static SHA1 hasher { get { return _hasher; } }
 
         // Key = filepath, Value = list of hashes of blocks
         protected IDictionary<string, IList<byte[]>> FileBlocks = new Dictionary<string, IList<byte[]>>();
         // Key = filepath, Value = File's metadata
-        protected IDictionary<string, BasicMetadata> BasicMetaIndex = new Dictionary<string, BasicMetadata>();
+        protected IDictionary<string, FileMetadata> FileMetaIndex = new Dictionary<string, FileMetadata>();
 
         // HashIndexStore holding BackupLocations indexed by hashes (in bytes)
         internal HashIndexStore HashStore { get; set; }
@@ -76,10 +76,10 @@ namespace BackupCore
             settings.NewLineOnAttributes = true;
             settings.IndentChars = "    ";
 
-            DataContractSerializer metaserializer = new DataContractSerializer(typeof(IDictionary<string, BasicMetadata>));
+            DataContractSerializer metaserializer = new DataContractSerializer(typeof(IDictionary<string, FileMetadata>));
             using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "metadata"), settings))
             {
-                metaserializer.WriteObject(writer, BasicMetaIndex);
+                metaserializer.WriteObject(writer, FileMetaIndex);
             }
 
             // TODO : Ability to read in HashIndexStore
@@ -117,7 +117,7 @@ namespace BackupCore
                 reader.Close();
             }
             writer.Close();
-            BasicMetaIndex[filepath].WriteOut(Path.Combine(backuppath_dst, relfilepath));
+            FileMetaIndex[filepath].WriteOut(Path.Combine(backuppath_dst, relfilepath));
         }
 
         protected void ImportIndex()
@@ -128,11 +128,11 @@ namespace BackupCore
                 using (XmlDictionaryReader reader =
                     XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
                 {
-                    DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, BasicMetadata>));
+                    DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, FileMetadata>));
 
                     // Deserialize the data and read it from the instance.
-                    Dictionary<string, BasicMetadata> importedmetadict =
-                        (Dictionary<string, BasicMetadata>)ser.ReadObject(reader, true);
+                    Dictionary<string, FileMetadata> importedmetadict =
+                        (Dictionary<string, FileMetadata>)ser.ReadObject(reader, true);
                 }
             }
             //// Deserialize location dict
@@ -308,8 +308,8 @@ namespace BackupCore
 
         protected void BackupFileMetadata(string filepath)
         {
-            BasicMetadata bm = new BasicMetadata(filepath);
-            BasicMetaIndex.Add(filepath, bm);
+            FileMetadata bm = new FileMetadata(filepath);
+            FileMetaIndex.Add(filepath, bm);
         }
 
         protected void SaveBlock(byte[] hash, byte[] block)

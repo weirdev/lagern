@@ -10,8 +10,11 @@ using System.Security.AccessControl;
 
 namespace BackupCore
 {
+    /// <summary>
+    /// Stores basic file metadata + list of hashes of file blocks
+    /// </summary>
     [DataContract]
-    public class BasicMetadata
+    public class FileMetadata
     {
         [DataMember]
         public string FileName { get; set; }
@@ -52,10 +55,13 @@ namespace BackupCore
         [DataMember]
         public FileAttributes Attributes { get; set; }
 
+        [DataMember]
+        public List<byte[]> BlocksHashes { get; set; }
+
         // TODO: Replace serializing ACL with writing ACL to a dummy file in a security store in backup location
         public FileSecurity AccessControl { get; set; }
 
-        public BasicMetadata(string filename, DateTimeOffset dateaccessed, DateTimeOffset datemodified, 
+        public FileMetadata(string filename, DateTimeOffset dateaccessed, DateTimeOffset datemodified, 
             DateTimeOffset datecreated, long filesize, FileAttributes attributes, FileSecurity accesscontrol)
         {
             FileName = filename;
@@ -67,7 +73,7 @@ namespace BackupCore
             AccessControl = accesscontrol;
         }
 
-        public BasicMetadata(string filepath)
+        public FileMetadata(string filepath)
         {
             FileName = Path.GetFileName(filepath);
             FileInfo fi = new FileInfo(filepath);
