@@ -11,53 +11,46 @@ using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    class BPlusTree : IEnumerable<KeyValuePair<byte[], BackupLocation>>
+    public class BPlusTree : IEnumerable<KeyValuePair<byte[], BackupLocation>>, ICustomSerializable<BPlusTree>
     {
-        protected BPTNodeStore NodeCache { get; set; }
 
-        public string Root { get; set; }
+        private BPlusTreeNode Root { get; set; }
 
         // Head of linked list allowing for efficient in order traversal of leaf nodes
-        private string Head { get; set; }
+        private BPlusTreeNode Head { get; set; }
 
         public int NodeSize { get; private set; }
 
         public string NodeStorePath { get; private set; }
 
-        public BPlusTree(int nodesize, string nodestorepath)
+        /// <summary>
+        /// Constructor for fully in-memory tree. If saving to disk
+        /// is desired, specify nodestorepath to use the other constructor.
+        /// </summary>
+        /// <param name="nodesize"></param>
+        public BPlusTree(int nodesize)
+        {
+            Initialize();
+            NodeSize = nodesize;
+        }
+
+        public BPlusTree(int nodesize, string nodestorepath) : this(nodesize)
         {
             NodeStorePath = nodestorepath;
-            NodeCache = new BPTNodeStore(NodeStorePath);
-            NodeSize = nodesize;
 
             try
             {
-                using (StreamReader reader = new StreamReader(Path.Combine(NodeStorePath, "root")))
+                using (FileStream fs = new FileStream(nodestorepath, FileMode.Open, FileAccess.Read))
                 {
-                    Root = reader.ReadLine();
-                }
-                using (StreamReader reader = new StreamReader(Path.Combine(NodeStorePath, "head")))
-                {
-                    Head = reader.ReadLine();
+                    using (BinaryReader reader = new BinaryReader(fs))
+                    {
+                        this.deserialize(reader.ReadBytes((int)fs.Length));
+                    }
                 }
             }
             catch (Exception)
             {
-                BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
-                Root = root.NodeID;
-                BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
-                BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2.NodeID);
-                root.Children.Add(rootchild1.NodeID);
-                root.Children.Add(rootchild2.NodeID);
-                root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
-
-                Head = rootchild1.NodeID;
-                PersistHeadID();
-
-                NodeCache.AddNewNode(root);
-                PersistRootID();
-                NodeCache.AddNewNode(rootchild1);
-                NodeCache.AddNewNode(rootchild2);
+                Console.WriteLine("Reading old index failed. Initializing new index...");
             }
         }
 
@@ -110,7 +103,7 @@ namespace BackupCore
                 {
                     // Create a new node and add half of this node's keys/ values to it
                     BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, true, NodeSize, node.Next);
-                    node.Next = newnode.NodeID;
+                    node.Next = newnode;
                     List<byte[]> oldkeys = new List<byte[]>(node.Keys);
                     List<BackupLocation> oldvalues = new List<BackupLocation>(node.Values);
                     newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
@@ -119,15 +112,14 @@ namespace BackupCore
                     node.Keys = new ObservableCollection<byte[]>(oldkeys);
                     oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
                     node.Values = new ObservableCollection<BackupLocation>(oldvalues);
-                    NodeCache.AddNewNode(newnode);
                     // Add the new node to its parent
-                    AddKeyToNode(NodeCache.GetNode(node.Parent), newnode.Keys[0], newnode.NodeID);
+                    AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
                 }
                 return false;
             }
         }
 
-        public void AddKeyToNode(BPlusTreeNode node, byte[] hash, string child)
+        private void AddKeyToNode(BPlusTreeNode node, byte[] hash, BPlusTreeNode child)
         {
             if (node.IsLeafNode == true)
             {
@@ -146,15 +138,14 @@ namespace BackupCore
                 // Create a new node and add half of this node's keys/ children to it
                 BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, false, NodeSize);
                 List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-                List<string> oldchildren = new List<string>(node.Children);
+                List<BPlusTreeNode> oldchildren = new List<BPlusTreeNode>(node.Children);
                 newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
-                newnode.Children = new ObservableCollection<string>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
-                NodeCache.AddNewNode(newnode);
+                newnode.Children = new ObservableCollection<BPlusTreeNode>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
                 int keycount = node.Keys.Count;
                 oldkeys.RemoveRange(keycount / 2, keycount - (keycount / 2));
                 node.Keys = new ObservableCollection<byte[]>(oldkeys);
                 oldchildren.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
-                node.Children = new ObservableCollection<string>(oldchildren);
+                node.Children = new ObservableCollection<BPlusTreeNode>(oldchildren);
                 byte[] split = node.Keys[node.Keys.Count - 1];
                 node.Keys.RemoveAt(node.Keys.Count - 1);
 
@@ -162,28 +153,26 @@ namespace BackupCore
                 // TODO: This is very inefficient when reading all the children to/from disk
                 foreach (var nchild in newnode.Children)
                 {
-                    BPlusTreeNode ri_nchild = NodeCache.GetNode(nchild);
-                    ri_nchild.Parent = newnode.NodeID;
+                    BPlusTreeNode ri_nchild = nchild;
+                    ri_nchild.Parent = newnode;
                 }
 
                 // Are we !at the root
                 if (node.Parent != null)
                 {
                     // Add the new node to its parent
-                    AddKeyToNode(NodeCache.GetNode(node.Parent), split, newnode.NodeID);
+                    AddKeyToNode(node.Parent, split, newnode);
                 }
                 else
                 {
                     // We just split the root, so make a new one
                     BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
-                    node.Parent = root.NodeID;
-                    newnode.Parent = root.NodeID;
+                    node.Parent = root;
+                    newnode.Parent = root;
                     root.Keys.Add(split);
-                    root.Children.Add(node.NodeID);
-                    root.Children.Add(newnode.NodeID);
-                    NodeCache.AddNewNode(root);
-                    Root = root.NodeID;
-                    PersistRootID();
+                    root.Children.Add(node);
+                    root.Children.Add(newnode);
+                    Root = root;
                 }
             }
         }
@@ -207,73 +196,27 @@ namespace BackupCore
         private BPlusTreeNode FindLeafNode(byte[] hash)
         {
             // Traverse down the tree
-            BPlusTreeNode node = NodeCache.GetNode(Root);
+            BPlusTreeNode node = Root;
             while (!node.IsLeafNode)
             {
                 int child = 0;
                 for (; child < node.Keys.Count && !HashTools.ByteArrayLessThan(hash, node.Keys[child]); child++) { }
-                node = NodeCache.GetNode(node.Children[child]);
+                node = node.Children[child];
             }
             return node;
         }
 
         public void SynchronizeCacheToDisk()
         {
-            NodeCache.SynchronizeToDisk();
-        }
-
-        public static void SerializeNode(BPlusTreeNode node, string writepath)
-        {
-            XmlWriterSettings settings = new XmlWriterSettings();
-            settings.WriteEndDocumentOnClose = true;
-            settings.Indent = true;
-            settings.NewLineOnAttributes = true;
-            settings.IndentChars = "    ";
-
-            DataContractSerializer metaserializer = new DataContractSerializer(typeof(BPlusTreeNode));
-            using (XmlWriter writer = XmlWriter.Create(writepath, settings))
+            using (FileStream fs = new FileStream(NodeStorePath, FileMode.Create, FileAccess.Write))
             {
-                metaserializer.WriteObject(writer, node);
-            }
-        }
-
-        public static BPlusTreeNode DeserializeNode(string path)
-        {
-            // Deserialize location dict
-            using (FileStream fs = new FileStream(path, FileMode.Open))
-            {
-                using (XmlDictionaryReader reader =
-                    XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
+                using (BinaryWriter writer = new BinaryWriter(fs))
                 {
-                    DataContractSerializer ser = new DataContractSerializer(typeof(BPlusTreeNode));
-
-                    // Deserialize the data and read it from the instance.
-                    return (BPlusTreeNode)ser.ReadObject(reader, true);
+                    writer.Write(this.serialize());
                 }
             }
         }
-
-        /// <summary>
-        /// Save the the identifier of root node to ((hashindex))\root
-        /// </summary>
-        private void PersistRootID()
-        {
-            using (StreamWriter writer = new StreamWriter(Path.Combine(NodeStorePath, "root"), false))
-            {
-                writer.WriteLine(Root);
-            }
-        }
-
-        /// <summary>
-        /// Save the the identifier of head (leaf) node to ((hashindex))\root
-        /// </summary>
-        private void PersistHeadID()
-        {
-            using (StreamWriter writer = new StreamWriter(Path.Combine(NodeStorePath, "head"), false))
-            {
-                writer.WriteLine(Head);
-            }
-        }
+        
 
         private void PrintTree()
         {
@@ -281,7 +224,7 @@ namespace BackupCore
             new StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
             {
                 Queue<BPlusTreeNode> printqueue = new Queue<BPlusTreeNode>();
-                printqueue.Enqueue(NodeCache.GetNode(Root));
+                printqueue.Enqueue(Root);
                 file.WriteLine('*');
                 while (printqueue.Count > 0)
                 {
@@ -295,7 +238,7 @@ namespace BackupCore
                     {
                         foreach (var child in node.Children)
                         {
-                            printqueue.Enqueue(NodeCache.GetNode(child));
+                            printqueue.Enqueue(child);
                         }
                     }
                 }
@@ -310,20 +253,68 @@ namespace BackupCore
 
         public IEnumerator<KeyValuePair<byte[], BackupLocation>> GetEnumerator()
         {
-            BPlusTreeNode node = NodeCache.GetNode(Head);
+            BPlusTreeNode node = Head;
             while (node != null)
             {
                 for (int i = 0; i < node.Keys.Count; i++)
                 {
                     yield return new KeyValuePair<byte[], BackupLocation>(node.Keys[i], node.Values[i]);
                 }
-                node = NodeCache.GetNode(node.Next);
+                node = node.Next;
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
+        }
+
+        public byte[] serialize()
+        {
+            List<byte> allbinrep = new List<byte>();
+
+            foreach (KeyValuePair<byte[], BackupLocation> kvp in this)
+            {
+                byte[] keybytes = kvp.Key;
+                byte[] backuplocationbytes = kvp.Value.serialize();
+
+                List<byte> kvpbinrep = new List<byte>();
+                BinaryEncoding.encode(keybytes, kvpbinrep);
+                BinaryEncoding.encode(backuplocationbytes, kvpbinrep);
+
+                BinaryEncoding.encode(kvpbinrep.ToArray(), allbinrep);
+            }
+
+            return allbinrep.ToArray();
+        }
+
+        public void deserialize(byte[] data)
+        {
+            this.Initialize();
+            List<byte[]> binkeyvalpairs = BinaryEncoding.decode(data);
+
+            foreach (byte[] binkvp in binkeyvalpairs)
+            {
+                List<byte[]> savedobjects = BinaryEncoding.decode(binkvp);
+                byte[] keybytes = savedobjects[0];
+                byte[] backuplocationbytes = savedobjects[1];
+
+                this.AddHash(keybytes, BackupLocation.deserialize(backuplocationbytes));
+            }
+        }
+
+        private void Initialize()
+        {
+
+            BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+            Root = root;
+            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
+            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2);
+            root.Children.Add(rootchild1);
+            root.Children.Add(rootchild2);
+            root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
+
+            Head = rootchild1;
         }
     }
 }

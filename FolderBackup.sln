@@ -1,26 +1,39 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackupCore", "BackupCore\BackupCore.csproj", "{3AF4032E-1786-4588-8B62-AA7458265E16}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Testing", "Testing\Testing.csproj", "{2412ED12-28B6-4909-B8D9-E41852FCDE54}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackupCoreTest", "BackupCoreTest\BackupCoreTest.csproj", "{EE9E5B15-A468-4757-B4AA-AF1D1687695E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
+		Test|Any CPU = Test|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{3AF4032E-1786-4588-8B62-AA7458265E16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{3AF4032E-1786-4588-8B62-AA7458265E16}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3AF4032E-1786-4588-8B62-AA7458265E16}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3AF4032E-1786-4588-8B62-AA7458265E16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3AF4032E-1786-4588-8B62-AA7458265E16}.Test|Any CPU.ActiveCfg = Test|Any CPU
+		{3AF4032E-1786-4588-8B62-AA7458265E16}.Test|Any CPU.Build.0 = Test|Any CPU
 		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Test|Any CPU.ActiveCfg = Test|Any CPU
+		{2412ED12-28B6-4909-B8D9-E41852FCDE54}.Test|Any CPU.Build.0 = Test|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Test|Any CPU.ActiveCfg = Test|Any CPU
+		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Test|Any CPU.Build.0 = Test|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

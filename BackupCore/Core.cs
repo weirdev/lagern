@@ -35,10 +35,17 @@ namespace BackupCore
             backuppath_src = src;
             backuppath_dst = dst;
 
+            // Make sure we have an index folder to write to later
+            if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
+            {
+                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
+            }
+
             HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
+            int i = 0;
         }
         
-        public void RunBackup()
+        public void RunBackupAsync()
         {
             // Make sure we have an index folder to write to later
             if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
@@ -48,7 +55,7 @@ namespace BackupCore
 
             if (!Directory.Exists(Path.Combine(backuppath_dst, "index", "hashindex")))
             {
-                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index", "hashindex"));
+                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
             }
 
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
@@ -60,7 +67,7 @@ namespace BackupCore
                 string file;
                 if (filequeue.TryTake(out file))
                 {
-                    backupops.Add(Task.Run(() => BackupFile(file)));
+                    backupops.Add(Task.Run(() => BackupFileAsync(file)));
                 }
             }
             Task.WaitAll(backupops.ToArray());
@@ -70,6 +77,53 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             HashStore.SynchronizeCacheToDisk();
             
+            XmlWriterSettings settings = new XmlWriterSettings();
+            settings.WriteEndDocumentOnClose = true;
+            settings.Indent = true;
+            settings.NewLineOnAttributes = true;
+            settings.IndentChars = "    ";
+
+            DataContractSerializer metaserializer = new DataContractSerializer(typeof(IDictionary<string, FileMetadata>));
+            using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "metadata"), settings))
+            {
+                metaserializer.WriteObject(writer, FileMetaIndex);
+            }
+
+            // TODO : Ability to read in HashIndexStore
+            //DataContractSerializer locdictserializer = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
+            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "hashindex"), settings))
+            //{
+            //    locdictserializer.WriteObject(writer, LocationDict);
+            //}
+
+            // TODO : Ability to serialize Dict with byte[]
+            //DataContractSerializer fileblockserializer = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
+            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "fileblocks"), settings))
+            //{
+            //    fileblockserializer.WriteObject(writer, FileBlocks);
+            //}
+        }
+
+        public void RunBackupSync()
+        {
+            BlockingCollection<string> filequeue = new BlockingCollection<string>();
+            GetFiles(filequeue);
+            
+            while (!filequeue.IsCompleted)
+            {
+                string file;
+                if (filequeue.TryTake(out file))
+                {
+                    BackupFileSync(file);
+                }
+            }
+
+
+            // Save "index"
+            // Writeout entire cached index
+            HashStore.SynchronizeCacheToDisk();
+
+            // Metadata
             XmlWriterSettings settings = new XmlWriterSettings();
             settings.WriteEndDocumentOnClose = true;
             settings.Indent = true;
@@ -223,7 +277,6 @@ namespace BackupCore
             MemoryStream newblock = new MemoryStream();
             FileStream reader = File.OpenRead(filepath);
             int readinblocksize = 256;
-            // 20 (hash) + 256 (data) = 276
             byte[] buffer = new byte[readinblocksize + 20];
             byte[] hash = new byte[20];
             try
@@ -269,13 +322,19 @@ namespace BackupCore
             hashblockqueue.CompleteAdding();
         }
 
-        protected void BackupFile(string filepath)
+        protected void BackupFileAsync(string filepath)
         {
             BackupFileMetadata(filepath);
-            BackupFileData(filepath);
+            BackupFileDataAsync(filepath);
         }
 
-        protected void BackupFileData(string filepath)
+        protected void BackupFileSync(string filepath)
+        {
+            BackupFileMetadata(filepath);
+            BackupFileDataSync(filepath);
+        }
+
+        protected void BackupFileDataAsync(string filepath)
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
             Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, filepath));
@@ -287,6 +346,37 @@ namespace BackupCore
                 if (fileblockqueue.TryTake(out block))
                 {
                     SaveBlock(block.Hash, block.Block);
+                    try
+                    {
+                        lock (FileBlocks[filepath])
+                        {
+                            FileBlocks[filepath].Add(block.Hash);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        lock (FileBlocks)
+                        {
+                            FileBlocks.Add(filepath, new List<byte[]>());
+                            FileBlocks[filepath].Add(block.Hash);
+                        }
+                    }
+                }
+            }
+        }
+
+        protected void BackupFileDataSync(string filepath)
+        {
+            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            GetFileBlocks(fileblockqueue, filepath);
+
+
+            while (!fileblockqueue.IsCompleted)
+            {
+                HashBlockPair block;
+                if (fileblockqueue.TryTake(out block))
+                {
+                    //SaveBlock(block.Hash, block.Block);
                     try
                     {
                         lock (FileBlocks[filepath])

@@ -11,6 +11,7 @@ namespace BackupCore
     /// </summary>
     class HashIndexStore
     {
+        // TODO: Consider some inheritance relationship between this class and BPlusTree
         public BPlusTree TreeIndexStore { get; private set; }
 
         public string IndexPath { get; set; }

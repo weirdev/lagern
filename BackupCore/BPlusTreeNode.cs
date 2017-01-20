@@ -17,22 +17,18 @@ namespace BackupCore
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
-        // Differs from/not saved to disk
-        [DataMember]
-        public bool Dirty { get; set; }
-
-        private string parent;
-        private string next;
+        private BPlusTreeNode parent;
+        private BPlusTreeNode next;
 
         private ObservableCollection<byte[]> keys;
-        private ObservableCollection<string> children;
+        private ObservableCollection<BPlusTreeNode> children;
         private ObservableCollection<BackupLocation> values;
 
         [DataMember]
         public string NodeID { get; private set; }
 
         [DataMember]
-        public string Parent
+        public BPlusTreeNode Parent
         {
             get { return parent; }
             set
@@ -47,7 +43,7 @@ namespace BackupCore
 
         // Only for leaf nodes makes a linked list for efficient in-order traversal
         [DataMember]
-        public string Next
+        public BPlusTreeNode Next
         {
             get { return next; }
             set
@@ -83,7 +79,7 @@ namespace BackupCore
 
         // Size m
         [DataMember]
-        public ObservableCollection<string> Children
+        public ObservableCollection<BPlusTreeNode> Children
         {
             get { return children; }
             set
@@ -111,9 +107,8 @@ namespace BackupCore
             }
         }
 
-        public BPlusTreeNode(string parent, bool isleafnode, int nodesize, string next=null)
+        public BPlusTreeNode(BPlusTreeNode parent, bool isleafnode, int nodesize, BPlusTreeNode next=null)
         {
-            NodeID = (Guid.NewGuid()).ToString();
             Parent = parent;
             NodeSize = nodesize;
             IsLeafNode = isleafnode;
@@ -125,13 +120,12 @@ namespace BackupCore
             }
             else
             {
-                Children = new ObservableCollection<string>();
+                Children = new ObservableCollection<BPlusTreeNode>();
             }
         }
 
         private void NotifyPropertyChanged([CallerMemberName] string propertyName="")
         {
-            Dirty = true;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
