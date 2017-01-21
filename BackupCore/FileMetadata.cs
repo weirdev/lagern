@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-using System.Runtime.Serialization;
 using System.Xml;
 using System.Security.AccessControl;
 
@@ -13,46 +12,36 @@ namespace BackupCore
     /// <summary>
     /// Stores basic file metadata + list of hashes of file blocks
     /// </summary>
-    [DataContract]
     public class FileMetadata : ICustomSerializable<FileMetadata>
     {
-        [DataMember]
         public string FileName { get; set; }
-
-        [IgnoreDataMember]
+        
         public DateTimeOffset DateAccessed { get; set; }
-
-        [DataMember]
+        
         private long NumDateAccessed
         {
             get { return DateAccessed.Ticks; }
             set { DateAccessed = new DateTimeOffset(value, new TimeSpan(0L)); }
         }
-
-        [IgnoreDataMember]
+        
         public DateTimeOffset DateModified { get; set; }
-
-        [DataMember]
+        
         private long NumDateModified
         {
             get { return DateModified.Ticks; }
             set { DateModified = new DateTimeOffset(value, new TimeSpan(0L)); }
         }
-
-        [IgnoreDataMember]
+        
         public DateTimeOffset DateCreated { get; set; }
-
-        [DataMember]
+        
         private long NumDateCreated
         {
             get { return DateCreated.Ticks; }
             set { DateCreated = new DateTimeOffset(value, new TimeSpan(0L)); }
         }
-
-        [DataMember]
+        
         public long FileSize { get; set; }
-
-        [DataMember]
+        
         public List<byte[]> BlocksHashes { get; set; }
 
         /// <summary>
