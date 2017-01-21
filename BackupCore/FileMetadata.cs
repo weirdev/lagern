@@ -84,7 +84,14 @@ namespace BackupCore
             FileInfo fi = new FileInfo(filepath);
             DateAccessed = fi.LastAccessTimeUtc;
             DateModified = fi.LastWriteTimeUtc;
-            FileSize = fi.Length;
+            if (fi.Attributes == FileAttributes.Directory)
+            {
+                FileSize = 0;
+            }
+            else
+            {
+                FileSize = fi.Length;
+            }
             DateCreated = fi.CreationTimeUtc;
         }
 
@@ -111,9 +118,12 @@ namespace BackupCore
             BinaryEncoding.encode(datemodifiedbytes, binrep);
             BinaryEncoding.encode(datecreatedbytes, binrep);
             BinaryEncoding.encode(filesizebytes, binrep);
-            foreach (var hash in BlocksHashes)
+            if (BlocksHashes != null)
             {
-                BinaryEncoding.encode(hash, binrep);
+                foreach (var hash in BlocksHashes)
+                {
+                    BinaryEncoding.encode(hash, binrep);
+                }
             }
 
             return binrep.ToArray();

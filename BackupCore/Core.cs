@@ -161,17 +161,17 @@ namespace BackupCore
                 foreach (var file in files)
                 {
                     // Convert file path to a relative path
-                    string relpath = file.Substring(backuppath_src.Length);
+                    string relpath = file.Substring(backuppath_src.Length + 1);
                     filequeue.Add(relpath);
                 }
             }
             filequeue.CompleteAdding();
         }
 
-        protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string filepath)
+        protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string relpath)
         {
             MemoryStream newblock = new MemoryStream();
-            FileStream readerbuffer = File.OpenRead(filepath);
+            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
             byte[] buffer = new byte[1];
             byte[] hash = new byte[16];
             byte[][] hashes = new byte[4096][];
