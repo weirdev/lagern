@@ -11,9 +11,7 @@ namespace BackupCore
     {
         private static readonly uint[] _lookup32 = CreateLookup32();
 
-        public static readonly MD5 md5hasher = MD5.Create();
-
-        public static readonly SHA1 sha1hasher = SHA1.Create();
+        private static readonly MD5 md5hasher = MD5.Create();
 
         // We hash one byte at a time, so there are only 256 possible values to hash
         // Thus, there are only 256 possible hash results and we need not compute these more than once.

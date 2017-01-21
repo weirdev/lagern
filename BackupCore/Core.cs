@@ -8,6 +8,7 @@ using System.Xml;
 using System.Runtime.Serialization;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Security.Cryptography;
 
 namespace BackupCore
 {
@@ -33,11 +34,12 @@ namespace BackupCore
             }
 
             HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
-            MetaStore = new MetadataStore(new FileMetadata(backuppath_src));
+            MetaStore = new MetadataStore(Path.Combine(backuppath_dst, "index", "metadata"));
         }
         
         public void RunBackupAsync()
         {
+            MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFiles(filequeue));
             
@@ -62,6 +64,7 @@ namespace BackupCore
 
         public void RunBackupSync()
         {
+            MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             GetFiles(filequeue);
             
@@ -172,6 +175,7 @@ namespace BackupCore
         {
             MemoryStream newblock = new MemoryStream();
             FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
+            SHA1 sha1hasher = SHA1.Create();
             byte[] buffer = new byte[1];
             byte[] hash = new byte[16];
             byte[][] hashes = new byte[4096][];
@@ -218,7 +222,7 @@ namespace BackupCore
                         {
                             Console.WriteLine(i + j - lastblock);
                             lastblock = i + j;
-                            hashblockqueue.Add(new HashBlockPair(HashTools.sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                            hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
                             newblock.Dispose();
                             newblock = new MemoryStream();
                             buffer = new byte[1];
@@ -231,7 +235,7 @@ namespace BackupCore
                 {
                     Console.WriteLine(newblock.Length);
                     // Hash the hash again for consistency with above
-                    hashblockqueue.Add(new HashBlockPair(HashTools.sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                    hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
                 }
             }
             catch (Exception)
@@ -304,7 +308,10 @@ namespace BackupCore
             FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
             fm.BlocksHashes = blockshashes;
             // TODO: will need to add subdirectories before their files
-            MetaStore.AddFile(relpath, fm);
+            lock (MetaStore)
+            {
+                MetaStore.AddFile(relpath, fm);
+            }
         }
 
         protected void SaveBlock(byte[] hash, byte[] block)

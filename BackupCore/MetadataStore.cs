@@ -12,9 +12,23 @@ namespace BackupCore
     {
         MetadataNode Root { get; set; }
 
-        public MetadataStore(FileMetadata rootinfo)
+
+        public MetadataStore(string metadatapath)
         {
-            Root = new MetadataNode(rootinfo);
+            try
+            {
+                using (FileStream fs = new FileStream(metadatapath, FileMode.Open, FileAccess.Read))
+                {
+                    using (BinaryReader reader = new BinaryReader(fs))
+                    {
+                        Root = deserialize(reader.ReadBytes((int)fs.Length)).Root;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Reading old metadata failed. Initializing new metadata store...");
+            }
         }
 
         private MetadataStore(MetadataNode root)
@@ -22,9 +36,36 @@ namespace BackupCore
             Root = root;
         }
 
+        public bool HasDirectory(string relpath)
+        {
+            return GetDirectory(relpath) != null;
+        }
+
         public FileMetadata GetDirectoryMetadata(string relpath)
         {
             return GetDirectory(relpath).DirMetadata;
+        }
+
+        public FileMetadata GetFile(string relpath)
+        {
+            if (relpath.StartsWith("/"))
+            {
+                throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
+            }
+            if (relpath.EndsWith("/"))
+            {
+                relpath = relpath.Substring(0, relpath.Length - 1);
+            }
+            int slash = relpath.LastIndexOf('/');
+            if (slash != -1)
+            {
+                MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
+                return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
+            }
+            else // only filename given, must exist in "root"
+            {
+                return Root.GetFile(relpath);
+            }
         }
         
         // TODO: handle ".." in paths
@@ -63,6 +104,10 @@ namespace BackupCore
                 {
                     nextdir = current_dir;
                 }
+                if (nextdir == null)
+                {
+                    return null;
+                }
                 return GetDirectory(nextpath, nextdir);
             }
             else
@@ -75,28 +120,6 @@ namespace BackupCore
                 {
                     return current_dir;
                 }
-            }
-        }
-
-        public FileMetadata GetFile(string relpath)
-        {
-            if (relpath.StartsWith("/"))
-            {
-                throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
-            }
-            if (relpath.EndsWith("/"))
-            {
-                relpath = relpath.Substring(0, relpath.Length - 1);
-            }
-            int slash = relpath.LastIndexOf('/');
-            if (slash != -1)
-            {
-                MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
-                return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
-            }
-            else // only filename given, must exist in "root"
-            {
-                return Root.GetFile(relpath);
             }
         }
 
@@ -115,7 +138,21 @@ namespace BackupCore
             }
             else // only directory name given, must exist in "root"
             {
-                Root.AddDirectory(metadata);
+                if (relpath == ".")
+                {
+                    if (Root != null)
+                    {
+                        Root.DirMetadata = metadata;
+                    }
+                    else
+                    {
+                        Root = new MetadataNode(metadata);
+                    }
+                }
+                else
+                {
+                    Root.AddDirectory(metadata);
+                }
             }
         }
 
@@ -198,12 +235,13 @@ namespace BackupCore
                 Dictionary<string, FileMetadata> files)
             {
                 DirMetadata = metadata;
-
+                Directories = directories;
+                Files = files;
             }
 
             public MetadataNode GetDirectory(string name)
             {
-                if (Directories.ContainsKey(name))
+                if (Directories != null && Directories.ContainsKey(name))
                 {
                     return Directories[name];
                 }
@@ -212,22 +250,30 @@ namespace BackupCore
 
             public FileMetadata GetFile(string name)
             {
-                if (Files.ContainsKey(name))
+                if (Files != null && Files.ContainsKey(name))
                 {
                     return Files[name];
                 }
                 return null;
             }
 
+            /// <summary>
+            /// Adds or updates a directory.
+            /// </summary>
+            /// <param name="metadata"></param>
             public void AddDirectory(FileMetadata metadata)
             {
                 MetadataNode ndir = new MetadataNode(metadata);
-                Directories.Add(metadata.FileName, ndir);
+                Directories[metadata.FileName] =  ndir;
             }
 
+            /// <summary>
+            /// Adds or updates a file.
+            /// </summary>
+            /// <param name="metadata"></param>
             public void AddFile(FileMetadata metadata)
             {
-                Files.Add(metadata.FileName, metadata);
+                Files[metadata.FileName] = metadata;
             }
 
             /// <summary>

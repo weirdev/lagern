@@ -65,13 +65,14 @@ namespace BackupCore
         /// <param name="datecreated"></param>
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTimeOffset dateaccessed, DateTimeOffset datemodified, 
-            DateTimeOffset datecreated, long filesize)
+            DateTimeOffset datecreated, long filesize, List<byte[]> blockshashes)
         {
             FileName = filename;
             DateAccessed = dateaccessed;
             DateModified = datemodified;
             FileSize = filesize;
             DateCreated = datecreated;
+            BlocksHashes = blockshashes;
         }
 
         /// <summary>
@@ -154,7 +155,8 @@ namespace BackupCore
                 new DateTimeOffset(numdateaccessed, new TimeSpan(0L)),
                 new DateTimeOffset(numdatemodified, new TimeSpan(0L)),
                 new DateTimeOffset(numdatecreated, new TimeSpan(0L)),
-                BitConverter.ToInt64(filesizebytes, 0));
+                BitConverter.ToInt64(filesizebytes, 0),
+                blockshashes);
         }
     }
 }
