@@ -75,7 +75,7 @@
     <Compile Include="SerializableKeyValuePair.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Notes.txt" />
+    <None Include="Notes.md" />
     <Content Include="treeviewer.py" />
   </ItemGroup>
   <ItemGroup>

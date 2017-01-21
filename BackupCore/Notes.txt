@@ -1,3 +1,0 @@
-﻿xdelta or equivalent on saved metadata/blocklist
-
-combine metadata/blocklist save as in original folder structure

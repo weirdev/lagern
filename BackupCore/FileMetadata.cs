@@ -14,7 +14,7 @@ namespace BackupCore
     /// Stores basic file metadata + list of hashes of file blocks
     /// </summary>
     [DataContract]
-    public class FileMetadata
+    public class FileMetadata : ICustomSerializable<FileMetadata>
     {
         [DataMember]
         public string FileName { get; set; }
@@ -23,7 +23,7 @@ namespace BackupCore
         public DateTimeOffset DateAccessed { get; set; }
 
         [DataMember]
-        private long XmlDateAccessed
+        private long NumDateAccessed
         {
             get { return DateAccessed.Ticks; }
             set { DateAccessed = new DateTimeOffset(value, new TimeSpan(0L)); }
@@ -33,7 +33,7 @@ namespace BackupCore
         public DateTimeOffset DateModified { get; set; }
 
         [DataMember]
-        private long XmlDateModified
+        private long NumDateModified
         {
             get { return DateModified.Ticks; }
             set { DateModified = new DateTimeOffset(value, new TimeSpan(0L)); }
@@ -43,7 +43,7 @@ namespace BackupCore
         public DateTimeOffset DateCreated { get; set; }
 
         [DataMember]
-        private long XmlDateCreated
+        private long NumDateCreated
         {
             get { return DateCreated.Ticks; }
             set { DateCreated = new DateTimeOffset(value, new TimeSpan(0L)); }
@@ -53,26 +53,31 @@ namespace BackupCore
         public long FileSize { get; set; }
 
         [DataMember]
-        public FileAttributes Attributes { get; set; }
-
-        [DataMember]
         public List<byte[]> BlocksHashes { get; set; }
 
-        // TODO: Replace serializing ACL with writing ACL to a dummy file in a security store in backup location
-        public FileSecurity AccessControl { get; set; }
-
+        /// <summary>
+        /// New FileMetadata by explicitly specifying each field of
+        /// a file's metadata.
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="dateaccessed"></param>
+        /// <param name="datemodified"></param>
+        /// <param name="datecreated"></param>
+        /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTimeOffset dateaccessed, DateTimeOffset datemodified, 
-            DateTimeOffset datecreated, long filesize, FileAttributes attributes, FileSecurity accesscontrol)
+            DateTimeOffset datecreated, long filesize)
         {
             FileName = filename;
             DateAccessed = dateaccessed;
             DateModified = datemodified;
             FileSize = filesize;
             DateCreated = datecreated;
-            Attributes = attributes;
-            AccessControl = accesscontrol;
         }
 
+        /// <summary>
+        /// New FileMetadata by examining a file on disk.
+        /// </summary>
+        /// <param name="filepath"></param>
         public FileMetadata(string filepath)
         {
             FileName = Path.GetFileName(filepath);
@@ -81,8 +86,6 @@ namespace BackupCore
             DateModified = fi.LastWriteTimeUtc;
             FileSize = fi.Length;
             DateCreated = fi.CreationTimeUtc;
-            Attributes = fi.Attributes;
-            AccessControl = fi.GetAccessControl();
         }
 
         public void WriteOut(string filepath)
@@ -91,8 +94,57 @@ namespace BackupCore
             fi.LastAccessTimeUtc = DateAccessed.DateTime;
             fi.LastWriteTimeUtc = DateModified.DateTime;
             fi.CreationTimeUtc = DateCreated.DateTime;
-            fi.Attributes = Attributes;
-            fi.SetAccessControl(AccessControl);
+        }
+
+        public byte[] serialize()
+        {
+            byte[] filenamebytes = Encoding.ASCII.GetBytes(FileName);
+            byte[] dateaccessedbytes = BitConverter.GetBytes(NumDateAccessed);
+            byte[] datemodifiedbytes = BitConverter.GetBytes(NumDateModified);
+            byte[] datecreatedbytes = BitConverter.GetBytes(NumDateCreated);
+            byte[] filesizebytes = BitConverter.GetBytes(FileSize);
+
+            List<byte> binrep = new List<byte>();
+
+            BinaryEncoding.encode(filenamebytes, binrep);
+            BinaryEncoding.encode(dateaccessedbytes, binrep);
+            BinaryEncoding.encode(datemodifiedbytes, binrep);
+            BinaryEncoding.encode(datecreatedbytes, binrep);
+            BinaryEncoding.encode(filesizebytes, binrep);
+            foreach (var hash in BlocksHashes)
+            {
+                BinaryEncoding.encode(hash, binrep);
+            }
+
+            return binrep.ToArray();
+        }
+
+        public static FileMetadata deserialize(byte[] data)
+        {
+            byte[] filenamebytes;
+            byte[] dateaccessedbytes;
+            byte[] datemodifiedbytes;
+            byte[] datecreatedbytes;
+            byte[] filesizebytes;
+
+            List<byte[]> savedobjects = BinaryEncoding.decode(data);
+            filenamebytes = savedobjects[0];
+            dateaccessedbytes = savedobjects[1];
+            datemodifiedbytes = savedobjects[2];
+            datecreatedbytes = savedobjects[3];
+            filesizebytes = savedobjects[4];
+
+            List<byte[]> blockshashes = savedobjects.GetRange(5, savedobjects.Count - 5);
+
+            long numdateaccessed = BitConverter.ToInt64(dateaccessedbytes, 0);
+            long numdatemodified = BitConverter.ToInt64(datemodifiedbytes, 0);
+            long numdatecreated = BitConverter.ToInt64(datecreatedbytes, 0);
+
+            return new FileMetadata(Encoding.ASCII.GetString(filenamebytes),
+                new DateTimeOffset(numdateaccessed, new TimeSpan(0L)),
+                new DateTimeOffset(numdatemodified, new TimeSpan(0L)),
+                new DateTimeOffset(numdatecreated, new TimeSpan(0L)),
+                BitConverter.ToInt64(filesizebytes, 0));
         }
     }
 }
