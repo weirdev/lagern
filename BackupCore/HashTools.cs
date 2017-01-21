@@ -3,12 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Security.Cryptography;
 
 namespace BackupCore
 {
     public static class HashTools
     {
         private static readonly uint[] _lookup32 = CreateLookup32();
+
+        public static readonly MD5 md5hasher = MD5.Create();
+
+        public static readonly SHA1 sha1hasher = SHA1.Create();
+
+        // We hash one byte at a time, so there are only 256 possible values to hash
+        // Thus, there are only 256 possible hash results and we need not compute these more than once.
+        public static readonly byte[][] md5hashes = CreateMD5ByteLookupTable();
 
         private static uint[] CreateLookup32()
         {
@@ -80,6 +89,19 @@ namespace BackupCore
                 }
             }
             return true;
+        }
+
+        private static byte[][] CreateMD5ByteLookupTable()
+        {
+            // Creat hash lookup table
+            var md5hashes = new byte[256][];
+            for (int i = 0; i < md5hashes.Length; i++)
+            {
+                byte[] tohash = new byte[1];
+                tohash[0] = (byte)i;
+                md5hashes[i] = md5hasher.ComputeHash(tohash);
+            }
+            return md5hashes;
         }
     }
 }

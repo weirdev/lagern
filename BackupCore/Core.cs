@@ -4,8 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-using System.Security.Cryptography;
-using System.Xml.Serialization;
 using System.Xml;
 using System.Runtime.Serialization;
 using System.Collections.Concurrent;
@@ -18,15 +16,6 @@ namespace BackupCore
         public string backuppath_src { get; set; }
 
         public string backuppath_dst { get; set; }
-
-        protected SHA1 _sha1hasher = SHA1.Create();
-        protected SHA1 sha1hasher { get { return _sha1hasher; } }
-
-        protected MD5 _md5hasher = MD5.Create();
-        protected MD5 md5hasher { get { return _md5hasher; } }
-        // We hash one byte at a time, so there are only 256 possible values to hash
-        // Thus, there are only 256 possible hash results and we need not compute these more than once.
-        protected byte[][] md5hashes { get; set; }
 
         // Key = filepath, Value = list of hashes of blocks
         protected IDictionary<string, IList<byte[]>> FileBlocks = new Dictionary<string, IList<byte[]>>();
@@ -48,14 +37,7 @@ namespace BackupCore
             }
 
             HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
-            // Creat hash lookup table
-            md5hashes = new byte[256][];
-            for (int i = 0; i < md5hashes.Length; i++)
-            {
-                byte[] tohash = new byte[1];
-                tohash[0] = (byte)i;
-                md5hashes[i] = md5hasher.ComputeHash(tohash);
-            }
+            
         }
         
         public void RunBackupAsync()
@@ -310,7 +292,7 @@ namespace BackupCore
                     }
                     for (int j = 0; j < readin.Length; j++)
                     {
-                        byte[] hashaddition = md5hashes[readin[j]];
+                        byte[] hashaddition = HashTools.md5hashes[readin[j]];
                         for (int k = 0; k < hashaddition.Length; k++)
                         {
                             hash[k] = (byte)(hash[k] ^ hashaddition[k]);
@@ -335,7 +317,7 @@ namespace BackupCore
                         {
                             Console.WriteLine(i + j - lastblock);
                             lastblock = i + j;
-                            hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                            hashblockqueue.Add(new HashBlockPair(HashTools.sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
                             newblock.Dispose();
                             newblock = new MemoryStream();
                             buffer = new byte[1];
@@ -348,7 +330,7 @@ namespace BackupCore
                 {
                     Console.WriteLine(newblock.Length);
                     // Hash the hash again for consistency with above
-                    hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                    hashblockqueue.Add(new HashBlockPair(HashTools.sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
                 }
             }
             catch (Exception)
@@ -368,6 +350,7 @@ namespace BackupCore
             BackupFileDataAsync(filepath);
         }
 
+        // TODO: This should be a relative filepath
         protected void BackupFileSync(string filepath)
         {
             BackupFileMetadata(filepath);
@@ -416,7 +399,7 @@ namespace BackupCore
                 HashBlockPair block;
                 if (fileblockqueue.TryTake(out block))
                 {
-                    //SaveBlock(block.Hash, block.Block);
+                    SaveBlock(block.Hash, block.Block);
                     try
                     {
                         lock (FileBlocks[filepath])
