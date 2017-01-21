@@ -19,8 +19,14 @@ namespace BackupCore
 
         public string backuppath_dst { get; set; }
 
-        protected static SHA1 _hasher = SHA1.Create();
-        protected static SHA1 hasher { get { return _hasher; } }
+        protected SHA1 _sha1hasher = SHA1.Create();
+        protected SHA1 sha1hasher { get { return _sha1hasher; } }
+
+        protected MD5 _md5hasher = MD5.Create();
+        protected MD5 md5hasher { get { return _md5hasher; } }
+        // We hash one byte at a time, so there are only 256 possible values to hash
+        // Thus, there are only 256 possible hash results and we need not compute these more than once.
+        protected byte[][] md5hashes { get; set; }
 
         // Key = filepath, Value = list of hashes of blocks
         protected IDictionary<string, IList<byte[]>> FileBlocks = new Dictionary<string, IList<byte[]>>();
@@ -42,7 +48,14 @@ namespace BackupCore
             }
 
             HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
-            int i = 0;
+            // Creat hash lookup table
+            md5hashes = new byte[256][];
+            for (int i = 0; i < md5hashes.Length; i++)
+            {
+                byte[] tohash = new byte[1];
+                tohash[0] = (byte)i;
+                md5hashes[i] = md5hasher.ComputeHash(tohash);
+            }
         }
         
         public void RunBackupAsync()
@@ -275,49 +288,76 @@ namespace BackupCore
         protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string filepath)
         {
             MemoryStream newblock = new MemoryStream();
-            FileStream reader = File.OpenRead(filepath);
-            int readinblocksize = 256;
-            byte[] buffer = new byte[readinblocksize + 20];
-            byte[] hash = new byte[20];
+            FileStream readerbuffer = File.OpenRead(filepath);
+            byte[] buffer = new byte[1];
+            byte[] hash = new byte[16];
+            byte[][] hashes = new byte[4096][];
+            int lastblock = 0;
             try
             {
-                for (int i = 0; i < reader.Length; i += readinblocksize)
+                for (int i = 0; i < readerbuffer.Length; i += 8388608)
                 {
-                    // Read into buffer leaving 20 bytes for previous hash
-                    reader.Read(buffer, 20, readinblocksize);
-                    hash = hasher.ComputeHash(buffer);
-                    hash.CopyTo(buffer, 0);
-                    // If we reach the end of the file and file.length % readinblocksize != 0
-                    // the last block we read in will be < readinblocksize bytes, so we need to 
-                    // not write the whole buffer to newblock
-                    if (i + readinblocksize > reader.Length)
+                    byte[] readin;
+                    if (i + 8388608 <= readerbuffer.Length)
                     {
-                        newblock.Write(buffer, 20, (int)(reader.Length % readinblocksize));
+                        readin = new byte[8388608];
+                        readerbuffer.Read(readin, 0, 8388608);
                     }
                     else
                     {
-                        newblock.Write(buffer, 20, readinblocksize);
+                        readin = new byte[readerbuffer.Length % 8388608];
+                        readerbuffer.Read(readin, 0, (int)(readerbuffer.Length % 8388608));
                     }
-                    // Last byte is 0
-                    if (hash[hash.Length - 1] == 0)
+                    for (int j = 0; j < readin.Length; j++)
                     {
-                        // Hash the 20 byte hash itself because forcing the last two bytes to 0
-                        // may cause balancing issues later
-                        hashblockqueue.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
-                        newblock.Dispose();
-                        newblock = new MemoryStream();
-                        buffer = new byte[readinblocksize + 20];
+                        byte[] hashaddition = md5hashes[readin[j]];
+                        for (int k = 0; k < hashaddition.Length; k++)
+                        {
+                            hash[k] = (byte)(hash[k] ^ hashaddition[k]);
+                        }
+                        if (hashes[(j + 1) % 4096] != null)
+                        {
+                            for (int k = 0; k < hashes[(j + 1) % 4096].Length; k++)
+                            {
+                                hash[k] = (byte)(hash[k] ^ hashes[(j + 1) % 4096][k]);
+                            }
+                        }
+                        hashes[j % 4096] = (byte[])hash.Clone();
+                        newblock.Write(buffer, 0, 1);
+                        // Last byte is 0
+                        // Third to last use only upper nibble
+                        int third = hash[hash.Length - 3] - 1;
+                        if (third < 0)
+                        {
+                            third = 0;
+                        }
+                        if (hash[hash.Length - 1] + hash[hash.Length - 2] + third == 0)
+                        {
+                            Console.WriteLine(i + j - lastblock);
+                            lastblock = i + j;
+                            hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                            newblock.Dispose();
+                            newblock = new MemoryStream();
+                            buffer = new byte[1];
+                            hash = new byte[16];
+                            hashes = new byte[4096][];
+                        }
                     }
                 }
                 if (newblock.Length != 0)
                 {
+                    Console.WriteLine(newblock.Length);
                     // Hash the hash again for consistency with above
-                    hashblockqueue.Add(new HashBlockPair(hasher.ComputeHash(hash), newblock.ToArray()));
+                    hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
                 }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Error");
             }
             finally
             {
-                reader.Close();
+                readerbuffer.Close();
             }
             hashblockqueue.CompleteAdding();
         }
