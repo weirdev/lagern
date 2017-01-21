@@ -2,17 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.Serialization;
-using System.IO;
-using System.Xml;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.ComponentModel;
 using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    [DataContract(Name = "BPlusTreeNode")]
     class BPlusTreeNode : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
@@ -23,11 +18,9 @@ namespace BackupCore
         private ObservableCollection<byte[]> keys;
         private ObservableCollection<BPlusTreeNode> children;
         private ObservableCollection<BackupLocation> values;
-
-        [DataMember]
+        
         public string NodeID { get; private set; }
-
-        [DataMember]
+        
         public BPlusTreeNode Parent
         {
             get { return parent; }
@@ -42,7 +35,6 @@ namespace BackupCore
         }
 
         // Only for leaf nodes makes a linked list for efficient in-order traversal
-        [DataMember]
         public BPlusTreeNode Next
         {
             get { return next; }
@@ -57,10 +49,8 @@ namespace BackupCore
         }
 
         // m
-        [DataMember]
         public int NodeSize { get; private set; }
-
-        [DataMember]
+        
         public ObservableCollection<byte[]> Keys
         {
             get { return keys; }
@@ -73,12 +63,10 @@ namespace BackupCore
                 }
             }
         }
-
-        [DataMember]
+        
         public bool IsLeafNode { get; private set; }
 
         // Size m
-        [DataMember]
         public ObservableCollection<BPlusTreeNode> Children
         {
             get { return children; }
@@ -93,7 +81,6 @@ namespace BackupCore
         }
 
         // Size m-1
-        [DataMember]
         public ObservableCollection<BackupLocation> Values
         {
             get { return values; }

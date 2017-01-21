@@ -3,23 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Runtime.Serialization;
 
 
 namespace BackupCore
 {
-    [DataContract(Name = "BackupLocation")]
     public class BackupLocation : ICustomSerializable<BackupLocation>
     {
         // TODO: change to blobID
         // blobID will initially correspond 1-1 with original hash of block
         // later blobs may be combined, and blobID will be the ID (filename)
         // of the new combination blob
-        [DataMember]
         public string RelativeFilePath { get; set; }
-        [DataMember]
         public int BytePosition { get; set; }
-        [DataMember]
         public int ByteLength { get; set; }
 
         public BackupLocation(string relpath, int bytepos, int bytelen)

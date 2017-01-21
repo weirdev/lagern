@@ -72,7 +72,6 @@
     <Compile Include="ICustomSerializable.cs" />
     <Compile Include="MetadataStore.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SerializableKeyValuePair.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Notes.md" />
