@@ -64,6 +64,7 @@
     <Compile Include="BackupLocationTest.cs" />
     <Compile Include="BinaryEncodingTest.cs" />
     <Compile Include="CoreTest.cs" />
+    <Compile Include="MetadataStoreTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="BPlusTreeTest.cs" />
   </ItemGroup>

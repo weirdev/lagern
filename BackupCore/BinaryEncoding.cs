@@ -24,8 +24,19 @@ namespace BackupCore
                 if (b == 24 || b == 0)
                 {
                     dst.Add(24);
+                    if (b == 24)
+                    {
+                        dst.Add(36);
+                    }
+                    else if (b == 0)
+                    {
+                        dst.Add(49);
+                    }
                 }
-                dst.Add(b);
+                else
+                {
+                    dst.Add(b);
+                }
             }
             dst.Add(0);
         }
@@ -48,7 +59,14 @@ namespace BackupCore
                 {
                     if (src[i] == 24)
                     {
-                        raw.Add(src[i + 1]);
+                        if (src[i + 1] == 36)
+                        {
+                            raw.Add(24);
+                        }
+                        else if (src[i + 1] == 49)
+                        {
+                            raw.Add(0);
+                        }
                         i += 1;
                     }
                     else if (src[i] == 0)
