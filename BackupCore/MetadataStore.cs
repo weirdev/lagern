@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,7 +12,7 @@ namespace BackupCore
     {
         MetadataNode Root { get; set; }
 
-        MetadataStore(FileMetadata rootinfo)
+        public MetadataStore(FileMetadata rootinfo)
         {
             Root = new MetadataNode(rootinfo);
         }
@@ -139,6 +140,17 @@ namespace BackupCore
             else // only filename given, must exist in "root"
             {
                 Root.AddFile(metadata);
+            }
+        }
+
+        public void SynchronizeCacheToDisk(string path)
+        {
+            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                using (BinaryWriter writer = new BinaryWriter(fs))
+                {
+                    writer.Write(this.serialize());
+                }
             }
         }
 

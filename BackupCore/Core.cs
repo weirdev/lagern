@@ -17,13 +17,9 @@ namespace BackupCore
 
         public string backuppath_dst { get; set; }
 
-        // Key = filepath, Value = list of hashes of blocks
-        protected IDictionary<string, IList<byte[]>> FileBlocks = new Dictionary<string, IList<byte[]>>();
-        // Key = filepath, Value = File's metadata
-        protected IDictionary<string, FileMetadata> FileMetaIndex = new Dictionary<string, FileMetadata>();
-
         // HashIndexStore holding BackupLocations indexed by hashes (in bytes)
-        internal HashIndexStore HashStore { get; set; }
+        private HashIndexStore HashStore { get; set; }
+        private MetadataStore MetaStore { get; set; }
 
         public Core(string src, string dst)
         {
@@ -37,22 +33,11 @@ namespace BackupCore
             }
 
             HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
-            
+            MetaStore = new MetadataStore(new FileMetadata(backuppath_src));
         }
         
         public void RunBackupAsync()
         {
-            // Make sure we have an index folder to write to later
-            if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
-            {
-                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
-            }
-
-            if (!Directory.Exists(Path.Combine(backuppath_dst, "index", "hashindex")))
-            {
-                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
-            }
-
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFiles(filequeue));
             
@@ -70,33 +55,9 @@ namespace BackupCore
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
-            HashStore.SynchronizeCacheToDisk();
-            
-            XmlWriterSettings settings = new XmlWriterSettings();
-            settings.WriteEndDocumentOnClose = true;
-            settings.Indent = true;
-            settings.NewLineOnAttributes = true;
-            settings.IndentChars = "    ";
-
-            DataContractSerializer metaserializer = new DataContractSerializer(typeof(IDictionary<string, FileMetadata>));
-            using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "metadata"), settings))
-            {
-                metaserializer.WriteObject(writer, FileMetaIndex);
-            }
-
-            // TODO : Ability to read in HashIndexStore
-            //DataContractSerializer locdictserializer = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
-            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "hashindex"), settings))
-            //{
-            //    locdictserializer.WriteObject(writer, LocationDict);
-            //}
-
-            // TODO : Ability to serialize Dict with byte[]
-            //DataContractSerializer fileblockserializer = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
-            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "fileblocks"), settings))
-            //{
-            //    fileblockserializer.WriteObject(writer, FileBlocks);
-            //}
+            HashStore.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
+            // Save metadata
+            MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
 
         public void RunBackupSync()
@@ -113,37 +74,11 @@ namespace BackupCore
                 }
             }
 
-
             // Save "index"
             // Writeout entire cached index
             HashStore.SynchronizeCacheToDisk();
-
-            // Metadata
-            XmlWriterSettings settings = new XmlWriterSettings();
-            settings.WriteEndDocumentOnClose = true;
-            settings.Indent = true;
-            settings.NewLineOnAttributes = true;
-            settings.IndentChars = "    ";
-
-            DataContractSerializer metaserializer = new DataContractSerializer(typeof(IDictionary<string, FileMetadata>));
-            using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "metadata"), settings))
-            {
-                metaserializer.WriteObject(writer, FileMetaIndex);
-            }
-
-            // TODO : Ability to read in HashIndexStore
-            //DataContractSerializer locdictserializer = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
-            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "hashindex"), settings))
-            //{
-            //    locdictserializer.WriteObject(writer, LocationDict);
-            //}
-
-            // TODO : Ability to serialize Dict with byte[]
-            //DataContractSerializer fileblockserializer = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
-            //using (XmlWriter writer = XmlWriter.Create(Path.Combine(backuppath_dst, "index", "fileblocks"), settings))
-            //{
-            //    fileblockserializer.WriteObject(writer, FileBlocks);
-            //}
+            // Save metadata
+            MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -156,7 +91,7 @@ namespace BackupCore
             FileStream reader;
             byte[] buffer;
             FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, relfilepath));
-            foreach (var hash in FileBlocks[filepath])
+            foreach (var hash in MetaStore.GetFile(relfilepath).BlocksHashes)
             {
                 BackupLocation blocation = HashStore.GetBackupLocation(hash);
                 reader = File.OpenRead(Path.Combine(backuppath_dst, blocation.RelativeFilePath));
@@ -166,50 +101,7 @@ namespace BackupCore
                 reader.Close();
             }
             writer.Close();
-            FileMetaIndex[filepath].WriteOut(Path.Combine(backuppath_dst, relfilepath));
-        }
-
-        protected void ImportIndex()
-        {
-            // Deserialize metadata
-            using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "metadata"), FileMode.Open))
-            {
-                using (XmlDictionaryReader reader =
-                    XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
-                {
-                    DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, FileMetadata>));
-
-                    // Deserialize the data and read it from the instance.
-                    Dictionary<string, FileMetadata> importedmetadict =
-                        (Dictionary<string, FileMetadata>)ser.ReadObject(reader, true);
-                }
-            }
-            //// Deserialize location dict
-            //using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "hashindex"), FileMode.Open))
-            //{
-            //    using (XmlDictionaryReader reader =
-            //        XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
-            //    {
-            //        DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, BackupLocation>));
-
-            //        // Deserialize the data and read it from the instance.
-            //        Dictionary<string, BackupLocation> importedlocationdict =
-            //            (Dictionary<string, BackupLocation>)ser.ReadObject(reader, true);
-            //    }
-            //}
-            //// Deserialize FileBlocks
-            //using (FileStream fs = new FileStream(Path.Combine(backuppath_dst, "index", "fileblocks"), FileMode.Open))
-            //{
-            //    using (XmlDictionaryReader reader =
-            //        XmlDictionaryReader.CreateTextReader(fs, new XmlDictionaryReaderQuotas()))
-            //    {
-            //        DataContractSerializer ser = new DataContractSerializer(typeof(Dictionary<string, IList<string>>));
-
-            //        // Deserialize the data and read it from the instance.
-            //        Dictionary<string, IList<string>> importedlocationdict =
-            //            (Dictionary<string, IList<string>>)ser.ReadObject(reader, true);
-            //    }
-            //}
+            MetaStore.GetFile(relfilepath).WriteOut(Path.Combine(backuppath_dst, relfilepath));
         }
 
         protected void GetFiles(BlockingCollection<string> filequeue, string path=null)
@@ -219,6 +111,7 @@ namespace BackupCore
                 path = backuppath_src;
             }
 
+            // TODO: Bigger stack?
             Stack<string> dirs = new Stack<string>(20);
 
             dirs.Push(path);
@@ -242,6 +135,12 @@ namespace BackupCore
                     continue;
                 }
 
+                // TODO: Enable below to backup subdirectories
+                /*foreach (var sd in subDirs)
+                {
+                    dirs.Push(sd);
+                }*/
+
                 string[] files = null;
                 try
                 {
@@ -261,7 +160,9 @@ namespace BackupCore
 
                 foreach (var file in files)
                 {
-                    filequeue.Add(file);
+                    // Convert file path to a relative path
+                    string relpath = file.Substring(backuppath_src.Length);
+                    filequeue.Add(relpath);
                 }
             }
             filequeue.CompleteAdding();
@@ -344,85 +245,66 @@ namespace BackupCore
             hashblockqueue.CompleteAdding();
         }
 
-        protected void BackupFileAsync(string filepath)
+        protected void BackupFileAsync(string relpath)
         {
-            BackupFileMetadata(filepath);
-            BackupFileDataAsync(filepath);
+            List<byte[]> blockshashes = BackupFileDataAsync(relpath);
+            BackupFileMetadata(relpath, blockshashes);
         }
 
         // TODO: This should be a relative filepath
-        protected void BackupFileSync(string filepath)
+        protected void BackupFileSync(string relpath)
         {
-            BackupFileMetadata(filepath);
-            BackupFileDataSync(filepath);
+            List<byte[]> blockshashes = BackupFileDataSync(relpath);
+            BackupFileMetadata(relpath, blockshashes);
         }
 
-        protected void BackupFileDataAsync(string filepath)
+        protected List<byte[]> BackupFileDataAsync(string relpath)
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, filepath));
+            Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, relpath));
 
-            
+            List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
             {
                 HashBlockPair block;
                 if (fileblockqueue.TryTake(out block))
                 {
                     SaveBlock(block.Hash, block.Block);
-                    try
-                    {
-                        lock (FileBlocks[filepath])
-                        {
-                            FileBlocks[filepath].Add(block.Hash);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        lock (FileBlocks)
-                        {
-                            FileBlocks.Add(filepath, new List<byte[]>());
-                            FileBlocks[filepath].Add(block.Hash);
-                        }
-                    }
+                    blockshashes.Add(block.Hash);
                 }
             }
+            return blockshashes;
         }
 
-        protected void BackupFileDataSync(string filepath)
+        /// <summary>
+        /// Backup a file's data asychronously as its blocks become available.
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <returns>A list of hashes representing the file contents.</returns>
+        protected List<byte[]> BackupFileDataSync(string relpath)
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            GetFileBlocks(fileblockqueue, filepath);
+            GetFileBlocks(fileblockqueue, relpath);
 
-
+            List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
             {
                 HashBlockPair block;
                 if (fileblockqueue.TryTake(out block))
                 {
                     SaveBlock(block.Hash, block.Block);
-                    try
-                    {
-                        lock (FileBlocks[filepath])
-                        {
-                            FileBlocks[filepath].Add(block.Hash);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        lock (FileBlocks)
-                        {
-                            FileBlocks.Add(filepath, new List<byte[]>());
-                            FileBlocks[filepath].Add(block.Hash);
-                        }
-                    }
+                    blockshashes.Add(block.Hash);
                 }
             }
+            return blockshashes;
         }
 
-        protected void BackupFileMetadata(string filepath)
+        protected void BackupFileMetadata(string relpath, List<byte[]> blockshashes)
         {
-            FileMetadata bm = new FileMetadata(filepath);
-            FileMetaIndex.Add(filepath, bm);
+            FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
+            fm.BlocksHashes = blockshashes;
+            // TODO: will need to add subdirectories before their files
+            MetaStore.AddFile(relpath, fm);
         }
 
         protected void SaveBlock(byte[] hash, byte[] block)
