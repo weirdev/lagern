@@ -207,66 +207,61 @@ namespace BackupCore
             MemoryStream newblock = new MemoryStream();
             FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
             SHA1 sha1hasher = SHA1.Create();
-            byte[] buffer = new byte[1];
+
+            int readsize = 8388608;
             byte[] hash = new byte[16];
-            byte[][] hashes = new byte[4096][];
             int lastblock = 0;
             try
             {
-                for (int i = 0; i < readerbuffer.Length; i += 8388608)
+                for (int i = 0; i < readerbuffer.Length; i += readsize) // read the file in larger chunks for efficiency
                 {
                     byte[] readin;
-                    if (i + 8388608 <= readerbuffer.Length)
+                    if (i + readsize <= readerbuffer.Length) // readsize or more bytes left to read
                     {
-                        readin = new byte[8388608];
-                        readerbuffer.Read(readin, 0, 8388608);
+                        readin = new byte[readsize];
+                        readerbuffer.Read(readin, 0, readsize);
                     }
-                    else
+                    else // < readsize bytes left to read
                     {
-                        readin = new byte[readerbuffer.Length % 8388608];
-                        readerbuffer.Read(readin, 0, (int)(readerbuffer.Length % 8388608));
+                        readin = new byte[readerbuffer.Length % readsize];
+                        readerbuffer.Read(readin, 0, (int)(readerbuffer.Length % readsize));
                     }
-                    for (int j = 0; j < readin.Length; j++)
+                    for (int j = 0; j < readin.Length; j++) // Byte by byte
                     {
+                        newblock.Write(readin, j, 1);
+                        // TODO: This is sloppy and a real checksum would probably be better.
+                        // Get hash of single byte
                         byte[] hashaddition = HashTools.md5hashes[readin[j]];
+                        // XOR hash with result of previous hashes
                         for (int k = 0; k < hashaddition.Length; k++)
                         {
                             hash[k] = (byte)(hash[k] ^ hashaddition[k]);
                         }
-                        if (hashes[(j + 1) % 4096] != null)
+
+                        if (hash[hash.Length - 1] == 0 && hash[hash.Length - 2] == 0)
                         {
-                            for (int k = 0; k < hashes[(j + 1) % 4096].Length; k++)
+                            // Last byte is 0
+                            // Third to last use only upper nibble
+                            int third = hash[hash.Length - 3] & 15;
+                            if (third == 0)
                             {
-                                hash[k] = (byte)(hash[k] ^ hashes[(j + 1) % 4096][k]);
+                                Console.WriteLine(i + j - lastblock);
+                                lastblock = i + j;
+                                byte[] block = newblock.ToArray();
+                                hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(block), block));
+                                newblock.Dispose();
+                                newblock = new MemoryStream();
+                                hash = new byte[16];
                             }
-                        }
-                        hashes[j % 4096] = (byte[])hash.Clone();
-                        newblock.Write(buffer, 0, 1);
-                        // Last byte is 0
-                        // Third to last use only upper nibble
-                        int third = hash[hash.Length - 3] - 1;
-                        if (third < 0)
-                        {
-                            third = 0;
-                        }
-                        if (hash[hash.Length - 1] + hash[hash.Length - 2] + third == 0)
-                        {
-                            Console.WriteLine(i + j - lastblock);
-                            lastblock = i + j;
-                            hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
-                            newblock.Dispose();
-                            newblock = new MemoryStream();
-                            buffer = new byte[1];
-                            hash = new byte[16];
-                            hashes = new byte[4096][];
                         }
                     }
                 }
-                if (newblock.Length != 0)
+                if (newblock.Length != 0) // Create block from remaining bytes
                 {
                     Console.WriteLine(newblock.Length);
-                    // Hash the hash again for consistency with above
-                    hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(newblock.ToArray()), newblock.ToArray()));
+                    byte[] block = newblock.ToArray();
+                    hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(block), block));
+                    newblock.Dispose();
                 }
             }
             catch (Exception)
