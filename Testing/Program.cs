@@ -25,7 +25,8 @@ namespace Testing
             backupper.RunBackupSync();
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
-            backupper.ReconstructFile("random.dat");
+            //backupper.ReconstructFile("random.dat");
+            backupper.ReconstructFile("sub\\moreshit.txt");
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
         }

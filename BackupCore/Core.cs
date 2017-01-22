@@ -40,9 +40,22 @@ namespace BackupCore
         {
             MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
-            Task getfilestask = Task.Run(() => GetFiles(filequeue));
+            BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
+            Task getfilestask = Task.Run(() => GetFilesAndDirectories(filequeue, directoryqueue));
             
             List<Task> backupops = new List<Task>();
+            while (!directoryqueue.IsCompleted)
+            {
+                string directory;
+                if (directoryqueue.TryTake(out directory))
+                {
+                    // We do not backup diretories asychronously
+                    // becuase a. they should not take long anyway
+                    // and b. the metadatastore needs to have stored directories
+                    // before it stores their children.
+                    BackupDirectory(directory);
+                }
+            }
             while (!filequeue.IsCompleted)
             {
                 string file;
@@ -65,8 +78,20 @@ namespace BackupCore
         {
             MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
-            GetFiles(filequeue);
-            
+            BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
+            GetFilesAndDirectories(filequeue, directoryqueue);
+
+            while (!directoryqueue.IsCompleted)
+            {
+                string directory;
+                if (directoryqueue.TryTake(out directory))
+                {
+                    // We backup directories first because
+                    // the metadatastore needs to have stored directories
+                    // before it stores their children.
+                    BackupDirectory(directory);
+                }
+            }
             while (!filequeue.IsCompleted)
             {
                 string file;
@@ -92,7 +117,7 @@ namespace BackupCore
 
             FileStream reader;
             byte[] buffer;
-            FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, relfilepath));
+            FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, Path.GetFileName(relfilepath)));
             foreach (var hash in MetaStore.GetFile(relfilepath).BlocksHashes)
             {
                 BackupLocation blocation = HashStore.GetBackupLocation(hash);
@@ -103,10 +128,10 @@ namespace BackupCore
                 reader.Close();
             }
             writer.Close();
-            MetaStore.GetFile(relfilepath).WriteOut(Path.Combine(backuppath_dst, relfilepath));
+            MetaStore.GetFile(relfilepath).WriteOut(Path.Combine(backuppath_dst, Path.GetFileName(relfilepath)));
         }
 
-        protected void GetFiles(BlockingCollection<string> filequeue, string path=null)
+        protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
         {
             if (path == null)
             {
@@ -136,12 +161,13 @@ namespace BackupCore
                     Console.WriteLine(e.Message);
                     continue;
                 }
-
-                // TODO: Enable below to backup subdirectories
-                /*foreach (var sd in subDirs)
+                
+                foreach (var sd in subDirs)
                 {
                     dirs.Push(sd);
-                }*/
+                    string relpath = sd.Substring(backuppath_src.Length + 1);
+                    directoryqueue.Add(relpath);
+                }
 
                 string[] files = null;
                 try
@@ -167,7 +193,13 @@ namespace BackupCore
                     filequeue.Add(relpath);
                 }
             }
+            directoryqueue.CompleteAdding();
             filequeue.CompleteAdding();
+        }
+
+        private void BackupDirectory(string relpath)
+        {
+            MetaStore.AddDirectory(relpath, new FileMetadata(Path.Combine(backuppath_src, relpath)));
         }
 
         protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string relpath)

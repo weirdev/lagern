@@ -48,15 +48,14 @@ namespace BackupCore
 
         public FileMetadata GetFile(string relpath)
         {
-            if (relpath.StartsWith("/"))
-            {
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))            {
                 throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
             }
-            if (relpath.EndsWith("/"))
+            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 relpath = relpath.Substring(0, relpath.Length - 1);
             }
-            int slash = relpath.LastIndexOf('/');
+            int slash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
             if (slash != -1)
             {
                 MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
@@ -71,11 +70,11 @@ namespace BackupCore
         // TODO: handle ".." in paths
         private MetadataNode GetDirectory(string relpath)
         {
-            if (relpath.StartsWith("/"))
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
             }
-            if (relpath.EndsWith("/"))
+            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 relpath = relpath.Substring(0, relpath.Length - 1);
             }
@@ -90,7 +89,7 @@ namespace BackupCore
         /// <returns></returns>
         private MetadataNode GetDirectory(string path, MetadataNode current_dir)
         {
-            int slash = path.IndexOf('/');
+            int slash = path.IndexOf(Path.DirectorySeparatorChar);
             if (slash != -1)
             {
                 string nextdirname = path.Substring(0, slash);
@@ -125,11 +124,11 @@ namespace BackupCore
 
         public void AddDirectory(string relpath, FileMetadata metadata)
         {
-            if (relpath.EndsWith("/"))
+            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 relpath = relpath.Substring(0, relpath.Length - 1);
             }
-            int lastslash = relpath.LastIndexOf('/');
+            int lastslash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
             if (lastslash != -1)
             {
                 string dirpath = relpath.Substring(0, lastslash);
@@ -163,11 +162,11 @@ namespace BackupCore
         /// <param name="metadata"></param>
         public void AddFile(string relpath, FileMetadata metadata)
         {
-            if (relpath.EndsWith("/"))
+            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 relpath = relpath.Substring(0, relpath.Length - 1);
             }
-            int lastslash = relpath.LastIndexOf('/');
+            int lastslash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
             if (lastslash != -1)
             {
                 string dirpath = relpath.Substring(0, lastslash);
@@ -263,8 +262,15 @@ namespace BackupCore
             /// <param name="metadata"></param>
             public void AddDirectory(FileMetadata metadata)
             {
-                MetadataNode ndir = new MetadataNode(metadata);
-                Directories[metadata.FileName] =  ndir;
+                if (Directories.ContainsKey(metadata.FileName))
+                {
+                    Directories[metadata.FileName].DirMetadata = metadata;
+                }
+                else
+                {
+                    MetadataNode ndir = new MetadataNode(metadata);
+                    Directories[metadata.FileName] = ndir;
+                }
             }
 
             /// <summary>
