@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Testing", "Testing\Testing.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackupCoreTest", "BackupCoreTest\BackupCoreTest.csproj", "{EE9E5B15-A468-4757-B4AA-AF1D1687695E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BackupConsole", "BackupConsole\BackupConsole.csproj", "{11113A9E-926D-4866-BBCC-257D8BF23522}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,6 +36,12 @@ Global
 		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Test|Any CPU.ActiveCfg = Test|Any CPU
 		{EE9E5B15-A468-4757-B4AA-AF1D1687695E}.Test|Any CPU.Build.0 = Test|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Test|Any CPU.ActiveCfg = Release|Any CPU
+		{11113A9E-926D-4866-BBCC-257D8BF23522}.Test|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
