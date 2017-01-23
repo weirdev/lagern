@@ -11,4 +11,6 @@
 
 *********************
 IN PROGRESS
-Backup console
+Transition backup console to proper command line program
+Remember past filesystem states
+Add FileAttributes to FileMetadata

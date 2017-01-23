@@ -17,7 +17,7 @@ namespace BackupConsole
         {
             while (true)
             {
-                Console.Write("backup > ");
+                Console.Write("backup> ");
                 string[] input = Console.ReadLine().Split(' ');
                 if (input[0] == "set")
                 {
@@ -26,6 +26,29 @@ namespace BackupConsole
                 else if (input[0] == "run")
                 {
                     RunBackup();
+                }
+                else if (input[0] == "restore")
+                {
+                    string filerelpath = input[1];
+                    string restorepath;
+                    if (input.Length >= 3)
+                    {
+                        if (input[2] == ".")
+                        {
+                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
+                        }
+                        else
+                        {
+                            restorepath = Path.Combine(input[2], Path.GetFileName(filerelpath));
+                        }
+                    }
+                    else
+                    {
+                        // No restoreto path given, restore
+                        // to cwd / its relative path
+                        restorepath = Path.Combine(cwd, filerelpath);
+                    }
+                    RestoreFile(filerelpath, restorepath);
                 }
                 else if (input[0] == "exit")
                 {
@@ -44,6 +67,18 @@ namespace BackupConsole
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
             bcore.RunBackupSync();
+        }
+
+        private static void RestoreFile(string filerelpath, string restorepath)
+        {
+            string destination = ReadSetting("dest");
+            if (destination == null)
+            {
+                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                return;
+            }
+            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            bcore.ReconstructFile(filerelpath, restorepath);
         }
 
         private static string ReadSetting(string key)

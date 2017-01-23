@@ -110,14 +110,11 @@ namespace BackupCore
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
         // TODO: ReconstructFile() doesnt produce exactly original file
-        public void ReconstructFile(string relfilepath)
+        public void ReconstructFile(string relfilepath, string restorepath)
         {
-            //ImportIndex();
-            string filepath = Path.Combine(backuppath_src, relfilepath);
-
             FileStream reader;
             byte[] buffer;
-            FileStream writer = File.OpenWrite(Path.Combine(backuppath_dst, Path.GetFileName(relfilepath)));
+            FileStream writer = File.OpenWrite(restorepath);
             foreach (var hash in MetaStore.GetFile(relfilepath).BlocksHashes)
             {
                 BackupLocation blocation = HashStore.GetBackupLocation(hash);
@@ -128,7 +125,7 @@ namespace BackupCore
                 reader.Close();
             }
             writer.Close();
-            MetaStore.GetFile(relfilepath).WriteOut(Path.Combine(backuppath_dst, Path.GetFileName(relfilepath)));
+            MetaStore.GetFile(relfilepath).WriteOut(restorepath);
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
