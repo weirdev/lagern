@@ -11,6 +11,6 @@
 
 *********************
 IN PROGRESS
-Transition backup console to proper command line program
 Remember past filesystem states
 Add FileAttributes to FileMetadata
+Browse past backups easily ("backup ls")

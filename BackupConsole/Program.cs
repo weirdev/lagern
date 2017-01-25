@@ -9,51 +9,49 @@ namespace BackupConsole
 {
     public class Program
     {
-        // When this becomes a regular command line program
-        // (like git) we will just use the actual working directory
-        private static string cwd = "C:\\Users\\Wesley\\Desktop\\test\\src";
+        // Current directory (where user launch from)
+        private static string cwd = Environment.CurrentDirectory;
 
         public static void Main(string[] args)
         {
-            while (true)
+            if (args.Length == 0)
             {
-                Console.Write("backup> ");
-                string[] input = Console.ReadLine().Split(' ');
-                if (input[0] == "set")
+                Console.WriteLine("Specify a subcommand to run. Try \"backup help\" for a listing of subcommands.");
+            }
+            else if (args[0] == "set")
+            {
+                WriteSetting(args[1], args[2]);
+            }
+            else if (args[0] == "run")
+            {
+                RunBackup();
+            }
+            else if (args[0] == "restore")
+            {
+                string filerelpath = args[1];
+                string restorepath;
+                if (args.Length >= 3)
                 {
-                    WriteSetting(input[1], input[2]);
-                }
-                else if (input[0] == "run")
-                {
-                    RunBackup();
-                }
-                else if (input[0] == "restore")
-                {
-                    string filerelpath = input[1];
-                    string restorepath;
-                    if (input.Length >= 3)
+                    if (args[2] == ".")
                     {
-                        if (input[2] == ".")
-                        {
-                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
-                        }
-                        else
-                        {
-                            restorepath = Path.Combine(input[2], Path.GetFileName(filerelpath));
-                        }
+                        restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
                     }
                     else
                     {
-                        // No restoreto path given, restore
-                        // to cwd / its relative path
-                        restorepath = Path.Combine(cwd, filerelpath);
+                        restorepath = Path.Combine(args[2], Path.GetFileName(filerelpath));
                     }
-                    RestoreFile(filerelpath, restorepath);
                 }
-                else if (input[0] == "exit")
+                else
                 {
-                    Environment.Exit(0);
+                    // No restoreto path given, restore
+                    // to cwd / its relative path
+                    restorepath = Path.Combine(cwd, filerelpath);
                 }
+                RestoreFile(filerelpath, restorepath);
+            }
+            else if (args[0] == "help")
+            {
+                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<destination directory path>]");
             }
         }
 
