@@ -12,5 +12,25 @@
 *********************
 IN PROGRESS
 Remember past filesystem states
+	Timestamp these states
+	Ability to add messages
 Add FileAttributes to FileMetadata
 Browse past backups easily ("backup ls")
+Reference count data blocks
+Ignore patterns
+Multiple base folders
+Replicate source file tree (as last backed up) in destination
+	BackupLocations point at these files
+	Block in the backup store but not in the replicated tree stored in a seperate folder
+
+**********************
+WHAT'S GOING ON
+The goal of this program is to back files up quickly and efficiently (i.e. low disk usage)
+
+The user runs the program from a base folder, and all files and child directories get backed up
+
+When a file gets backed up, its metadata and data are seperated.
+
+Data from a file is split into chunks (called blocks) that average ~4KB. For large files that change only a little, this allows only the modified parts to be saved again in the backup. The blocks are stored according to their SHA1 hashes. A hash index (<destination>/index/hashes) keeps track of which hashes (blocks) we have stored. In memory this is a very efficient B+ tree of hashes. Now we save each block as <destination>/<block hash>, but this may be done differently later. For that reason some extra data (relative path, byte offset, block length) is stored in the hash index.
+
+Metadata from a file (right now we don't support all NTFS metadata) is stored, along with the metadata of all other files and directories being backed up, in a metadata index (<destination>/index/metadata). This index rembebers the original file tree of the backup source. The metadata index also contains, for each file, an ordered list of the hashes making up that file.
