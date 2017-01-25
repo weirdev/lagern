@@ -32,13 +32,15 @@ namespace BackupCore
                 Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
             }
 
-            HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"));
+            HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"), backuppath_dst);
             MetaStore = new MetadataStore(Path.Combine(backuppath_dst, "index", "metadata"));
         }
         
         public void RunBackupAsync()
         {
-            MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree();
+
+            newmetatree.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFilesAndDirectories(filequeue, directoryqueue));
@@ -53,7 +55,7 @@ namespace BackupCore
                     // becuase a. they should not take long anyway
                     // and b. the metadatastore needs to have stored directories
                     // before it stores their children.
-                    BackupDirectory(directory);
+                    BackupDirectory(directory, newmetatree);
                 }
             }
             while (!filequeue.IsCompleted)
@@ -61,11 +63,16 @@ namespace BackupCore
                 string file;
                 if (filequeue.TryTake(out file))
                 {
-                    backupops.Add(Task.Run(() => BackupFileAsync(file)));
+                    backupops.Add(Task.Run(() => BackupFileAsync(file, newmetatree)));
                 }
             }
             Task.WaitAll(backupops.ToArray());
 
+            // Add new metadatatree to metastore
+            byte[] newmtreebytes = newmetatree.serialize();
+            MemoryStream mtreestream = new MemoryStream(newmtreebytes);
+            List<byte[]> newmtreehashes = BackupFileDataAsync(mtreestream);
+            MetaStore.AddBackup("", newmtreehashes);
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
@@ -76,7 +83,9 @@ namespace BackupCore
 
         public void RunBackupSync()
         {
-            MetaStore.AddDirectory(".", new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree();
+
+            newmetatree.AddDirectory(".", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             GetFilesAndDirectories(filequeue, directoryqueue);
@@ -89,7 +98,7 @@ namespace BackupCore
                     // We backup directories first because
                     // the metadatastore needs to have stored directories
                     // before it stores their children.
-                    BackupDirectory(directory);
+                    BackupDirectory(directory, newmetatree);
                 }
             }
             while (!filequeue.IsCompleted)
@@ -97,9 +106,15 @@ namespace BackupCore
                 string file;
                 if (filequeue.TryTake(out file))
                 {
-                    BackupFileSync(file);
+                    BackupFileSync(file, newmetatree);
                 }
             }
+
+            // Add new metadatatree to metastore
+            byte[] newmtreebytes = newmetatree.serialize();
+            MemoryStream mtreestream = new MemoryStream(newmtreebytes);
+            List<byte[]> newmtreehashes = BackupFileDataSync(mtreestream);
+            MetaStore.AddBackup("", newmtreehashes);
 
             // Save "index"
             // Writeout entire cached index
@@ -110,12 +125,13 @@ namespace BackupCore
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
         // TODO: ReconstructFile() doesnt produce exactly original file
-        public void ReconstructFile(string relfilepath, string restorepath)
+        public void WriteOutFile(string relfilepath, string restorepath)
         {
             FileStream reader;
             byte[] buffer;
             FileStream writer = File.OpenWrite(restorepath);
-            foreach (var hash in MetaStore.GetFile(relfilepath).BlocksHashes)
+            MetadataTree latestmtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore.LatestBackup.MetadataTreeHashes));
+            foreach (var hash in latestmtree.GetFile(relfilepath).BlocksHashes)
             {
                 BackupLocation blocation = HashStore.GetBackupLocation(hash);
                 reader = File.OpenRead(Path.Combine(backuppath_dst, blocation.RelativeFilePath));
@@ -125,7 +141,7 @@ namespace BackupCore
                 reader.Close();
             }
             writer.Close();
-            MetaStore.GetFile(relfilepath).WriteOut(restorepath);
+            latestmtree.GetFile(relfilepath).WriteOut(restorepath);
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -194,15 +210,14 @@ namespace BackupCore
             filequeue.CompleteAdding();
         }
 
-        private void BackupDirectory(string relpath)
+        private void BackupDirectory(string relpath, MetadataTree mtree)
         {
-            MetaStore.AddDirectory(relpath, new FileMetadata(Path.Combine(backuppath_src, relpath)));
+            mtree.AddDirectory(relpath, new FileMetadata(Path.Combine(backuppath_src, relpath)));
         }
 
-        protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, string relpath)
+        protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, Stream readerbuffer)
         {
             MemoryStream newblock = new MemoryStream();
-            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
             SHA1 sha1hasher = SHA1.Create();
 
             int readsize = 8388608;
@@ -272,23 +287,26 @@ namespace BackupCore
             hashblockqueue.CompleteAdding();
         }
 
-        protected void BackupFileAsync(string relpath)
+        protected void BackupFileAsync(string relpath, MetadataTree mtree)
         {
-            List<byte[]> blockshashes = BackupFileDataAsync(relpath);
-            BackupFileMetadata(relpath, blockshashes);
+            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
+            List<byte[]> blockshashes = BackupFileDataAsync(readerbuffer);
+            BackupFileMetadata(relpath, blockshashes, mtree);
         }
 
         // TODO: This should be a relative filepath
-        protected void BackupFileSync(string relpath)
+        protected void BackupFileSync(string relpath, MetadataTree mtree)
         {
-            List<byte[]> blockshashes = BackupFileDataSync(relpath);
-            BackupFileMetadata(relpath, blockshashes);
+            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
+            List<byte[]> blockshashes = BackupFileDataSync(readerbuffer);
+            BackupFileMetadata(relpath, blockshashes, mtree);
         }
 
-        protected List<byte[]> BackupFileDataAsync(string relpath)
+        protected List<byte[]> BackupFileDataAsync(Stream readerbuffer)
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, relpath));
+            
+            Task getfileblockstask = Task.Run(() => GetFileBlocks(fileblockqueue, readerbuffer));
 
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
@@ -308,10 +326,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <returns>A list of hashes representing the file contents.</returns>
-        protected List<byte[]> BackupFileDataSync(string relpath)
+        protected List<byte[]> BackupFileDataSync(Stream readerbuffer)
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            GetFileBlocks(fileblockqueue, relpath);
+            GetFileBlocks(fileblockqueue, readerbuffer);
 
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
@@ -326,14 +344,14 @@ namespace BackupCore
             return blockshashes;
         }
 
-        protected void BackupFileMetadata(string relpath, List<byte[]> blockshashes)
+        protected void BackupFileMetadata(string relpath, List<byte[]> blockshashes, MetadataTree mtree)
         {
             FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
             fm.BlocksHashes = blockshashes;
             // TODO: will need to add subdirectories before their files
             lock (MetaStore)
             {
-                MetaStore.AddFile(relpath, fm);
+                mtree.AddFile(relpath, fm);
             }
         }
 

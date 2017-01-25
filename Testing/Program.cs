@@ -26,7 +26,7 @@ namespace Testing
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
             //backupper.ReconstructFile("random.dat");
-            backupper.ReconstructFile("sub\\moreshit.txt");
+            backupper.WriteOutFile("sub\\moreshit.txt", Path.Combine(backupper.backuppath_dst, "moreshit.txt"));
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
         }

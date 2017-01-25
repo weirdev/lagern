@@ -12,6 +12,10 @@
 *********************
 IN PROGRESS
 Remember past filesystem states
+	- Rename metadatastore to metadataTree
+		- Metadata trees are chunked and stored as regular blocks
+	- New metadata store class
+		- holds timestamps, messages and a block list of the associated metadata tree
 	Timestamp these states
 	Ability to add messages
 Add FileAttributes to FileMetadata

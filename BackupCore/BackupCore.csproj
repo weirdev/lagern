@@ -60,6 +60,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BackupLocation.cs" />
+    <Compile Include="BackupRecord.cs" />
     <Compile Include="BinaryEncoding.cs" />
     <Compile Include="BPlusTree.cs" />
     <Compile Include="BPlusTreeNode.cs" />
@@ -71,6 +72,7 @@
     <Compile Include="FileMetadata.cs" />
     <Compile Include="ICustomSerializable.cs" />
     <Compile Include="MetadataStore.cs" />
+    <Compile Include="MetadataTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

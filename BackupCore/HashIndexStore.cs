@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,9 +17,12 @@ namespace BackupCore
 
         public string IndexPath { get; set; }
 
-        public HashIndexStore(string indexpath)
+        public string BlockSaveDirectory { get; set; }
+
+        public HashIndexStore(string indexpath, string blocksavedir)
         {
             IndexPath = indexpath;
+            BlockSaveDirectory = blocksavedir;
             TreeIndexStore = new BPlusTree(100, IndexPath);
         }
         
@@ -48,6 +52,23 @@ namespace BackupCore
         public BackupLocation GetBackupLocation(byte[] hash)
         {
             return TreeIndexStore.GetRecord(hash);
+        }
+
+        public byte[] ReconstructFileData(List<byte[]> blockhashes)
+        {
+            MemoryStream file = new MemoryStream();
+            foreach (var hash in blockhashes)
+            {
+                BackupLocation blockloc = GetBackupLocation(hash);
+                FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
+                byte[] buffer = new byte[blockstream.Length];
+                blockstream.Read(buffer, 0, blockloc.ByteLength);
+                file.Write(buffer, 0, blockloc.ByteLength);
+                blockstream.Close();
+            }
+            byte[] filedata = file.ToArray();
+            file.Close();
+            return filedata;
         }
 
         public void SynchronizeCacheToDisk()

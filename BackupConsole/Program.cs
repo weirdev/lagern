@@ -76,7 +76,7 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            bcore.ReconstructFile(filerelpath, restorepath);
+            bcore.WriteOutFile(filerelpath, restorepath);
         }
 
         private static string ReadSetting(string key)
