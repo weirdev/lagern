@@ -35,25 +35,27 @@ namespace BackupConsole
             else if (args[0] == "restore")
             {
                 string filerelpath = args[1];
-                string restorepath;
+                // No restoreto path given, restore
+                // to cwd / its relative path
+                string restorepath = Path.Combine(cwd, filerelpath);
+                // TODO: Perhaps replace backup indexes with hashes of the metadata tree file?
+                int backupindex = -1; // default to the latest backup
                 if (args.Length >= 3)
                 {
-                    if (args[2] == ".")
+                    backupindex = Convert.ToInt32(args[2]);
+                    if (args.Length >= 4)
                     {
-                        restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
-                    }
-                    else
-                    {
-                        restorepath = Path.Combine(args[2], Path.GetFileName(filerelpath));
+                        if (args[3] == ".")
+                        {
+                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
+                        }
+                        else
+                        {
+                            restorepath = Path.Combine(args[3], Path.GetFileName(filerelpath));
+                        }
                     }
                 }
-                else
-                {
-                    // No restoreto path given, restore
-                    // to cwd / its relative path
-                    restorepath = Path.Combine(cwd, filerelpath);
-                }
-                RestoreFile(filerelpath, restorepath);
+                RestoreFile(filerelpath, restorepath, backupindex);
             }
             else if (args[0] == "list")
             {
@@ -66,7 +68,7 @@ namespace BackupConsole
             }
             else if (args[0] == "help")
             {
-                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<destination directory path>]");
+                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
             }
         }
 
@@ -82,7 +84,7 @@ namespace BackupConsole
             bcore.RunBackupSync(message);
         }
 
-        private static void RestoreFile(string filerelpath, string restorepath)
+        private static void RestoreFile(string filerelpath, string restorepath, int backupindex)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -91,7 +93,7 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            bcore.WriteOutFile(filerelpath, restorepath);
+            bcore.WriteOutFile(filerelpath, restorepath, backupindex);
         }
 
         private static void ListBackups(int show=-1)
@@ -103,12 +105,12 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            var backups = bcore.GetBackups().Reverse().ToArray();
+            var backups = bcore.GetBackups().ToArray();
             show = show == -1 ? backups.Length : show;
             show = backups.Length < show ? backups.Length : show;
-            for (int i = 0; i < show; i++)
+            for (int i = show - 1; i >= 0; i--)
             {
-                Console.WriteLine("[" + i.ToString() + "]\t" + backups[i].Item1.DateTime.ToString() + "\t" +
+                Console.WriteLine("[" + i.ToString() + "]\t" + backups[i].Item1.ToLocalTime().ToString() + "\t" +
                     backups[i].Item2);
             }
         }

@@ -11,21 +11,30 @@
 
 *********************
 IN PROGRESS
-Remember past filesystem states
-	- Rename metadatastore to metadataTree
-		- Metadata trees are chunked and stored as regular blocks
-	- New metadata store class
-		- holds timestamps, messages and a block list of the associated metadata tree
-	Timestamp these states
-	Ability to add messages
+Better encode/decode
+	named objects
+	header blocks so scanning through all data to be is unnecessary
+		may also improve deduplication of large encoded files (metadata)
 Add FileAttributes to FileMetadata
 Browse past backups easily ("backup ls")
+	Captive prompt?
+		bakup <relpath>: 
 Reference count data blocks
 Ignore patterns
+Handle common things that could go wrong
+	warn when lack permission to backup file
+	overwriting existing file when restoring
+	more...
 Multiple base folders
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder
+
+Special handling for zip files (including Office .***x files)?
+	Deduplication wont work for compressed formats (I think?)
+	silently expand archive for saving
+	Issues:
+		compressed for a reason, deduplication may be far less efficient for an edited paper, etc.
 
 **********************
 WHAT'S GOING ON
