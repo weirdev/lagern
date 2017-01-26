@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using System.Xml;
 using System.IO;
@@ -24,7 +25,12 @@ namespace BackupConsole
             }
             else if (args[0] == "run")
             {
-                RunBackup();
+                string message = null;
+                if (args.Length >= 2)
+                {
+                    message = args[1];
+                }
+                RunBackup(message);
             }
             else if (args[0] == "restore")
             {
@@ -49,13 +55,22 @@ namespace BackupConsole
                 }
                 RestoreFile(filerelpath, restorepath);
             }
+            else if (args[0] == "list")
+            {
+                int listcount = -1;
+                if (args.Length >= 2)
+                {
+                    listcount = Convert.ToInt32(args[1]);
+                }
+                ListBackups(listcount);
+            }
             else if (args[0] == "help")
             {
                 Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<destination directory path>]");
             }
         }
 
-        private static void RunBackup()
+        private static void RunBackup(string message)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -64,7 +79,7 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            bcore.RunBackupSync();
+            bcore.RunBackupSync(message);
         }
 
         private static void RestoreFile(string filerelpath, string restorepath)
@@ -77,6 +92,25 @@ namespace BackupConsole
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
             bcore.WriteOutFile(filerelpath, restorepath);
+        }
+
+        private static void ListBackups(int show=-1)
+        {
+            string destination = ReadSetting("dest");
+            if (destination == null)
+            {
+                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                return;
+            }
+            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            var backups = bcore.GetBackups().Reverse().ToArray();
+            show = show == -1 ? backups.Length : show;
+            show = backups.Length < show ? backups.Length : show;
+            for (int i = 0; i < show; i++)
+            {
+                Console.WriteLine("[" + i.ToString() + "]\t" + backups[i].Item1.DateTime.ToString() + "\t" +
+                    backups[i].Item2);
+            }
         }
 
         private static string ReadSetting(string key)

@@ -22,7 +22,7 @@ namespace Testing
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             var backupper = new BackupCore.Core(@"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
             //backupper.RunBackupAsync();
-            backupper.RunBackupSync();
+            backupper.RunBackupSync(null);
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
             //backupper.ReconstructFile("random.dat");

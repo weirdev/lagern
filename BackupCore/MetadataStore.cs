@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,10 +8,9 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    class MetadataStore : ICustomSerializable<MetadataStore>
+    class MetadataStore : IList<BackupRecord>, ICustomSerializable<MetadataStore>
     {
         List<BackupRecord> backups;
-
         public MetadataStore(string metadatapath)
         {
             try
@@ -35,15 +35,32 @@ namespace BackupCore
             backups.Add(new BackupRecord(message, metadatatreehashes));
         }
 
-        public BackupRecord LatestBackup
+        public int Count
         {
             get
             {
-                if (backups.Count > 0)
-                {
-                    return backups[backups.Count - 1];
-                }
-                return null;
+                return ((IList<BackupRecord>)backups).Count;
+            }
+        }
+
+        public bool IsReadOnly
+        {
+            get
+            {
+                return ((IList<BackupRecord>)backups).IsReadOnly;
+            }
+        }
+
+        public BackupRecord this[int index]
+        {
+            get
+            {
+                return ((IList<BackupRecord>)backups)[index];
+            }
+
+            set
+            {
+                ((IList<BackupRecord>)backups)[index] = value;
             }
         }
 
@@ -79,6 +96,56 @@ namespace BackupCore
                 savedbackups.Add(BackupRecord.deserialize(backup));
             }
             return savedbackups;
+        }
+
+        public int IndexOf(BackupRecord item)
+        {
+            return ((IList<BackupRecord>)backups).IndexOf(item);
+        }
+
+        public void Insert(int index, BackupRecord item)
+        {
+            ((IList<BackupRecord>)backups).Insert(index, item);
+        }
+
+        public void RemoveAt(int index)
+        {
+            ((IList<BackupRecord>)backups).RemoveAt(index);
+        }
+
+        public void Add(BackupRecord item)
+        {
+            ((IList<BackupRecord>)backups).Add(item);
+        }
+
+        public void Clear()
+        {
+            ((IList<BackupRecord>)backups).Clear();
+        }
+
+        public bool Contains(BackupRecord item)
+        {
+            return ((IList<BackupRecord>)backups).Contains(item);
+        }
+
+        public void CopyTo(BackupRecord[] array, int arrayIndex)
+        {
+            ((IList<BackupRecord>)backups).CopyTo(array, arrayIndex);
+        }
+
+        public bool Remove(BackupRecord item)
+        {
+            return ((IList<BackupRecord>)backups).Remove(item);
+        }
+
+        public IEnumerator<BackupRecord> GetEnumerator()
+        {
+            return ((IList<BackupRecord>)backups).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IList<BackupRecord>)backups).GetEnumerator();
         }
     }
 }

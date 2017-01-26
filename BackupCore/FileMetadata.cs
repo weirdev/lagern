@@ -16,28 +16,28 @@ namespace BackupCore
     {
         public string FileName { get; set; }
         
-        public DateTimeOffset DateAccessed { get; set; }
+        public DateTime DateAccessedUTC { get; set; }
         
-        private long NumDateAccessed
+        private long NumDateAccessedUTC
         {
-            get { return DateAccessed.Ticks; }
-            set { DateAccessed = new DateTimeOffset(value, new TimeSpan(0L)); }
+            get { return DateAccessedUTC.Ticks; }
+            set { DateAccessedUTC = new DateTime(value); }
         }
         
-        public DateTimeOffset DateModified { get; set; }
+        public DateTime DateModifiedUTC { get; set; }
         
-        private long NumDateModified
+        private long NumDateModifiedUTC
         {
-            get { return DateModified.Ticks; }
-            set { DateModified = new DateTimeOffset(value, new TimeSpan(0L)); }
+            get { return DateModifiedUTC.Ticks; }
+            set { DateModifiedUTC = new DateTime(value); }
         }
         
-        public DateTimeOffset DateCreated { get; set; }
+        public DateTime DateCreatedUTC { get; set; }
         
-        private long NumDateCreated
+        private long NumDateCreatedUTC
         {
-            get { return DateCreated.Ticks; }
-            set { DateCreated = new DateTimeOffset(value, new TimeSpan(0L)); }
+            get { return DateCreatedUTC.Ticks; }
+            set { DateCreatedUTC = new DateTime(value); }
         }
         
         public long FileSize { get; set; }
@@ -53,14 +53,14 @@ namespace BackupCore
         /// <param name="datemodified"></param>
         /// <param name="datecreated"></param>
         /// <param name="filesize"></param>
-        public FileMetadata(string filename, DateTimeOffset dateaccessed, DateTimeOffset datemodified, 
-            DateTimeOffset datecreated, long filesize, List<byte[]> blockshashes)
+        public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
+            DateTime datecreated, long filesize, List<byte[]> blockshashes)
         {
             FileName = filename;
-            DateAccessed = dateaccessed;
-            DateModified = datemodified;
+            DateAccessedUTC = dateaccessed;
+            DateModifiedUTC = datemodified;
             FileSize = filesize;
-            DateCreated = datecreated;
+            DateCreatedUTC = datecreated;
             BlocksHashes = blockshashes;
         }
 
@@ -72,8 +72,8 @@ namespace BackupCore
         {
             FileName = Path.GetFileName(filepath);
             FileInfo fi = new FileInfo(filepath);
-            DateAccessed = fi.LastAccessTimeUtc;
-            DateModified = fi.LastWriteTimeUtc;
+            DateAccessedUTC = fi.LastAccessTimeUtc;
+            DateModifiedUTC = fi.LastWriteTimeUtc;
             if (fi.Attributes == FileAttributes.Directory)
             {
                 FileSize = 0;
@@ -82,23 +82,23 @@ namespace BackupCore
             {
                 FileSize = fi.Length;
             }
-            DateCreated = fi.CreationTimeUtc;
+            DateCreatedUTC = fi.CreationTimeUtc;
         }
 
-        public void WriteOut(string filepath)
+        public void WriteOutMetadata(string filepath)
         {
             FileInfo fi = new FileInfo(filepath);
-            fi.LastAccessTimeUtc = DateAccessed.DateTime;
-            fi.LastWriteTimeUtc = DateModified.DateTime;
-            fi.CreationTimeUtc = DateCreated.DateTime;
+            fi.LastAccessTimeUtc = DateAccessedUTC;
+            fi.LastWriteTimeUtc = DateModifiedUTC;
+            fi.CreationTimeUtc = DateCreatedUTC;
         }
 
         public byte[] serialize()
         {
             byte[] filenamebytes = Encoding.ASCII.GetBytes(FileName);
-            byte[] dateaccessedbytes = BitConverter.GetBytes(NumDateAccessed);
-            byte[] datemodifiedbytes = BitConverter.GetBytes(NumDateModified);
-            byte[] datecreatedbytes = BitConverter.GetBytes(NumDateCreated);
+            byte[] dateaccessedbytes = BitConverter.GetBytes(NumDateAccessedUTC);
+            byte[] datemodifiedbytes = BitConverter.GetBytes(NumDateModifiedUTC);
+            byte[] datecreatedbytes = BitConverter.GetBytes(NumDateCreatedUTC);
             byte[] filesizebytes = BitConverter.GetBytes(FileSize);
 
             List<byte> binrep = new List<byte>();
@@ -141,9 +141,9 @@ namespace BackupCore
             long numdatecreated = BitConverter.ToInt64(datecreatedbytes, 0);
 
             return new FileMetadata(Encoding.ASCII.GetString(filenamebytes),
-                new DateTimeOffset(numdateaccessed, new TimeSpan(0L)),
-                new DateTimeOffset(numdatemodified, new TimeSpan(0L)),
-                new DateTimeOffset(numdatecreated, new TimeSpan(0L)),
+                new DateTime(numdateaccessed),
+                new DateTime(numdatemodified),
+                new DateTime(numdatecreated),
                 BitConverter.ToInt64(filesizebytes, 0),
                 blockshashes);
         }

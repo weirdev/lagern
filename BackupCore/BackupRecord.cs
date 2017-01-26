@@ -8,24 +8,26 @@ namespace BackupCore
 {
     class BackupRecord : ICustomSerializable<BackupRecord>
     {
-        public DateTimeOffset BackupTime { get; set; }
-        public string BackupMessage { get; set; }
+        public DateTime BackupTime { get; set; }
+        // Prevent BackupMessage from being null
+        private string _message;
+        public string BackupMessage
+        {
+            get { return _message; }
+            set { _message = value == null ? "" : value; }
+        }
         public List<byte[]> MetadataTreeHashes { get; set; }
 
         public BackupRecord(string message, List<byte[]> treehashes)
         {
-            BackupTime = DateTimeOffset.Now;
+            BackupTime = DateTime.UtcNow;
             BackupMessage = message;
             MetadataTreeHashes = treehashes;
         }
 
-        private BackupRecord(DateTimeOffset backuptime, string message, List<byte[]> treehashes)
+        private BackupRecord(DateTime backuptime, string message, List<byte[]> treehashes)
         {
             BackupTime = backuptime;
-            if (message == null)
-            {
-                message = "";
-            }
             BackupMessage = message;
             MetadataTreeHashes = treehashes;
         }
@@ -60,7 +62,7 @@ namespace BackupCore
 
             long numbackuptime = BitConverter.ToInt64(backuptimebytes, 0);
 
-            return new BackupRecord(new DateTimeOffset(numbackuptime, new TimeSpan(0L)),
+            return new BackupRecord(new DateTime(numbackuptime),
                 Encoding.ASCII.GetString(backupmessagebytes), treehashes);
         }
     }

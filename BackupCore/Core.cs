@@ -36,7 +36,7 @@ namespace BackupCore
             MetaStore = new MetadataStore(Path.Combine(backuppath_dst, "index", "metadata"));
         }
         
-        public void RunBackupAsync()
+        public void RunBackupAsync(string message)
         {
             MetadataTree newmetatree = new MetadataTree();
 
@@ -72,7 +72,7 @@ namespace BackupCore
             byte[] newmtreebytes = newmetatree.serialize();
             MemoryStream mtreestream = new MemoryStream(newmtreebytes);
             List<byte[]> newmtreehashes = BackupFileDataAsync(mtreestream);
-            MetaStore.AddBackup("", newmtreehashes);
+            MetaStore.AddBackup(message, newmtreehashes);
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
@@ -81,7 +81,7 @@ namespace BackupCore
             MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
 
-        public void RunBackupSync()
+        public void RunBackupSync(string message)
         {
             MetadataTree newmetatree = new MetadataTree();
 
@@ -114,7 +114,7 @@ namespace BackupCore
             byte[] newmtreebytes = newmetatree.serialize();
             MemoryStream mtreestream = new MemoryStream(newmtreebytes);
             List<byte[]> newmtreehashes = BackupFileDataSync(mtreestream);
-            MetaStore.AddBackup("", newmtreehashes);
+            MetaStore.AddBackup(message, newmtreehashes);
 
             // Save "index"
             // Writeout entire cached index
@@ -124,24 +124,27 @@ namespace BackupCore
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
-        // TODO: ReconstructFile() doesnt produce exactly original file
-        public void WriteOutFile(string relfilepath, string restorepath)
+        /// <summary>
+        /// Restore a backed up file. Includes metadata.
+        /// </summary>
+        /// <param name="relfilepath"></param>
+        /// <param name="restorepath"></param>
+        /// <param name="backupindex"></param>
+        public void WriteOutFile(string relfilepath, string restorepath, int backupindex=-1)
         {
-            FileStream reader;
-            byte[] buffer;
-            FileStream writer = File.OpenWrite(restorepath);
-            MetadataTree latestmtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore.LatestBackup.MetadataTreeHashes));
-            foreach (var hash in latestmtree.GetFile(relfilepath).BlocksHashes)
+            // We assume the latest backup
+            if (backupindex == -1)
             {
-                BackupLocation blocation = HashStore.GetBackupLocation(hash);
-                reader = File.OpenRead(Path.Combine(backuppath_dst, blocation.RelativeFilePath));
-                buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, blocation.ByteLength);
-                writer.Write(buffer, 0, blocation.ByteLength);
-                reader.Close();
+                backupindex = MetaStore.Count - 1;
             }
-            writer.Close();
-            latestmtree.GetFile(relfilepath).WriteOut(restorepath);
+            MetadataTree latestmtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
+            FileMetadata filemeta = latestmtree.GetFile(relfilepath);
+            byte[] filedata = HashStore.ReconstructFileData(filemeta.BlocksHashes);
+            using (FileStream writer = File.OpenWrite(restorepath))
+            {
+                writer.Write(filedata, 0, filedata.Length);
+            }
+            filemeta.WriteOutMetadata(restorepath);
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -376,14 +379,14 @@ namespace BackupCore
                 }
             }
         }
-
-        public string GetRelativePath(string fullpath, string basepath)
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
+        public IEnumerable<Tuple<DateTime, string>> GetBackups()
         {
-            if (!fullpath.StartsWith(basepath))
-            {
-                throw new ArgumentException("basepath doesn't prefix fullpath");
-            }
-            return fullpath.Substring(basepath.Length);
+            return from backup in MetaStore select new Tuple<DateTime, string>(backup.BackupTime, backup.BackupMessage);
         }
     }
 }
