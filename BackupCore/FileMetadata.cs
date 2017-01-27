@@ -39,6 +39,8 @@ namespace BackupCore
             get { return DateCreatedUTC.Ticks; }
             set { DateCreatedUTC = new DateTime(value); }
         }
+
+        public FileAttributes Attributes { get; set; }
         
         public long FileSize { get; set; }
         
@@ -54,11 +56,12 @@ namespace BackupCore
         /// <param name="datecreated"></param>
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
-            DateTime datecreated, long filesize, List<byte[]> blockshashes)
+            DateTime datecreated, FileAttributes attributes, long filesize, List<byte[]> blockshashes)
         {
             FileName = filename;
             DateAccessedUTC = dateaccessed;
             DateModifiedUTC = datemodified;
+            Attributes = attributes;
             FileSize = filesize;
             DateCreatedUTC = datecreated;
             BlocksHashes = blockshashes;
@@ -74,7 +77,8 @@ namespace BackupCore
             FileInfo fi = new FileInfo(filepath);
             DateAccessedUTC = fi.LastAccessTimeUtc;
             DateModifiedUTC = fi.LastWriteTimeUtc;
-            if (fi.Attributes == FileAttributes.Directory)
+            Attributes = fi.Attributes;
+            if ((Attributes & FileAttributes.Directory) == FileAttributes.Directory)
             {
                 FileSize = 0;
             }
@@ -91,24 +95,34 @@ namespace BackupCore
             fi.LastAccessTimeUtc = DateAccessedUTC;
             fi.LastWriteTimeUtc = DateModifiedUTC;
             fi.CreationTimeUtc = DateCreatedUTC;
+            if (fi.Attributes != 0)
+            {
+                fi.Attributes = Attributes;
+            }
         }
 
         public byte[] serialize()
         {
             Dictionary<string, byte[]> fmdata = new Dictionary<string, byte[]>();
-            // -"-v1"
+            // v1
+            // -"-v1" (suffix for below)
             // FileName = ASCII encoded
             // DateAccessedUTC = BitConverter.GetBytes(long NumDateAccessedUTC)
             // DateModifiedUTC = BitConverter.GetBytes(long NumDateModifiedUTC)
             // DateCreatedUTC = BitConverter.GetBytes(long NumDateCreatedUTC)
             // FileSize = BitConverter.GetBytes(long)
-            // BlocksHashes = enum_encode(BlocksHashes)
+            // BlocksHashes = enum_encode(BlocksHashes) or byte[0] if BlocksHashes==null
+
+            // v2
+            // all v1 data (suffix unchanged) +
+            // Attributes = BitConverter.GetBytes((int)Attributes)
 
             fmdata.Add("FileName-v1", Encoding.ASCII.GetBytes(FileName));
             fmdata.Add("DateAccessedUTC-v1", BitConverter.GetBytes(NumDateAccessedUTC));
             fmdata.Add("DateModifiedUTC-v1", BitConverter.GetBytes(NumDateModifiedUTC));
             fmdata.Add("DateCreatedUTC-v1", BitConverter.GetBytes(NumDateCreatedUTC));
             fmdata.Add("FileSize-v1", BitConverter.GetBytes(FileSize));
+            fmdata.Add("Attributes-v2", BitConverter.GetBytes((int)Attributes));
             if (BlocksHashes != null)
             {
                 fmdata.Add("BlocksHashes-v1", BinaryEncoding.enum_encode(BlocksHashes));
@@ -131,11 +145,18 @@ namespace BackupCore
             long filesize = BitConverter.ToInt64(savedobjects["FileSize-v1"], 0);
             byte[] binblockshashes = savedobjects["BlocksHashes-v1"];
             List<byte[]> blockshashes = BinaryEncoding.enum_decode(binblockshashes);
+
+            FileAttributes attributes = 0;
+            if (savedobjects.ContainsKey("Attributes-v2"))
+            {
+                attributes = (FileAttributes)BitConverter.ToInt32(savedobjects["Attributes-v2"], 0);
+            }
             
             return new FileMetadata(filename,
                 new DateTime(numdateaccessed),
                 new DateTime(numdatemodified),
                 new DateTime(numdatecreated),
+                attributes,
                 filesize,
                 blockshashes);
         }
