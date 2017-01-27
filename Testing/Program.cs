@@ -14,7 +14,12 @@ namespace Testing
         {
             //BPlusTreeTest bpt_test = new BPlusTreeTest();
             //bpt_test.TestSerializeDeserialize();
+
             BackupRun();
+
+            //BinaryEncodingTest betest = new BinaryEncodingTest();
+            //betest.TestDictEncodeDecode();
+            //betest.TestEnumEncodeDecode();
         }
 
         static void BackupRun()
@@ -25,8 +30,7 @@ namespace Testing
             backupper.RunBackupSync(null);
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
-            //backupper.ReconstructFile("random.dat");
-            backupper.WriteOutFile("sub\\moreshit.txt", Path.Combine(backupper.backuppath_dst, "moreshit.txt"));
+            backupper.WriteOutFile("moreshit.txt", Path.Combine(backupper.backuppath_dst, "moreshit.txt"));
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
         }

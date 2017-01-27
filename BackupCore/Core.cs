@@ -260,7 +260,6 @@ namespace BackupCore
                             int third = hash[hash.Length - 3] & 15;
                             if (third == 0)
                             {
-                                Console.WriteLine(i + j - lastblock);
                                 lastblock = i + j;
                                 byte[] block = newblock.ToArray();
                                 hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(block), block));
@@ -273,7 +272,6 @@ namespace BackupCore
                 }
                 if (newblock.Length != 0) // Create block from remaining bytes
                 {
-                    Console.WriteLine(newblock.Length);
                     byte[] block = newblock.ToArray();
                     hashblockqueue.Add(new HashBlockPair(sha1hasher.ComputeHash(block), block));
                     newblock.Dispose();

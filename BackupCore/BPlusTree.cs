@@ -270,33 +270,40 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            List<byte> allbinrep = new List<byte>();
+            Dictionary<string, byte[]> bptdata = new Dictionary<string, byte[]>();
+            // -"-v1"
+            // keysize = BitConverter.GetBytes(int) (only used for decoding HashBLocationPairs)
+            // HashBLocationPairs = enum_encode(List<byte[]> [hash,... & backuplocation.serialize(),...])
 
+            bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
+
+            List<byte[]> binkeyvals = new List<byte[]>();
             foreach (KeyValuePair<byte[], BackupLocation> kvp in this)
             {
                 byte[] keybytes = kvp.Key;
                 byte[] backuplocationbytes = kvp.Value.serialize();
-
-                List<byte> kvpbinrep = new List<byte>();
-                BinaryEncoding.encode(keybytes, kvpbinrep);
-                BinaryEncoding.encode(backuplocationbytes, kvpbinrep);
-
-                BinaryEncoding.encode(kvpbinrep.ToArray(), allbinrep);
+                byte[] binkeyval = new byte[keybytes.Length + backuplocationbytes.Length];
+                Array.Copy(keybytes, binkeyval, keybytes.Length);
+                Array.Copy(backuplocationbytes, 0, binkeyval, keybytes.Length, backuplocationbytes.Length);
+                binkeyvals.Add(binkeyval);
             }
+            bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
 
-            return allbinrep.ToArray();
+            return BinaryEncoding.dict_encode(bptdata);
         }
 
         public void deserialize(byte[] data)
         {
             this.Initialize();
-            List<byte[]> binkeyvalpairs = BinaryEncoding.decode(data);
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
 
-            foreach (byte[] binkvp in binkeyvalpairs)
+            foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
-                List<byte[]> savedobjects = BinaryEncoding.decode(binkvp);
-                byte[] keybytes = savedobjects[0];
-                byte[] backuplocationbytes = savedobjects[1];
+                byte[] keybytes = new byte[keysize];
+                byte[] backuplocationbytes = new byte[binkvp.Length - keysize];
+                Array.Copy(binkvp, keybytes, keysize);
+                Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
 
                 this.AddHash(keybytes, BackupLocation.deserialize(backuplocationbytes));
             }

@@ -43,33 +43,27 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            byte[] stringbytes = Encoding.ASCII.GetBytes(RelativeFilePath);
-            byte[] bytepositionbytes = BitConverter.GetBytes(BytePosition);
-            byte[] bytelengthbytes = BitConverter.GetBytes(ByteLength);
+            Dictionary<string, byte[]> bldata = new Dictionary<string, byte[]>();
+            // -"-v1"
+            // RelativeFilePath = ASCII encoded
+            // BytePosition = BitConverter.GetBytes(int)
+            // ByteLength = BitConverter.GetBytes(int)
 
-            List<byte> binrep = new List<byte>();
-             
-            BinaryEncoding.encode(stringbytes, binrep);
-            BinaryEncoding.encode(bytepositionbytes, binrep);
-            BinaryEncoding.encode(bytelengthbytes, binrep);
-
-            return binrep.ToArray();
+            bldata.Add("RelativeFilePath-v1", Encoding.ASCII.GetBytes(RelativeFilePath));
+            bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
+            bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
+            
+            return BinaryEncoding.dict_encode(bldata);
         }
 
         public static BackupLocation deserialize(byte[] data)
         {
-            byte[] stringbytes;
-            byte[] bytepositionbytes;
-            byte[] bytelengthbytes;
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            string relfilepath = Encoding.ASCII.GetString(savedobjects["RelativeFilePath-v1"]);
+            int byteposition = BitConverter.ToInt32(savedobjects["BytePosition-v1"], 0);
+            int bytelength = BitConverter.ToInt32(savedobjects["ByteLength-v1"], 0);
 
-            List<byte[]> savedobjects = BinaryEncoding.decode(data);
-            stringbytes = savedobjects[0];
-            bytepositionbytes = savedobjects[1];
-            bytelengthbytes = savedobjects[2];
-            
-            return new BackupLocation(Encoding.ASCII.GetString(stringbytes),
-                BitConverter.ToInt32(bytepositionbytes, 0),
-                BitConverter.ToInt32(bytelengthbytes, 0));
+            return new BackupLocation(relfilepath, byteposition, bytelength);
         }
     }
 }

@@ -77,25 +77,12 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            List<byte> binrep = new List<byte>();
-            foreach (BackupRecord br in backups)
-            {
-                BinaryEncoding.encode(br.serialize(), binrep);
-            }
-
-            return binrep.ToArray();
+            return BinaryEncoding.enum_encode(from b in backups select b.serialize());
         }
 
         private List<BackupRecord> deserialize(byte[] data)
         {
-            List<byte[]> savedobjects = BinaryEncoding.decode(data);
-
-            List<BackupRecord> savedbackups = new List<BackupRecord>();
-            foreach (var backup in savedobjects)
-            {
-                savedbackups.Add(BackupRecord.deserialize(backup));
-            }
-            return savedbackups;
+            return new List<BackupRecord>(from bin in BinaryEncoding.enum_decode(data) select BackupRecord.deserialize(bin));
         }
 
         public int IndexOf(BackupRecord item)

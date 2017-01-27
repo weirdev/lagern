@@ -11,10 +11,11 @@
 
 *********************
 IN PROGRESS
-Better encode/decode
+-Better encode/decode
 	named objects
 	header blocks so scanning through all data to be is unnecessary
 		may also improve deduplication of large encoded files (metadata)
+	-continue changing de-/serialize() methods to use new en-/de-code methods
 Add FileAttributes to FileMetadata
 Browse past backups easily ("backup ls")
 	Captive prompt?

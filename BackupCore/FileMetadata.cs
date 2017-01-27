@@ -95,56 +95,48 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            byte[] filenamebytes = Encoding.ASCII.GetBytes(FileName);
-            byte[] dateaccessedbytes = BitConverter.GetBytes(NumDateAccessedUTC);
-            byte[] datemodifiedbytes = BitConverter.GetBytes(NumDateModifiedUTC);
-            byte[] datecreatedbytes = BitConverter.GetBytes(NumDateCreatedUTC);
-            byte[] filesizebytes = BitConverter.GetBytes(FileSize);
+            Dictionary<string, byte[]> fmdata = new Dictionary<string, byte[]>();
+            // -"-v1"
+            // FileName = ASCII encoded
+            // DateAccessedUTC = BitConverter.GetBytes(long NumDateAccessedUTC)
+            // DateModifiedUTC = BitConverter.GetBytes(long NumDateModifiedUTC)
+            // DateCreatedUTC = BitConverter.GetBytes(long NumDateCreatedUTC)
+            // FileSize = BitConverter.GetBytes(long)
+            // BlocksHashes = enum_encode(BlocksHashes)
 
-            List<byte> binrep = new List<byte>();
-
-            BinaryEncoding.encode(filenamebytes, binrep);
-            BinaryEncoding.encode(dateaccessedbytes, binrep);
-            BinaryEncoding.encode(datemodifiedbytes, binrep);
-            BinaryEncoding.encode(datecreatedbytes, binrep);
-            BinaryEncoding.encode(filesizebytes, binrep);
+            fmdata.Add("FileName-v1", Encoding.ASCII.GetBytes(FileName));
+            fmdata.Add("DateAccessedUTC-v1", BitConverter.GetBytes(NumDateAccessedUTC));
+            fmdata.Add("DateModifiedUTC-v1", BitConverter.GetBytes(NumDateModifiedUTC));
+            fmdata.Add("DateCreatedUTC-v1", BitConverter.GetBytes(NumDateCreatedUTC));
+            fmdata.Add("FileSize-v1", BitConverter.GetBytes(FileSize));
             if (BlocksHashes != null)
             {
-                foreach (var hash in BlocksHashes)
-                {
-                    BinaryEncoding.encode(hash, binrep);
-                }
+                fmdata.Add("BlocksHashes-v1", BinaryEncoding.enum_encode(BlocksHashes));
+            }
+            else
+            {
+                fmdata.Add("BlocksHashes-v1", new byte[0]);
             }
 
-            return binrep.ToArray();
+            return BinaryEncoding.dict_encode(fmdata);
         }
 
         public static FileMetadata deserialize(byte[] data)
         {
-            byte[] filenamebytes;
-            byte[] dateaccessedbytes;
-            byte[] datemodifiedbytes;
-            byte[] datecreatedbytes;
-            byte[] filesizebytes;
-
-            List<byte[]> savedobjects = BinaryEncoding.decode(data);
-            filenamebytes = savedobjects[0];
-            dateaccessedbytes = savedobjects[1];
-            datemodifiedbytes = savedobjects[2];
-            datecreatedbytes = savedobjects[3];
-            filesizebytes = savedobjects[4];
-
-            List<byte[]> blockshashes = savedobjects.GetRange(5, savedobjects.Count - 5);
-
-            long numdateaccessed = BitConverter.ToInt64(dateaccessedbytes, 0);
-            long numdatemodified = BitConverter.ToInt64(datemodifiedbytes, 0);
-            long numdatecreated = BitConverter.ToInt64(datecreatedbytes, 0);
-
-            return new FileMetadata(Encoding.ASCII.GetString(filenamebytes),
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            string filename = Encoding.ASCII.GetString(savedobjects["FileName-v1"]);
+            long numdateaccessed = BitConverter.ToInt64(savedobjects["DateAccessedUTC-v1"], 0);
+            long numdatemodified = BitConverter.ToInt64(savedobjects["DateModifiedUTC-v1"], 0);
+            long numdatecreated = BitConverter.ToInt64(savedobjects["DateCreatedUTC-v1"], 0);
+            long filesize = BitConverter.ToInt64(savedobjects["FileSize-v1"], 0);
+            byte[] binblockshashes = savedobjects["BlocksHashes-v1"];
+            List<byte[]> blockshashes = BinaryEncoding.enum_decode(binblockshashes);
+            
+            return new FileMetadata(filename,
                 new DateTime(numdateaccessed),
                 new DateTime(numdatemodified),
                 new DateTime(numdatecreated),
-                BitConverter.ToInt64(filesizebytes, 0),
+                filesize,
                 blockshashes);
         }
     }

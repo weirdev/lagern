@@ -34,36 +34,32 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            byte[] backuptimebytes = BitConverter.GetBytes(BackupTime.Ticks);
-            byte[] backupmessagebytes = Encoding.ASCII.GetBytes(BackupMessage);
-
-            List<byte> binrep = new List<byte>();
-
-            BinaryEncoding.encode(backuptimebytes, binrep);
-            BinaryEncoding.encode(backupmessagebytes, binrep);
-            foreach (var hash in MetadataTreeHashes)
-            {
-                BinaryEncoding.encode(hash, binrep);
-            }
-
-            return binrep.ToArray();
+            Dictionary<string, byte[]> brdata = new Dictionary<string, byte[]>();
+            // -"-v1"
+            // BackupTime = DateTime.Ticks
+            // BackupMessage = Encoding.ASCII.GetBytes(string)
+            // MetadataTreeHashes = enum_encode(List<byte[]>)
+            
+            brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
+            brdata.Add("BackupMessage-v1", Encoding.ASCII.GetBytes(BackupMessage));
+            brdata.Add("MetadataTreeHashes-v1", BinaryEncoding.enum_encode(MetadataTreeHashes));
+            
+            return BinaryEncoding.dict_encode(brdata);
         }
 
         public static BackupRecord deserialize(byte[] data)
         {
-            byte[] backuptimebytes;
-            byte[] backupmessagebytes;
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            DateTime backuptime = new DateTime(BitConverter.ToInt64(savedobjects["BackupTime-v1"], 0));
+            string backupmessage;
+            if (savedobjects["BackupMessage-v1"] != null)
+            {
+                backupmessage = Encoding.ASCII.GetString(savedobjects["BackupMessage-v1"]);
+            }
+            backupmessage = null;
+            List<byte[]> metadatatreehashes = BinaryEncoding.enum_decode(savedobjects["MetadataTreeHashes-v1"]);
 
-            List<byte[]> savedobjects = BinaryEncoding.decode(data);
-            backuptimebytes = savedobjects[0];
-            backupmessagebytes = savedobjects[1];
-
-            List<byte[]> treehashes = savedobjects.GetRange(2, savedobjects.Count - 2);
-
-            long numbackuptime = BitConverter.ToInt64(backuptimebytes, 0);
-
-            return new BackupRecord(new DateTime(numbackuptime),
-                Encoding.ASCII.GetString(backupmessagebytes), treehashes);
+            return new BackupRecord(backuptime, backupmessage, metadatatreehashes);
         }
     }
 }

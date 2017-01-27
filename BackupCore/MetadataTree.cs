@@ -206,8 +206,22 @@ namespace BackupCore
                 Dictionary<string, FileMetadata> files)
             {
                 DirMetadata = metadata;
-                Directories = directories;
-                Files = files;
+                if (directories != null)
+                {
+                    Directories = directories;
+                }
+                else
+                {
+                    Directories = new Dictionary<string, MetadataNode>();
+                }
+                if (files != null)
+                {
+                    Files = files;
+                }
+                else
+                {
+                    files = new Dictionary<string, FileMetadata>();
+                }
             }
 
             public MetadataNode GetDirectory(string name)
@@ -263,28 +277,17 @@ namespace BackupCore
             /// <returns></returns>
             public byte[] serialize()
             {
-                byte[] dirmetadatabytes = DirMetadata.serialize();
+                Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
+                // -"-v1"
+                // DirMetadata = FileMetadata DirMetadata.serialize()
+                // Directories = enum_encode([Directories.Values MetadataNode.serialize(),... ])
+                // Files = enum_encode([Files.Values FileMetadata.serialize(),... ])
 
-                List<byte> dirsbinrep = new List<byte>();
-                foreach (var mnode in Directories.Values)
-                {
-                    BinaryEncoding.encode(mnode.serialize(), dirsbinrep);
-                }
-                byte[] directoriesbytes = dirsbinrep.ToArray();
+                mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
+                mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from mn in Directories.Values.AsEnumerable() select mn.serialize()));
+                mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
 
-                List<byte> filesbinrep = new List<byte>();
-                foreach (var filem in Files.Values)
-                {
-                    BinaryEncoding.encode(filem.serialize(), filesbinrep);
-                }
-                byte[] filesbytes = filesbinrep.ToArray();
-
-                List<byte> allbinrep = new List<byte>();
-                BinaryEncoding.encode(dirmetadatabytes, allbinrep);
-                BinaryEncoding.encode(directoriesbytes, allbinrep);
-                BinaryEncoding.encode(filesbytes, allbinrep);
-
-                return allbinrep.ToArray();
+                return BinaryEncoding.dict_encode(mtdata);
             }
 
             /// <summary>
@@ -297,33 +300,22 @@ namespace BackupCore
             /// <returns></returns>
             public static MetadataNode deserialize(byte[] data)
             {
-                // TEST: This when directory lacks child directories and / or files
-                byte[] dirmetadatabytes;
-                byte[] directoriesbytes;
-                byte[] filesbytes;
-
-                List<byte[]> savedobjects = BinaryEncoding.decode(data);
-                dirmetadatabytes = savedobjects[0];
-
-                directoriesbytes = savedobjects[1];
-                filesbytes = savedobjects[2];
-
+                Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+                FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
                 Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
-                foreach (var dir in BinaryEncoding.decode(directoriesbytes))
+                foreach (var binmn in BinaryEncoding.enum_decode(savedobjects["Directories-v1"]))
                 {
-                    MetadataNode mnode = MetadataNode.deserialize(dir);
-                    directories.Add(mnode.DirMetadata.FileName, mnode);
+                    MetadataNode newmn = MetadataNode.deserialize(binmn);
+                    directories.Add(newmn.DirMetadata.FileName, newmn);
                 }
-
                 Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
-                foreach (var file in BinaryEncoding.decode(filesbytes))
+                foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
                 {
-                    FileMetadata filem = FileMetadata.deserialize(file);
-                    files.Add(filem.FileName, filem);
+                    FileMetadata newfm = FileMetadata.deserialize(binfm);
+                    files.Add(newfm.FileName, newfm);
                 }
 
-                return new MetadataNode(FileMetadata.deserialize(dirmetadatabytes),
-                    directories, files);
+                return new MetadataNode(dirmetadata, directories, files);
             }
         }
     }
