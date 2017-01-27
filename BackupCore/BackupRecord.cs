@@ -56,7 +56,10 @@ namespace BackupCore
             {
                 backupmessage = Encoding.ASCII.GetString(savedobjects["BackupMessage-v1"]);
             }
-            backupmessage = null;
+            else
+            {
+                backupmessage = null;
+            }
             List<byte[]> metadatatreehashes = BinaryEncoding.enum_decode(savedobjects["MetadataTreeHashes-v1"]);
 
             return new BackupRecord(backuptime, backupmessage, metadatatreehashes);
