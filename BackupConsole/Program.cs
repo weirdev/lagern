@@ -19,9 +19,45 @@ namespace BackupConsole
             {
                 Console.WriteLine("Specify a subcommand to run. Try \"backup help\" for a listing of subcommands.");
             }
+            else if (args[0] == "show")
+            {
+                if (args.Length >= 2)
+                {
+                    var setting = ReadSetting(args[1]);
+                    if (setting != null)
+                    {
+                        Console.WriteLine(setting);
+                    }
+                }
+                else
+                {
+                    foreach (var setval in ReadSettings())
+                    {
+                        Console.WriteLine(setval.Key + ": " + setval.Value);
+                    }
+                }
+            }
             else if (args[0] == "set")
             {
-                WriteSetting(args[1], args[2]);
+                if (args.Length >= 2)
+                {
+                    if (args.Length >= 3)
+                    {
+                        WriteSetting(args[1], args[2]);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Specify a value for %s. Use \"backup clear <setting>\" to remove a setting.", args[1]);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Specify a setting to set");
+                }
+            }
+            else if (args[0] == "clear")
+            {
+                ClearSetting(args[1]);
             }
             else if (args[0] == "run")
             {
@@ -67,6 +103,10 @@ namespace BackupConsole
                 ListBackups(listcount);
             }
             else if (args[0] == "help")
+            {
+                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
+            }
+            else
             {
                 Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
             }
@@ -117,7 +157,15 @@ namespace BackupConsole
 
         private static string ReadSetting(string key)
         {
-            return ReadSettings()?[key];
+            var settings = ReadSettings();
+            if (settings != null)
+            {
+                if (settings.ContainsKey(key))
+                {
+                    return settings[key];
+                }
+            }
+            return null;
         }
 
         private static void WriteSetting(string key, string value)
@@ -129,6 +177,19 @@ namespace BackupConsole
             }
             settings[key] = value;
             WriteSettings(settings);
+        }
+
+        private static void ClearSetting(string key)
+        {
+            var settings = ReadSettings();
+            if (settings != null)
+            {
+                if (settings.ContainsKey(key))
+                {
+                    settings.Remove(key);
+                    WriteSettings(settings);
+                }
+            }
         }
 
         private static Dictionary<string, string> ReadSettings()
