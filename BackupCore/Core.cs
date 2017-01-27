@@ -140,7 +140,7 @@ namespace BackupCore
             MetadataTree latestmtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
             FileMetadata filemeta = latestmtree.GetFile(relfilepath);
             byte[] filedata = HashStore.ReconstructFileData(filemeta.BlocksHashes);
-            using (FileStream writer = File.OpenWrite(restorepath))
+            using (FileStream writer = new FileStream(restorepath, FileMode.Create))
             {
                 writer.Write(filedata, 0, filedata.Length);
             }
