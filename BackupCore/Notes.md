@@ -25,7 +25,7 @@ Ignore patterns
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
-	fail gracefully when parsing input
+	
 	more...
 Multiple base folders
 Replicate source file tree (as last backed up) in destination

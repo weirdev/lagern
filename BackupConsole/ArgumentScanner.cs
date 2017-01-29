@@ -15,11 +15,13 @@ namespace BackupConsole
 
     class ArgumentScanner
     {
+        public List<string> CommandStrings { get; set; } = new List<string>();
         Dictionary<string, ArgumentNode> Commands { get; set; } = new Dictionary<string, ArgumentNode>();
         public ArgumentScanner() { }
         public ArgumentScanner(List<string> commandstrings)
         {
-            foreach (var cs in commandstrings)
+            CommandStrings = commandstrings;
+            foreach (var cs in CommandStrings)
             {
                 AddCommand(cs);
             }
@@ -45,6 +47,7 @@ namespace BackupConsole
 
         public void AddCommand(string commandstring)
         {
+            CommandStrings.Add(commandstring);
             ArgumentNode an = new ArgumentNode(commandstring);
             Commands.Add(an.Key, an);
         }
@@ -61,6 +64,8 @@ namespace BackupConsole
                 // "subcommand <requiredparam1> <requiredparam2> [-a <>] [-b] [<optionalparam1> <optionalparam2> [<optionalparam3> [-c]]] [-d <>]"
                 // <Key=subcommand, [requiredparam1, requiredparam2], {a:"", b:null, d:""}, <Key=null, [optionalparam1, optionalparam2], {}, <Key=null, [optionalparam3], {c:null}, null>>>
                 // subcommand val val -b -a val val val val -c (no d)
+
+                // TODO: long/descriptive flag names, (ignored) comments on commands as part of command strings?
 
                 int bracketcounter = 0;
                 int open = -1;

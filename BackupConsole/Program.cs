@@ -16,86 +16,93 @@ namespace BackupConsole
 
         public static void Main(string[] args)
         {
-            var parsed = scanner.ParseInput(args);
-            if (parsed.Item1 == "show" )
+            try
             {
-                // "show [<setting>]"
-                if (parsed.Item2.ContainsKey("setting"))
+                var parsed = scanner.ParseInput(args);
+                if (parsed.Item1 == "show")
                 {
-                    var setting = ReadSetting(parsed.Item2["setting"]);
-                    if (setting != null)
+                    // "show [<setting>]"
+                    if (parsed.Item2.ContainsKey("setting"))
                     {
-                        Console.WriteLine(setting);
-                    }
-                }
-                else
-                {
-                    foreach (var setval in ReadSettings())
-                    {
-                        Console.WriteLine(setval.Key + ": " + setval.Value);
-                    }
-                }
-            }
-            else if (parsed.Item1 == "set")
-            {
-                // "set <setting> <value>"\
-                WriteSetting(parsed.Item2["setting"], parsed.Item2["value"]);
-            }
-            else if (parsed.Item1 == "clear")
-            {
-                // "clear <setting>"
-                ClearSetting(parsed.Item2["setting"]);
-            }
-            else if (parsed.Item1 == "run")
-            {
-                // "run [<message>]"
-                string message = null;
-                if (parsed.Item2.ContainsKey("message"))
-                {
-                    message = parsed.Item2["message"];
-                }
-                RunBackup(message);
-            }
-            else if (parsed.Item1 == "restore")
-            {
-                // "restore <filerelpath> [-i <>] [-r <>]"
-                string filerelpath = parsed.Item2["filerelpath"];
-                // If no restoreto path given, restore
-                // to cwd / its relative path
-                string restorepath = Path.Combine(cwd, filerelpath);
-                // TODO: Perhaps replace backup indexes with hashes of the metadata tree file?
-                int backupindex = -1; // default to the latest backup
-                if (parsed.Item3.ContainsKey("i"))
-                {
-                    backupindex = Convert.ToInt32(parsed.Item3["i"]);
-                    if (parsed.Item3.ContainsKey("r"))
-                    {
-                        if (parsed.Item3["r"] == ".")
+                        var setting = ReadSetting(parsed.Item2["setting"]);
+                        if (setting != null)
                         {
-                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
+                            Console.WriteLine(setting);
                         }
-                        else
+                    }
+                    else
+                    {
+                        foreach (var setval in ReadSettings())
                         {
-                            restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
+                            Console.WriteLine(setval.Key + ": " + setval.Value);
                         }
                     }
                 }
-                RestoreFile(filerelpath, restorepath, backupindex);
-            }
-            else if (parsed.Item1 == "list")
-            {
-                // "list [<listcount>]"
-                int listcount = -1;
-                if (parsed.Item2.ContainsKey("listcount"))
+                else if (parsed.Item1 == "set")
                 {
-                    listcount = Convert.ToInt32(parsed.Item2["listcount"]);
+                    // "set <setting> <value>"\
+                    WriteSetting(parsed.Item2["setting"], parsed.Item2["value"]);
                 }
-                ListBackups(listcount);
+                else if (parsed.Item1 == "clear")
+                {
+                    // "clear <setting>"
+                    ClearSetting(parsed.Item2["setting"]);
+                }
+                else if (parsed.Item1 == "run")
+                {
+                    // "run [<message>]"
+                    string message = null;
+                    if (parsed.Item2.ContainsKey("message"))
+                    {
+                        message = parsed.Item2["message"];
+                    }
+                    RunBackup(message);
+                }
+                else if (parsed.Item1 == "restore")
+                {
+                    // "restore <filerelpath> [-i <>] [-r <>]"
+                    string filerelpath = parsed.Item2["filerelpath"];
+                    // If no restoreto path given, restore
+                    // to cwd / its relative path
+                    string restorepath = Path.Combine(cwd, filerelpath);
+                    // TODO: Perhaps replace backup indexes with hashes of the metadata tree file?
+                    int backupindex = -1; // default to the latest backup
+                    if (parsed.Item3.ContainsKey("i"))
+                    {
+                        backupindex = Convert.ToInt32(parsed.Item3["i"]);
+                        if (parsed.Item3.ContainsKey("r"))
+                        {
+                            if (parsed.Item3["r"] == ".")
+                            {
+                                restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
+                            }
+                            else
+                            {
+                                restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
+                            }
+                        }
+                    }
+                    RestoreFile(filerelpath, restorepath, backupindex);
+                }
+                else if (parsed.Item1 == "list")
+                {
+                    // "list [<listcount>]"
+                    int listcount = -1;
+                    if (parsed.Item2.ContainsKey("listcount"))
+                    {
+                        listcount = Convert.ToInt32(parsed.Item2["listcount"]);
+                    }
+                    ListBackups(listcount);
+                }
+                else if (parsed.Item1 == "help")
+                {
+                    // "help"
+                    ShowCommands();
+                }
             }
-            else if (parsed.Item1 == "help")
+            catch
             {
-                // "help"
-                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
+                ShowCommands();
             }
         }
 
@@ -110,6 +117,14 @@ namespace BackupConsole
             scanner.AddCommand("list [<listcount>]");
             scanner.AddCommand("help");
             return scanner;
+        }
+
+        private static void ShowCommands()
+        {
+            foreach (var command in scanner.CommandStrings)
+            {
+                Console.WriteLine(command);
+            }
         }
 
         private static void RunBackup(string message=null)
