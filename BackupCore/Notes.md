@@ -11,16 +11,21 @@
 
 *********************
 IN PROGRESS
-Full argument parsing for BackupConsole
-	Rolling my own could make reimplementation in other languages easier
 Browse past backups easily ("backup ls")
 	Captive prompt?
 		bakup <relpath>: 
 Reference count data blocks
+	Delete backups
+		Consider hashes as backup identifiers (like git)
+		Backup id would then be "stable"
+	Show total and "additional" space used by each backup
+		additional=space regained by deleting backup and leaving all others
+Progress report/bar
 Ignore patterns
 Handle common things that could go wrong
 	warn when lack permission to backup file
-	overwriting existing file when restoring
+	warn when overwriting existing file when restoring
+	fail gracefully when parsing input
 	more...
 Multiple base folders
 Replicate source file tree (as last backed up) in destination
@@ -31,7 +36,7 @@ Special handling for zip files (including Office .***x files)?
 	Deduplication wont work for compressed formats (I think?)
 	silently expand archive for saving
 	Issues:
-		compressed for a reason, deduplication may be far less efficient for an edited paper, etc.
+		compressed for a reason, deduplication may be far less efficient than compression for an edited paper, etc.
 
 **********************
 WHAT'S GOING ON

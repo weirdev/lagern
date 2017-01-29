@@ -12,18 +12,17 @@ namespace BackupConsole
     {
         // Current directory (where user launch from)
         private static string cwd = Environment.CurrentDirectory;
+        private static readonly ArgumentScanner scanner = ArgScannerFactory();
 
         public static void Main(string[] args)
         {
-            if (args.Length == 0)
+            var parsed = scanner.ParseInput(args);
+            if (parsed.Item1 == "show" )
             {
-                Console.WriteLine("Specify a subcommand to run. Try \"backup help\" for a listing of subcommands.");
-            }
-            else if (args[0] == "show")
-            {
-                if (args.Length >= 2)
+                // "show [<setting>]"
+                if (parsed.Item2.ContainsKey("setting"))
                 {
-                    var setting = ReadSetting(args[1]);
+                    var setting = ReadSetting(parsed.Item2["setting"]);
                     if (setting != null)
                     {
                         Console.WriteLine(setting);
@@ -37,82 +36,83 @@ namespace BackupConsole
                     }
                 }
             }
-            else if (args[0] == "set")
+            else if (parsed.Item1 == "set")
             {
-                if (args.Length >= 2)
-                {
-                    if (args.Length >= 3)
-                    {
-                        WriteSetting(args[1], args[2]);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Specify a value for %s. Use \"backup clear <setting>\" to remove a setting.", args[1]);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Specify a setting to set");
-                }
+                // "set <setting> <value>"\
+                WriteSetting(parsed.Item2["setting"], parsed.Item2["value"]);
             }
-            else if (args[0] == "clear")
+            else if (parsed.Item1 == "clear")
             {
-                ClearSetting(args[1]);
+                // "clear <setting>"
+                ClearSetting(parsed.Item2["setting"]);
             }
-            else if (args[0] == "run")
+            else if (parsed.Item1 == "run")
             {
+                // "run [<message>]"
                 string message = null;
-                if (args.Length >= 2)
+                if (parsed.Item2.ContainsKey("message"))
                 {
-                    message = args[1];
+                    message = parsed.Item2["message"];
                 }
                 RunBackup(message);
             }
-            else if (args[0] == "restore")
+            else if (parsed.Item1 == "restore")
             {
-                string filerelpath = args[1];
-                // No restoreto path given, restore
+                // "restore <filerelpath> [-i <>] [-r <>]"
+                string filerelpath = parsed.Item2["filerelpath"];
+                // If no restoreto path given, restore
                 // to cwd / its relative path
                 string restorepath = Path.Combine(cwd, filerelpath);
                 // TODO: Perhaps replace backup indexes with hashes of the metadata tree file?
                 int backupindex = -1; // default to the latest backup
-                if (args.Length >= 3)
+                if (parsed.Item3.ContainsKey("i"))
                 {
-                    backupindex = Convert.ToInt32(args[2]);
-                    if (args.Length >= 4)
+                    backupindex = Convert.ToInt32(parsed.Item3["i"]);
+                    if (parsed.Item3.ContainsKey("r"))
                     {
-                        if (args[3] == ".")
+                        if (parsed.Item3["r"] == ".")
                         {
                             restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
                         }
                         else
                         {
-                            restorepath = Path.Combine(args[3], Path.GetFileName(filerelpath));
+                            restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
                         }
                     }
                 }
                 RestoreFile(filerelpath, restorepath, backupindex);
             }
-            else if (args[0] == "list")
+            else if (parsed.Item1 == "list")
             {
+                // "list [<listcount>]"
                 int listcount = -1;
-                if (args.Length >= 2)
+                if (parsed.Item2.ContainsKey("listcount"))
                 {
-                    listcount = Convert.ToInt32(args[1]);
+                    listcount = Convert.ToInt32(parsed.Item2["listcount"]);
                 }
                 ListBackups(listcount);
             }
-            else if (args[0] == "help")
+            else if (parsed.Item1 == "help")
             {
-                Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
-            }
-            else
-            {
+                // "help"
                 Console.WriteLine("Possible backup subcommands include:\nset <setting> <value>\nrun\nrestore <relative filepath> [<backup index> [<destination directory path>]]");
             }
         }
 
-        private static void RunBackup(string message)
+        private static ArgumentScanner ArgScannerFactory()
+        {
+            ArgumentScanner scanner = new ArgumentScanner();
+            scanner.AddCommand("show [<setting>]");
+            scanner.AddCommand("set <setting> <value>");
+            scanner.AddCommand("clear <setting>");
+            scanner.AddCommand("run [<message>]");
+            scanner.AddCommand("restore <filerelpath> [-i <>] [-r <>]");
+            scanner.AddCommand("list [<listcount>]");
+            scanner.AddCommand("help");
+            return scanner;
+        }
+
+        private static void RunBackup(string message=null)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -148,7 +148,7 @@ namespace BackupConsole
             var backups = bcore.GetBackups().ToArray();
             show = show == -1 ? backups.Length : show;
             show = backups.Length < show ? backups.Length : show;
-            for (int i = show - 1; i >= 0; i--)
+            for (int i = backups.Length - 1; i >= backups.Length - show; i--)
             {
                 Console.WriteLine("[" + i.ToString() + "]\t" + backups[i].Item1.ToLocalTime().ToString() + "\t" +
                     backups[i].Item2);
@@ -167,7 +167,7 @@ namespace BackupConsole
             }
             return null;
         }
-
+        
         private static void WriteSetting(string key, string value)
         {
             var settings = ReadSettings();
