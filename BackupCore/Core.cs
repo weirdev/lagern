@@ -132,13 +132,12 @@ namespace BackupCore
         /// <param name="backupindex"></param>
         public void WriteOutFile(string relfilepath, string restorepath, int backupindex=-1)
         {
-            // We assume the latest backup
             if (backupindex == -1)
             {
                 backupindex = MetaStore.Count - 1;
             }
-            MetadataTree latestmtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
-            FileMetadata filemeta = latestmtree.GetFile(relfilepath);
+            MetadataTree mtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
+            FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = HashStore.ReconstructFileData(filemeta.BlocksHashes);
             // TODO: handle ~/./.. throughout program
             // TODO: autoreplacing of '/' with '\\'
@@ -152,6 +151,16 @@ namespace BackupCore
 
             }
             filemeta.WriteOutMetadata(restorepath);
+        }
+
+        public MetadataNode GetDirectory(int backupindex, string relpath)
+        {
+            if (backupindex == -1)
+            {
+                backupindex = MetaStore.Count - 1;
+            }
+            MetadataTree mtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
+            return mtree.GetDirectory(relpath);
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)

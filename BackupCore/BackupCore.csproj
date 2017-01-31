@@ -71,6 +71,7 @@
     <Compile Include="HashTools.cs" />
     <Compile Include="FileMetadata.cs" />
     <Compile Include="ICustomSerializable.cs" />
+    <Compile Include="MetadataNode.cs" />
     <Compile Include="MetadataStore.cs" />
     <Compile Include="MetadataTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

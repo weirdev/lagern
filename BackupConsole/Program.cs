@@ -11,14 +11,14 @@ namespace BackupConsole
     public class Program
     {
         // Current directory (where user launch from)
-        private static string cwd = Environment.CurrentDirectory;
-        private static readonly ArgumentScanner scanner = ArgScannerFactory();
+        public static string cwd = Environment.CurrentDirectory;
+        private static readonly ArgumentScanner main_scanner = MainArgScannerFactory();
 
         public static void Main(string[] args)
         {
             try
             {
-                var parsed = scanner.ParseInput(args);
+                var parsed = main_scanner.ParseInput(args);
                 if (parsed.Item1 == "show")
                 {
                     // "show [<setting>]"
@@ -40,7 +40,7 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "set")
                 {
-                    // "set <setting> <value>"\
+                    // "set <setting> <value>"
                     WriteSetting(parsed.Item2["setting"], parsed.Item2["value"]);
                 }
                 else if (parsed.Item1 == "clear")
@@ -94,6 +94,17 @@ namespace BackupConsole
                     }
                     ListBackups(listcount);
                 }
+                else if (parsed.Item1 == "browse")
+                {
+                    // "browse [-i <>]"
+                    int backupindex = -1;
+                    if (parsed.Item3.ContainsKey("i"))
+                    {
+                        backupindex = Convert.ToInt32(parsed.Item3["i"]);
+                    }
+                    var browser = new BackupBrowser(backupindex);
+                    browser.CommandLoop();
+                }
                 else if (parsed.Item1 == "help")
                 {
                     // "help"
@@ -106,7 +117,7 @@ namespace BackupConsole
             }
         }
 
-        private static ArgumentScanner ArgScannerFactory()
+        private static ArgumentScanner MainArgScannerFactory()
         {
             ArgumentScanner scanner = new ArgumentScanner();
             scanner.AddCommand("show [<setting>]");
@@ -115,13 +126,14 @@ namespace BackupConsole
             scanner.AddCommand("run [<message>]");
             scanner.AddCommand("restore <filerelpath> [-i <>] [-r <>]");
             scanner.AddCommand("list [<listcount>]");
+            scanner.AddCommand("browse [-i <>]");
             scanner.AddCommand("help");
             return scanner;
         }
 
         private static void ShowCommands()
         {
-            foreach (var command in scanner.CommandStrings)
+            foreach (var command in main_scanner.CommandStrings)
             {
                 Console.WriteLine(command);
             }
@@ -170,7 +182,7 @@ namespace BackupConsole
             }
         }
 
-        private static string ReadSetting(string key)
+        public static string ReadSetting(string key)
         {
             var settings = ReadSettings();
             if (settings != null)

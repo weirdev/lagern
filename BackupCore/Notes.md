@@ -11,9 +11,10 @@
 
 *********************
 IN PROGRESS
-Browse past backups easily ("backup ls")
+Browse past backups easily ("backup browse")
 	Captive prompt?
-		bakup <relpath>: 
+		backup rel_path> ls (etc)
+			simple to restore file located in this manner 
 Reference count data blocks
 	Delete backups
 		Consider hashes as backup identifiers (like git)
