@@ -67,7 +67,7 @@
     <Compile Include="Core.cs" />
     <Compile Include="HashBin.cs" />
     <Compile Include="HashBlockPair.cs" />
-    <Compile Include="HashIndexStore.cs" />
+    <Compile Include="BlockHashStore.cs" />
     <Compile Include="HashTools.cs" />
     <Compile Include="FileMetadata.cs" />
     <Compile Include="ICustomSerializable.cs" />

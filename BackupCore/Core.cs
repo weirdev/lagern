@@ -17,8 +17,8 @@ namespace BackupCore
 
         public string backuppath_dst { get; set; }
 
-        // HashIndexStore holding BackupLocations indexed by hashes (in bytes)
-        private HashIndexStore HashStore { get; set; }
+        // BlockHashStore holding BackupLocations indexed by hashes (in bytes)
+        private BlockHashStore BlockStore { get; set; }
         private MetadataStore MetaStore { get; set; }
 
         public Core(string src, string dst)
@@ -32,7 +32,7 @@ namespace BackupCore
                 Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
             }
 
-            HashStore = new HashIndexStore(Path.Combine(backuppath_dst, "index", "hashindex"), backuppath_dst);
+            BlockStore = new BlockHashStore(Path.Combine(backuppath_dst, "index", "hashindex"), backuppath_dst);
             MetaStore = new MetadataStore(Path.Combine(backuppath_dst, "index", "metadata"));
         }
         
@@ -76,7 +76,7 @@ namespace BackupCore
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
-            HashStore.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
+            BlockStore.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
             // Save metadata
             MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
@@ -118,7 +118,7 @@ namespace BackupCore
 
             // Save "index"
             // Writeout entire cached index
-            HashStore.SynchronizeCacheToDisk();
+            BlockStore.SynchronizeCacheToDisk();
             // Save metadata
             MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
@@ -136,9 +136,9 @@ namespace BackupCore
             {
                 backupindex = MetaStore.Count - 1;
             }
-            MetadataTree mtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
+            MetadataTree mtree = MetadataTree.deserialize(BlockStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
-            byte[] filedata = HashStore.ReconstructFileData(filemeta.BlocksHashes);
+            byte[] filedata = BlockStore.ReconstructFileData(filemeta.BlocksHashes);
             // TODO: autoreplacing of '/' with '\\'
             using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
             {
@@ -158,7 +158,7 @@ namespace BackupCore
             {
                 backupindex = MetaStore.Count - 1;
             }
-            return MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
+            return MetadataTree.deserialize(BlockStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -375,10 +375,10 @@ namespace BackupCore
             string path = Path.Combine(backuppath_dst, relpath);
             BackupLocation posblocation = new BackupLocation(relpath, 0, block.Length);
             bool alreadystored = false;
-            lock (HashStore)
+            lock (BlockStore)
             {
                 // Have we already stored this 
-                alreadystored = HashStore.AddHash(hash, posblocation);
+                alreadystored = BlockStore.AddHash(hash, posblocation);
             }
             if (!alreadystored)
             {

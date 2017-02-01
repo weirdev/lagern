@@ -10,7 +10,7 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    class HashIndexStore
+    class BlockHashStore
     {
         // TODO: Consider some inheritance relationship between this class and BPlusTree
         public BPlusTree TreeIndexStore { get; private set; }
@@ -19,7 +19,7 @@ namespace BackupCore
 
         public string BlockSaveDirectory { get; set; }
 
-        public HashIndexStore(string indexpath, string blocksavedir)
+        public BlockHashStore(string indexpath, string blocksavedir)
         {
             IndexPath = indexpath;
             BlockSaveDirectory = blocksavedir;
@@ -36,7 +36,7 @@ namespace BackupCore
         /// </returns>
         public bool AddHash(byte[] hash, BackupLocation blocation)
         {
-            // Adds a hash and Backup Location to the HashIndexStore
+            // Adds a hash and Backup Location to the BlockHashStore
             return TreeIndexStore.AddHash(hash, blocation);
         }
 
