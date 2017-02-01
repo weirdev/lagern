@@ -11,16 +11,13 @@
 
 *********************
 IN PROGRESS
-Browse past backups easily ("backup browse")
-	Captive prompt?
-		backup rel_path> ls (etc)
-			simple to restore file located in this manner 
 Reference count data blocks
 	Delete backups
 		Consider hashes as backup identifiers (like git)
 		Backup id would then be "stable"
 	Show total and "additional" space used by each backup
 		additional=space regained by deleting backup and leaving all others
+Rework MetadataTree/Node / how is accessed from core
 Progress report/bar
 Ignore patterns
 Handle common things that could go wrong

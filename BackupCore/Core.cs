@@ -139,7 +139,6 @@ namespace BackupCore
             MetadataTree mtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = HashStore.ReconstructFileData(filemeta.BlocksHashes);
-            // TODO: handle ~/./.. throughout program
             // TODO: autoreplacing of '/' with '\\'
             using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
             {

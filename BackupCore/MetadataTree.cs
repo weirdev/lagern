@@ -31,31 +31,20 @@ namespace BackupCore
 
         public FileMetadata GetFile(string relpath)
         {
-            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))            {
-                throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
-            }
-            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
-            {
-                relpath = relpath.Substring(0, relpath.Length - 1);
-            }
             int slash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
-            if (slash != -1)
+            if (slash == -1) // file must exist in "root" assume '\\' before path
             {
-                MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
-                return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
+                relpath = '\\' + relpath;
             }
-            else // only filename given, must exist in "root"
-            {
-                return Root.GetFile(relpath);
-            }
+            MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
+            return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
         }
         
-        // TODO: handle ".." in paths
         public MetadataNode GetDirectory(string relpath)
         {
-            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString())) // always start at root of tree, toss first slash
             {
-                throw new ArgumentException("Paths must be relative and cannot begin with \"/\".");
+                relpath = relpath.Substring(1);
             }
             if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
@@ -72,20 +61,20 @@ namespace BackupCore
         /// <returns></returns>
         private MetadataNode GetDirectory(string path, MetadataNode current_dir)
         {
+            if (path.StartsWith("\\"))
+            {
+                path = path.Substring(1);
+            }
+            if (path == "")
+            {
+                return current_dir;
+            }
             int slash = path.IndexOf(Path.DirectorySeparatorChar);
             if (slash != -1)
             {
                 string nextdirname = path.Substring(0, slash);
                 string nextpath = path.Substring(slash + 1, path.Length - slash - 1);
-                MetadataNode nextdir;
-                if (nextdirname != ".")
-                {
-                    nextdir = current_dir.GetDirectory(nextdirname);
-                }
-                else
-                {
-                    nextdir = current_dir;
-                }
+                MetadataNode nextdir = current_dir.GetDirectory(nextdirname);
                 if (nextdir == null)
                 {
                     return null;
@@ -94,14 +83,7 @@ namespace BackupCore
             }
             else
             {
-                if (path != ".")
-                {
-                    return current_dir.GetDirectory(path);
-                }
-                else
-                {
-                    return current_dir;
-                }
+                return current_dir.GetDirectory(path);
             }
         }
 
@@ -128,7 +110,7 @@ namespace BackupCore
                     }
                     else
                     {
-                        Root = new MetadataNode(metadata);
+                        Root = new MetadataNode(metadata, null);
                     }
                 }
                 else

@@ -70,16 +70,16 @@ namespace BackupConsole
                     if (parsed.Item3.ContainsKey("i"))
                     {
                         backupindex = Convert.ToInt32(parsed.Item3["i"]);
-                        if (parsed.Item3.ContainsKey("r"))
+                    }
+                    if (parsed.Item3.ContainsKey("r"))
+                    {
+                        if (parsed.Item3["r"] == "\\")
                         {
-                            if (parsed.Item3["r"] == ".")
-                            {
-                                restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
-                            }
-                            else
-                            {
-                                restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
-                            }
+                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
+                        }
+                        else
+                        {
+                            restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
                         }
                     }
                     RestoreFile(filerelpath, restorepath, backupindex);
@@ -151,7 +151,7 @@ namespace BackupConsole
             bcore.RunBackupSync(message);
         }
 
-        private static void RestoreFile(string filerelpath, string restorepath, int backupindex)
+        public static void RestoreFile(string filerelpath, string restorepath, int backupindex)
         {
             string destination = ReadSetting("dest");
             if (destination == null)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace BackupCore
 {
@@ -23,37 +24,56 @@ namespace BackupCore
         public Dictionary<string, MetadataNode> Directories { get; set; }
         public Dictionary<string, FileMetadata> Files { get; set; }
 
-        public MetadataNode(FileMetadata metadata)
+        public string Path
+        {
+            get
+            {
+                if (Directories[".."] != null)
+                {
+                    return System.IO.Path.Combine(Directories[".."].Path, DirMetadata.FileName);
+                }
+                else
+                {
+                    return "\\";
+                }
+            }
+        }
+
+        public MetadataNode(FileMetadata metadata, MetadataNode parent)
         {
             DirMetadata = metadata;
             Directories = new Dictionary<string, MetadataNode>();
+            Directories.Add("..", parent);
             Files = new Dictionary<string, FileMetadata>();
         }
 
-        private MetadataNode(FileMetadata metadata, Dictionary<string, MetadataNode> directories,
-            Dictionary<string, FileMetadata> files)
+        private MetadataNode()
         {
-            DirMetadata = metadata;
-            if (directories != null)
-            {
-                Directories = directories;
-            }
-            else
-            {
-                Directories = new Dictionary<string, MetadataNode>();
-            }
-            if (files != null)
-            {
-                Files = files;
-            }
-            else
-            {
-                files = new Dictionary<string, FileMetadata>();
-            }
+            //DirMetadata = metadata;
+            //if (directories != null)
+            //{
+            //    Directories = directories;
+            //}
+            //else
+            //{
+            //    Directories = new Dictionary<string, MetadataNode>();
+            //}
+            //if (files != null)
+            //{
+            //    Files = files;
+            //}
+            //else
+            //{
+            //    files = new Dictionary<string, FileMetadata>();
+            //}
         }
 
         public MetadataNode GetDirectory(string name)
         {
+            if (name == ".")
+            {
+                return this;
+            }
             if (Directories != null && Directories.ContainsKey(name))
             {
                 return Directories[name];
@@ -82,7 +102,7 @@ namespace BackupCore
             }
             else
             {
-                MetadataNode ndir = new MetadataNode(metadata);
+                MetadataNode ndir = new MetadataNode(metadata, this);
                 Directories[metadata.FileName] = ndir;
             }
         }
@@ -112,7 +132,7 @@ namespace BackupCore
             // Files = enum_encode([Files.Values FileMetadata.serialize(),... ])
 
             mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
-            mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from mn in Directories.Values.AsEnumerable() select mn.serialize()));
+            mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from smnkvp in Directories where smnkvp.Key!=".." select smnkvp.Value.serialize()));
             mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
 
             return BinaryEncoding.dict_encode(mtdata);
@@ -126,24 +146,29 @@ namespace BackupCore
         /// </summary>
         /// <param name="data"></param>
         /// <returns></returns>
-        public static MetadataNode deserialize(byte[] data)
+        public static MetadataNode deserialize(byte[] data, MetadataNode parent=null)
         {
+            var curmn = new MetadataNode();
+
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
+            curmn.DirMetadata = dirmetadata;
             Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
             foreach (var binmn in BinaryEncoding.enum_decode(savedobjects["Directories-v1"]))
             {
-                MetadataNode newmn = MetadataNode.deserialize(binmn);
+                MetadataNode newmn = MetadataNode.deserialize(binmn, curmn);
                 directories.Add(newmn.DirMetadata.FileName, newmn);
             }
+            directories[".."] = parent;
+            curmn.Directories = directories;
             Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
             foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
             {
                 FileMetadata newfm = FileMetadata.deserialize(binfm);
                 files.Add(newfm.FileName, newfm);
             }
-
-            return new MetadataNode(dirmetadata, directories, files);
+            curmn.Files = files;
+            return curmn;
         }
     }
 }
