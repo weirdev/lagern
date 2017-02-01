@@ -10,7 +10,7 @@ namespace BackupCore
 {
     public class MetadataTree : ICustomSerializable<MetadataTree>
     {
-        MetadataNode Root { get; set; }
+        public MetadataNode Root { get; set; }
 
         public MetadataTree() { }
 
@@ -87,61 +87,31 @@ namespace BackupCore
             }
         }
 
-        public void AddDirectory(string relpath, FileMetadata metadata)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="dirpath">Relative path NOT containing name of new directory.</param>
+        /// <param name="metadata"></param>
+        public void AddDirectory(string dirpath, FileMetadata metadata)
         {
-            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            if (dirpath == "\\")
             {
-                relpath = relpath.Substring(0, relpath.Length - 1);
+                Root = new MetadataNode(metadata, null);
             }
-            int lastslash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
-            if (lastslash != -1)
+            else
             {
-                string dirpath = relpath.Substring(0, lastslash);
-                MetadataNode parent = GetDirectory(dirpath);
-                parent.AddDirectory(metadata);
-            }
-            else // only directory name given, must exist in "root"
-            {
-                if (relpath == ".")
-                {
-                    if (Root != null)
-                    {
-                        Root.DirMetadata = metadata;
-                    }
-                    else
-                    {
-                        Root = new MetadataNode(metadata, null);
-                    }
-                }
-                else
-                {
-                    Root.AddDirectory(metadata);
-                }
+                GetDirectory(dirpath).AddDirectory(metadata);
             }
         }
 
         /// <summary>
         /// Adds a file to its parent folder.
         /// </summary>
-        /// <param name="relpath">Relative file path containing filename.</param>
+        /// <param name="dirpath">Relative path NOT containing filename.</param>
         /// <param name="metadata"></param>
-        public void AddFile(string relpath, FileMetadata metadata)
+        public void AddFile(string dirpath, FileMetadata metadata)
         {
-            if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
-            {
-                relpath = relpath.Substring(0, relpath.Length - 1);
-            }
-            int lastslash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
-            if (lastslash != -1)
-            {
-                string dirpath = relpath.Substring(0, lastslash);
-                MetadataNode parent = GetDirectory(dirpath);
-                parent.AddFile(metadata);
-            }
-            else // only filename given, must exist in "root"
-            {
-                Root.AddFile(metadata);
-            }
+            GetDirectory(dirpath).AddFile(metadata);
         }
 
         /// <summary>

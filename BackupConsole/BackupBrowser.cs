@@ -13,7 +13,8 @@ namespace BackupConsole
 
         BackupCore.Core BCore;
         int BackupIndex;
-        string CurrentPath = "\\";
+        BackupCore.MetadataTree backuptree;
+        BackupCore.MetadataNode currentnode;
 
         public BackupBrowser(int backupindex)
         {
@@ -21,18 +22,18 @@ namespace BackupConsole
             string destination = Program.ReadSetting("dest");
             if (destination == null)
             { 
-                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                return;
+                throw new Exception("A backup destination must be specified with \"set dest <path>\"");
             }
             BCore = new BackupCore.Core(Program.cwd, destination);
-
+            backuptree = BCore.GetMetadataTree(BackupIndex);
+            currentnode = backuptree.Root;
         }
 
         public void CommandLoop()
         {
             while (true)
             {
-                Console.Write(String.Format("backup {0}:{1}> ", BackupIndex, CurrentPath));
+                Console.Write(String.Format("backup {0}:{1}> ", BackupIndex, currentnode.Path));
                 string command = Console.ReadLine();
                 string[] args = command.Split();
                 try
@@ -46,7 +47,7 @@ namespace BackupConsole
                     else if (parsed.Item1 == "ls")
                     {
                         // "ls"
-                        ListDirectory(CurrentPath);
+                        ListDirectory();
                     }
                     else if (parsed.Item1 == "exit")
                     {
@@ -56,7 +57,7 @@ namespace BackupConsole
                     else if (parsed.Item1 == "restore")
                     {
                         // "restore <filerelpath> [-r <>]"
-                        string filerelpath = Path.Combine(CurrentPath, parsed.Item2["filerelpath"]);
+                        string filerelpath = Path.Combine(currentnode.Path, parsed.Item2["filerelpath"]);
                         // If no restoreto path given, restore
                         // to cwd / its relative path
                         string restorepath = Path.Combine(Program.cwd, filerelpath);
@@ -104,9 +105,9 @@ namespace BackupConsole
             }
         }
 
-        private void ListDirectory(string relpath)
+        private void ListDirectory()
         {
-            BackupCore.MetadataNode dir = BCore.GetDirectory(BackupIndex, relpath);
+            BackupCore.MetadataNode dir = currentnode;
 
             List<BackupCore.MetadataNode> childdirectories = new List<BackupCore.MetadataNode>(from cdir in dir.Directories where cdir.Key!=".." select cdir.Value);
             childdirectories.Sort(delegate (BackupCore.MetadataNode x, BackupCore.MetadataNode y)
@@ -136,11 +137,11 @@ namespace BackupConsole
             {
                 if (directory.StartsWith("\\"))
                 {
-                    dir = BCore.GetDirectory(BackupIndex, directory);
+                    dir = backuptree.GetDirectory(directory);
                 }
                 else
                 {
-                    dir = BCore.GetDirectory(BackupIndex, Path.Combine(CurrentPath, directory));
+                    dir = backuptree.GetDirectory(Path.Combine(currentnode.Path, directory));
                 }
             }
             catch (Exception)
@@ -152,7 +153,7 @@ namespace BackupConsole
                 Console.WriteLine("Cannot find directory specified");
                 return;
             }
-            CurrentPath = dir.Path;
+            currentnode = dir;
         }
     }
 }

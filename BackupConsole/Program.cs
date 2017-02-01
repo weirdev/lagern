@@ -102,8 +102,15 @@ namespace BackupConsole
                     {
                         backupindex = Convert.ToInt32(parsed.Item3["i"]);
                     }
-                    var browser = new BackupBrowser(backupindex);
-                    browser.CommandLoop();
+                    try
+                    {
+                        var browser = new BackupBrowser(backupindex);
+                        browser.CommandLoop();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
                 }
                 else if (parsed.Item1 == "help")
                 {

@@ -17,13 +17,15 @@ Reference count data blocks
 		Backup id would then be "stable"
 	Show total and "additional" space used by each backup
 		additional=space regained by deleting backup and leaving all others
-Rework MetadataTree/Node / how is accessed from core
+Backup commands from backup destination
+	restore after have lost src
+	restore to different place
 Progress report/bar
 Ignore patterns
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
-	
+	crash mid operations
 	more...
 Multiple base folders
 Replicate source file tree (as last backed up) in destination

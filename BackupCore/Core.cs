@@ -40,7 +40,7 @@ namespace BackupCore
         {
             MetadataTree newmetatree = new MetadataTree();
 
-            newmetatree.AddDirectory(".", new FileMetadata(backuppath_src));
+            newmetatree.AddDirectory("\\", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFilesAndDirectories(filequeue, directoryqueue));
@@ -85,7 +85,7 @@ namespace BackupCore
         {
             MetadataTree newmetatree = new MetadataTree();
 
-            newmetatree.AddDirectory(".", new FileMetadata(backuppath_src));
+            newmetatree.AddDirectory("\\", new FileMetadata(backuppath_src));
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             GetFilesAndDirectories(filequeue, directoryqueue);
@@ -152,14 +152,13 @@ namespace BackupCore
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        public MetadataNode GetDirectory(int backupindex, string relpath)
+        public MetadataTree GetMetadataTree(int backupindex)
         {
             if (backupindex == -1)
             {
                 backupindex = MetaStore.Count - 1;
             }
-            MetadataTree mtree = MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
-            return mtree.GetDirectory(relpath);
+            return MetadataTree.deserialize(HashStore.ReconstructFileData(MetaStore[backupindex].MetadataTreeHashes));
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -230,7 +229,7 @@ namespace BackupCore
 
         private void BackupDirectory(string relpath, MetadataTree mtree)
         {
-            mtree.AddDirectory(relpath, new FileMetadata(Path.Combine(backuppath_src, relpath)));
+            mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(backuppath_src, relpath)));
         }
 
         protected void GetFileBlocks(BlockingCollection<HashBlockPair> hashblockqueue, Stream readerbuffer)
@@ -364,10 +363,9 @@ namespace BackupCore
         {
             FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
             fm.BlocksHashes = blockshashes;
-            // TODO: will need to add subdirectories before their files
             lock (MetaStore)
             {
-                mtree.AddFile(relpath, fm);
+                mtree.AddFile(Path.GetDirectoryName(relpath), fm);
             }
         }
 
