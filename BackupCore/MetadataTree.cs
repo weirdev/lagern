@@ -35,6 +35,7 @@ namespace BackupCore
             if (slash == -1) // file must exist in "root" assume '\\' before path
             {
                 relpath = '\\' + relpath;
+                slash = 0;
             }
             MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
             return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));

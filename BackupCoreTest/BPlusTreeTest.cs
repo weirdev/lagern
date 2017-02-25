@@ -15,7 +15,7 @@ namespace BackupCoreTest
     {
         public BPlusTreeTest()
         {
-            BPTree = new BPlusTree(100);
+            BPTree = new BPlusTree<BackupLocation>(100);
 
             BackupLocation bl1 = new BackupLocation("somewhere1", 0, 40);
             BackupLocation bl2 = new BackupLocation("somewhere2", 4, 401);
@@ -44,7 +44,7 @@ namespace BackupCoreTest
             BPTree.AddHash(key1, bl1);
         }
 
-        public BPlusTree BPTree { get; set; }
+        public BPlusTree<BackupLocation> BPTree { get; set; }
 
         private TestContext testContextInstance;
 
@@ -86,6 +86,8 @@ namespace BackupCoreTest
         //
         #endregion
 
+        /* // Serialize no longer in B+ tree generic class
+         * // TODO: Add serialization tests for classes using/inheriting B+ tree
         [TestMethod]
         public void TestSerializeDeserialize()
         {
@@ -98,5 +100,6 @@ namespace BackupCoreTest
                 Assert.AreEqual(orig[i].Value, deser[i].Value);
             }
         }
+        */
     }
 }
