@@ -8,7 +8,7 @@ namespace BackupCore
 {
     class HashBin
     {
-        public bool AddHash(byte[] hash, BackupLocation blocation)
+        public bool AddHash(byte[] hash, BlobLocation blocation)
         {
             throw new NotImplementedException();
         }
@@ -18,7 +18,7 @@ namespace BackupCore
             throw new NotImplementedException();
         }
 
-        public BackupLocation GetBackupLocation(byte[] hash)
+        public BlobLocation GetBackupLocation(byte[] hash)
         {
             throw new NotImplementedException();
         }

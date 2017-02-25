@@ -15,12 +15,12 @@ namespace BackupCoreTest
     {
         public BPlusTreeTest()
         {
-            BPTree = new BPlusTree<BackupLocation>(100);
+            BPTree = new BPlusTree<BlobLocation>(100);
 
-            BackupLocation bl1 = new BackupLocation("somewhere1", 0, 40);
-            BackupLocation bl2 = new BackupLocation("somewhere2", 4, 401);
-            BackupLocation bl3 = new BackupLocation("somewhere3", 0, 440);
-            BackupLocation bl4 = new BackupLocation("somewhere4", 300, 74000);
+            BlobLocation bl1 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere1", 0, 40);
+            BlobLocation bl2 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere2", 4, 401);
+            BlobLocation bl3 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere3", 0, 440);
+            BlobLocation bl4 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere4", 300, 74000);
 
             var rng = new Random();
 
@@ -44,7 +44,7 @@ namespace BackupCoreTest
             BPTree.AddHash(key1, bl1);
         }
 
-        public BPlusTree<BackupLocation> BPTree { get; set; }
+        public BPlusTree<BlobLocation> BPTree { get; set; }
 
         private TestContext testContextInstance;
 

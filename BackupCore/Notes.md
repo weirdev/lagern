@@ -11,6 +11,7 @@
 
 *********************
 IN PROGRESS
+BlobStore handles saving of data to disk
 Reference count data blocks
 	Delete backups
 		Consider hashes as backup identifiers (like git)

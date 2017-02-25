@@ -7,17 +7,18 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class BackupLocation : ICustomSerializable<BackupLocation>
+    public class BlobLocation : ICustomSerializable<BlobLocation>
     {
         // TODO: change to blobID
         // blobID will initially correspond 1-1 with original hash of block
         // later blobs may be combined, and blobID will be the ID (filename)
         // of the new combination blob
         public string RelativeFilePath { get; set; }
+        public BlobTypes BlobType { get; set; }
         public int BytePosition { get; set; }
         public int ByteLength { get; set; }
 
-        public BackupLocation(string relpath, int bytepos, int bytelen)
+        public BlobLocation(BlobTypes blobtype, string relpath, int bytepos, int bytelen)
         {
             RelativeFilePath = relpath;
             BytePosition = bytepos;
@@ -32,8 +33,8 @@ namespace BackupCore
                 return false;
             }
 
-            return RelativeFilePath == ((BackupLocation)obj).RelativeFilePath && BytePosition == ((BackupLocation)obj).BytePosition && 
-                ByteLength == ((BackupLocation)obj).ByteLength;
+            return RelativeFilePath == ((BlobLocation)obj).RelativeFilePath && BytePosition == ((BlobLocation)obj).BytePosition && 
+                ByteLength == ((BlobLocation)obj).ByteLength;
         }
         
         public override int GetHashCode()
@@ -48,22 +49,41 @@ namespace BackupCore
             // RelativeFilePath = ASCII encoded
             // BytePosition = BitConverter.GetBytes(int)
             // ByteLength = BitConverter.GetBytes(int)
+            // -"-v2"
+            // BlobType = BitConverter.GetBytes(int)
 
             bldata.Add("RelativeFilePath-v1", Encoding.ASCII.GetBytes(RelativeFilePath));
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
-            
+
+            bldata.Add("BlobType-v2", BitConverter.GetBytes(ByteLength));
+
             return BinaryEncoding.dict_encode(bldata);
         }
 
-        public static BackupLocation deserialize(byte[] data)
+        public static BlobLocation deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             string relfilepath = Encoding.ASCII.GetString(savedobjects["RelativeFilePath-v1"]);
             int byteposition = BitConverter.ToInt32(savedobjects["BytePosition-v1"], 0);
             int bytelength = BitConverter.ToInt32(savedobjects["ByteLength-v1"], 0);
 
-            return new BackupLocation(relfilepath, byteposition, bytelength);
+            int blobtypeint;
+            if (savedobjects.ContainsKey("BlobType-v2"))
+            {
+                blobtypeint = BitConverter.ToInt32(savedobjects["BlobType-v2"], 0);
+            }
+            else
+            {
+                blobtypeint = 0;
+            }
+            return new BlobLocation((BlobTypes)blobtypeint, relfilepath, byteposition, bytelength);
+        }
+
+        public enum BlobTypes
+        {
+            FileBlock=0,
+            HashList=1
         }
     }
 }

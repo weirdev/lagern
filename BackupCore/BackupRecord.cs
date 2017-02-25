@@ -16,20 +16,20 @@ namespace BackupCore
             get { return _message; }
             set { _message = value == null ? "" : value; }
         }
-        public List<byte[]> MetadataTreeHashes { get; set; }
+        public byte[] MetadataTreeHash { get; set; }
 
-        public BackupRecord(string message, List<byte[]> treehashes)
+        public BackupRecord(string message, byte[] treehash)
         {
             BackupTime = DateTime.UtcNow;
             BackupMessage = message;
-            MetadataTreeHashes = treehashes;
+            MetadataTreeHash = treehash;
         }
 
-        private BackupRecord(DateTime backuptime, string message, List<byte[]> treehashes)
+        private BackupRecord(DateTime backuptime, string message, byte[] treehash)
         {
             BackupTime = backuptime;
             BackupMessage = message;
-            MetadataTreeHashes = treehashes;
+            MetadataTreeHash = treehash;
         }
 
         public byte[] serialize()
@@ -39,10 +39,16 @@ namespace BackupCore
             // BackupTime = DateTime.Ticks
             // BackupMessage = Encoding.ASCII.GetBytes(string)
             // MetadataTreeHashes = enum_encode(List<byte[]>)
+
+            // -v2
+            // Breaks compatability
+            // v1 - MetadataTreeHashes +
+            // MetadataTreeHash = byte[]
             
             brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
             brdata.Add("BackupMessage-v1", Encoding.ASCII.GetBytes(BackupMessage));
-            brdata.Add("MetadataTreeHashes-v1", BinaryEncoding.enum_encode(MetadataTreeHashes));
+
+            brdata.Add("MetadataTreeHash-v2", MetadataTreeHash);
             
             return BinaryEncoding.dict_encode(brdata);
         }
@@ -60,9 +66,9 @@ namespace BackupCore
             {
                 backupmessage = null;
             }
-            List<byte[]> metadatatreehashes = BinaryEncoding.enum_decode(savedobjects["MetadataTreeHashes-v1"]);
+            byte[] metadatatreehash = savedobjects["MetadataTreeHash-v2"];
 
-            return new BackupRecord(backuptime, backupmessage, metadatatreehashes);
+            return new BackupRecord(backuptime, backupmessage, metadatatreehash);
         }
     }
 }

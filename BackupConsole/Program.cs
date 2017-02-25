@@ -184,8 +184,8 @@ namespace BackupConsole
             show = backups.Length < show ? backups.Length : show;
             for (int i = backups.Length - 1; i >= backups.Length - show; i--)
             {
-                Console.WriteLine("[" + i.ToString() + "]\t" + backups[i].Item1.ToLocalTime().ToString() + "\t" +
-                    backups[i].Item2);
+                Console.WriteLine(backups[i].Item1.Substring(0, 7) + "\t" + backups[i].Item2.ToLocalTime().ToString() + "\t" +
+                    backups[i].Item3);
             }
         }
 

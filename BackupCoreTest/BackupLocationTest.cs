@@ -62,8 +62,8 @@ namespace BackupCoreTest
         [TestMethod]
         public void TestSerializeDeserialize()
         {
-            BackupLocation old = new BackupLocation("somewhere1", 0, 40);
-            BackupLocation deser = BackupLocation.deserialize(old.serialize());
+            BlobLocation old = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere1", 0, 40);
+            BlobLocation deser = BlobLocation.deserialize(old.serialize());
             Assert.AreEqual(old, deser);
         }
     }

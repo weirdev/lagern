@@ -10,20 +10,20 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    class BlockHashStore : ICustomSerializable<BlockHashStore>
+    class BlobStore : ICustomSerializable<BlobStore>
     {
         // TODO: Consider some inheritance relationship between this class and BPlusTree
-        public BPlusTree<BackupLocation> TreeIndexStore { get; private set; }
+        public BPlusTree<BlobLocation> TreeIndexStore { get; private set; }
 
         public string StorePath { get; set; }
 
         public string BlockSaveDirectory { get; set; }
 
-        public BlockHashStore(string indexpath, string blocksavedir)
+        public BlobStore(string indexpath, string blocksavedir)
         {
             StorePath = indexpath;
             BlockSaveDirectory = blocksavedir;
-            TreeIndexStore = new BPlusTree<BackupLocation>(100);
+            TreeIndexStore = new BPlusTree<BlobLocation>(100);
 
             try
             {
@@ -38,7 +38,7 @@ namespace BackupCore
             catch (Exception)
             {
                 Console.WriteLine("Reading old index failed. Initializing new index...");
-                TreeIndexStore = new BPlusTree<BackupLocation>(100);
+                TreeIndexStore = new BPlusTree<BlobLocation>(100);
             }
         }
         
@@ -50,10 +50,37 @@ namespace BackupCore
         /// True if we already have the hash stored. False if we need to
         /// save the corresponding block.
         /// </returns>
-        public bool AddHash(byte[] hash, BackupLocation blocation)
+        public bool AddHash(byte[] hash, BlobLocation blocation)
         {
-            // Adds a hash and Backup Location to the BlockHashStore
+            // Adds a hash and Blob Location to the BlockHashStore
             return TreeIndexStore.AddHash(hash, blocation);
+        }
+
+        public void AddBlob(byte[] hash, byte[] blob, BlobLocation.BlobTypes type)
+        {
+            string relpath = HashTools.ByteArrayToHexViaLookup32(hash);
+            BlobLocation posblocation = new BlobLocation(type, relpath, 0, blob.Length);
+            bool alreadystored = false;
+            lock (this)
+            {
+                // Have we already stored this 
+                alreadystored = AddHash(hash, posblocation);
+            }
+            if (!alreadystored)
+            {
+                WriteBlob(posblocation, blob);
+            }
+        }
+
+        public void WriteBlob(BlobLocation blocation, byte[] blob)
+        {
+            string path = Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath);
+            using (FileStream writer = File.OpenWrite(path))
+            {
+                writer.Write(blob, 0, blob.Length);
+                writer.Flush();
+                writer.Close();
+            }
         }
 
         public bool ContainsHash(byte[] hash)
@@ -65,17 +92,30 @@ namespace BackupCore
             return false;
         }
 
-        public BackupLocation GetBackupLocation(byte[] hash)
+        public BlobLocation GetBackupLocation(byte[] hash)
         {
             return TreeIndexStore.GetRecord(hash);
         }
 
-        public byte[] ReconstructFileData(List<byte[]> blockhashes)
+        public byte[] ReconstructFileData(byte[] filehash)
         {
+            // First read the list of hashes associated with a file, then read
+            // in the data associated with each hash in the list
+            BlobLocation blockhashlistloc = GetBackupLocation(filehash);
+            FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockhashlistloc.RelativeFilePath));
+            List<byte[]> blockhashes = new List<byte[]>();
+            for (int i = 0; i < blockhashstream.Length / filehash.Length; i++)
+            {
+                byte[] buffer = new byte[filehash.Length];
+                blockhashstream.Read(buffer, i * filehash.Length, filehash.Length);
+                blockhashes.Add(buffer);
+            }
+            blockhashstream.Close();
+
             MemoryStream file = new MemoryStream();
             foreach (var hash in blockhashes)
             {
-                BackupLocation blockloc = GetBackupLocation(hash);
+                BlobLocation blockloc = GetBackupLocation(hash);
                 FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
                 byte[] buffer = new byte[blockstream.Length];
                 blockstream.Read(buffer, 0, blockloc.ByteLength);
@@ -97,7 +137,7 @@ namespace BackupCore
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
 
             List<byte[]> binkeyvals = new List<byte[]>();
-            foreach (KeyValuePair<byte[], BackupLocation> kvp in TreeIndexStore)
+            foreach (KeyValuePair<byte[], BlobLocation> kvp in TreeIndexStore)
             {
                 byte[] keybytes = kvp.Key;
                 byte[] backuplocationbytes = kvp.Value.serialize();
@@ -123,7 +163,7 @@ namespace BackupCore
                 Array.Copy(binkvp, keybytes, keysize);
                 Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
 
-                this.AddHash(keybytes, BackupLocation.deserialize(backuplocationbytes));
+                this.AddHash(keybytes, BlobLocation.deserialize(backuplocationbytes));
             }
         }
 
