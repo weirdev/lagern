@@ -10,13 +10,13 @@ using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    public class BPlusTree : IEnumerable<KeyValuePair<byte[], BackupLocation>>, ICustomSerializable<BPlusTree>
+    public class BPlusTree<T> : IEnumerable<KeyValuePair<byte[], T>>
     {
 
-        private BPlusTreeNode Root { get; set; }
+        private BPlusTreeNode<T> Root { get; set; }
 
         // Head of linked list allowing for efficient in order traversal of leaf nodes
-        private BPlusTreeNode Head { get; set; }
+        private BPlusTreeNode<T> Head { get; set; }
 
         public int NodeSize { get; private set; }
 
@@ -33,36 +33,16 @@ namespace BackupCore
             NodeSize = nodesize;
         }
 
-        public BPlusTree(int nodesize, string nodestorepath) : this(nodesize)
-        {
-            NodeStorePath = nodestorepath;
-
-            try
-            {
-                using (FileStream fs = new FileStream(nodestorepath, FileMode.Open, FileAccess.Read))
-                {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        this.deserialize(reader.ReadBytes((int)fs.Length));
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Reading old index failed. Initializing new index...");
-            }
-        }
-
         /// <summary>
         /// Adds a hash and backuplocation to the tree
         /// </summary>
         /// <param name="hash"></param>
         /// <param name="blocation"></param>
         /// <returns>True if hash already exists in tree, False otherwise.</returns>
-        public bool AddHash(byte[] hash, BackupLocation blocation)
+        public bool AddHash(byte[] hash, T blocation)
         {
             // Traverse down the tree
-            BPlusTreeNode node = FindLeafNode(hash);
+            BPlusTreeNode<T> node = FindLeafNode(hash);
 
             bool dosave = AddKeyToNode(node, hash, blocation);
             
@@ -73,7 +53,7 @@ namespace BackupCore
             return dosave;
         }
 
-        private bool AddKeyToNode(BPlusTreeNode node, byte[] hash, BackupLocation blocation)
+        private bool AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation)
         {
             if (node.IsLeafNode != true)
             {
@@ -101,16 +81,16 @@ namespace BackupCore
                 if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
                 {
                     // Create a new node and add half of this node's keys/ values to it
-                    BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, true, NodeSize, node.Next);
+                    BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, true, NodeSize, node.Next);
                     node.Next = newnode;
                     List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-                    List<BackupLocation> oldvalues = new List<BackupLocation>(node.Values);
+                    List<T> oldvalues = new List<T>(node.Values);
                     newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
-                    newnode.Values = new ObservableCollection<BackupLocation>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+                    newnode.Values = new ObservableCollection<T>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
                     oldkeys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
                     node.Keys = new ObservableCollection<byte[]>(oldkeys);
                     oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
-                    node.Values = new ObservableCollection<BackupLocation>(oldvalues);
+                    node.Values = new ObservableCollection<T>(oldvalues);
                     // Add the new node to its parent
                     AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
                 }
@@ -118,7 +98,7 @@ namespace BackupCore
             }
         }
 
-        private void AddKeyToNode(BPlusTreeNode node, byte[] hash, BPlusTreeNode child)
+        private void AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, BPlusTreeNode<T> child)
         {
             if (node.IsLeafNode == true)
             {
@@ -135,16 +115,16 @@ namespace BackupCore
             if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
             {
                 // Create a new node and add half of this node's keys/ children to it
-                BPlusTreeNode newnode = new BPlusTreeNode(node.Parent, false, NodeSize);
+                BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, false, NodeSize);
                 List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-                List<BPlusTreeNode> oldchildren = new List<BPlusTreeNode>(node.Children);
+                List<BPlusTreeNode<T>> oldchildren = new List<BPlusTreeNode<T>>(node.Children);
                 newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
-                newnode.Children = new ObservableCollection<BPlusTreeNode>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
+                newnode.Children = new ObservableCollection<BPlusTreeNode<T>>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
                 int keycount = node.Keys.Count;
                 oldkeys.RemoveRange(keycount / 2, keycount - (keycount / 2));
                 node.Keys = new ObservableCollection<byte[]>(oldkeys);
                 oldchildren.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
-                node.Children = new ObservableCollection<BPlusTreeNode>(oldchildren);
+                node.Children = new ObservableCollection<BPlusTreeNode<T>>(oldchildren);
                 byte[] split = node.Keys[node.Keys.Count - 1];
                 node.Keys.RemoveAt(node.Keys.Count - 1);
 
@@ -152,7 +132,7 @@ namespace BackupCore
                 // TODO: This is very inefficient when reading all the children to/from disk
                 foreach (var nchild in newnode.Children)
                 {
-                    BPlusTreeNode ri_nchild = nchild;
+                    BPlusTreeNode<T> ri_nchild = nchild;
                     ri_nchild.Parent = newnode;
                 }
 
@@ -165,7 +145,7 @@ namespace BackupCore
                 else
                 {
                     // We just split the root, so make a new one
-                    BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+                    BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, false, NodeSize);
                     node.Parent = root;
                     newnode.Parent = root;
                     root.Keys.Add(split);
@@ -176,7 +156,7 @@ namespace BackupCore
             }
         }
 
-        private BackupLocation GetRecordFromNode(BPlusTreeNode node, byte[] hash)
+        private T GetRecordFromNode(BPlusTreeNode<T> node, byte[] hash)
         {
             if (node.IsLeafNode != true)
             {
@@ -189,13 +169,13 @@ namespace BackupCore
                     return node.Values[i];
                 }
             }
-            return null;
+            return default(T);
         }
 
-        private BPlusTreeNode FindLeafNode(byte[] hash)
+        private BPlusTreeNode<T> FindLeafNode(byte[] hash)
         {
             // Traverse down the tree
-            BPlusTreeNode node = Root;
+            BPlusTreeNode<T> node = Root;
             while (!node.IsLeafNode)
             {
                 int child = 0;
@@ -204,17 +184,6 @@ namespace BackupCore
             }
             return node;
         }
-
-        public void SynchronizeCacheToDisk()
-        {
-            using (FileStream fs = new FileStream(NodeStorePath, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(this.serialize());
-                }
-            }
-        }
         
 
         private void PrintTree()
@@ -222,7 +191,7 @@ namespace BackupCore
             using (StreamWriter file =
             new StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
             {
-                Queue<BPlusTreeNode> printqueue = new Queue<BPlusTreeNode>();
+                Queue<BPlusTreeNode<T>> printqueue = new Queue<BPlusTreeNode<T>>();
                 printqueue.Enqueue(Root);
                 file.WriteLine('*');
                 while (printqueue.Count > 0)
@@ -245,19 +214,19 @@ namespace BackupCore
 
         }
 
-        public BackupLocation GetRecord(byte[] hash)
+        public T GetRecord(byte[] hash)
         {
             return GetRecordFromNode(FindLeafNode(hash), hash);
         }
 
-        public IEnumerator<KeyValuePair<byte[], BackupLocation>> GetEnumerator()
+        public IEnumerator<KeyValuePair<byte[], T>> GetEnumerator()
         {
-            BPlusTreeNode node = Head;
+            BPlusTreeNode<T> node = Head;
             while (node != null)
             {
                 for (int i = 0; i < node.Keys.Count; i++)
                 {
-                    yield return new KeyValuePair<byte[], BackupLocation>(node.Keys[i], node.Values[i]);
+                    yield return new KeyValuePair<byte[], T>(node.Keys[i], node.Values[i]);
                 }
                 node = node.Next;
             }
@@ -268,54 +237,13 @@ namespace BackupCore
             return GetEnumerator();
         }
 
-        public byte[] serialize()
-        {
-            Dictionary<string, byte[]> bptdata = new Dictionary<string, byte[]>();
-            // -"-v1"
-            // keysize = BitConverter.GetBytes(int) (only used for decoding HashBLocationPairs)
-            // HashBLocationPairs = enum_encode(List<byte[]> [hash,... & backuplocation.serialize(),...])
-
-            bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
-
-            List<byte[]> binkeyvals = new List<byte[]>();
-            foreach (KeyValuePair<byte[], BackupLocation> kvp in this)
-            {
-                byte[] keybytes = kvp.Key;
-                byte[] backuplocationbytes = kvp.Value.serialize();
-                byte[] binkeyval = new byte[keybytes.Length + backuplocationbytes.Length];
-                Array.Copy(keybytes, binkeyval, keybytes.Length);
-                Array.Copy(backuplocationbytes, 0, binkeyval, keybytes.Length, backuplocationbytes.Length);
-                binkeyvals.Add(binkeyval);
-            }
-            bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
-
-            return BinaryEncoding.dict_encode(bptdata);
-        }
-
-        public void deserialize(byte[] data)
-        {
-            this.Initialize();
-            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
-
-            foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
-            {
-                byte[] keybytes = new byte[keysize];
-                byte[] backuplocationbytes = new byte[binkvp.Length - keysize];
-                Array.Copy(binkvp, keybytes, keysize);
-                Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
-
-                this.AddHash(keybytes, BackupLocation.deserialize(backuplocationbytes));
-            }
-        }
-
         private void Initialize()
         {
 
-            BPlusTreeNode root = new BPlusTreeNode(null, false, NodeSize);
+            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, false, NodeSize);
             Root = root;
-            BPlusTreeNode rootchild2 = new BPlusTreeNode(Root, true, NodeSize);
-            BPlusTreeNode rootchild1 = new BPlusTreeNode(Root, true, NodeSize, rootchild2);
+            BPlusTreeNode<T> rootchild2 = new BPlusTreeNode<T>(Root, true, NodeSize);
+            BPlusTreeNode<T> rootchild1 = new BPlusTreeNode<T>(Root, true, NodeSize, rootchild2);
             root.Children.Add(rootchild1);
             root.Children.Add(rootchild2);
             root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));

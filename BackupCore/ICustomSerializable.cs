@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    interface ICustomSerializable<T>
+    public interface ICustomSerializable<T>
     {
         byte[] serialize();
 

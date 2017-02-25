@@ -10,20 +10,22 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    class BlockHashStore : ICustomSerializable<BlockHashStore>
+    class FileBlockHashListStore
     {
         // TODO: Consider some inheritance relationship between this class and BPlusTree
-        public BPlusTree<BackupLocation> TreeIndexStore { get; private set; }
+        public BPlusTree<List<byte[]>> TreeIndexStore { get; private set; }
 
         public string StorePath { get; set; }
 
         public string BlockSaveDirectory { get; set; }
 
-        public BlockHashStore(string indexpath, string blocksavedir)
+        private static int ValueHashLength = 20; // Length of hashes in hash lists
+
+        public FileBlockHashListStore(string indexpath, string blocksavedir)
         {
             StorePath = indexpath;
             BlockSaveDirectory = blocksavedir;
-            TreeIndexStore = new BPlusTree<BackupLocation>(100);
+            TreeIndexStore = new BPlusTree<List<byte[]>>(100);
 
             try
             {
@@ -38,10 +40,10 @@ namespace BackupCore
             catch (Exception)
             {
                 Console.WriteLine("Reading old index failed. Initializing new index...");
-                TreeIndexStore = new BPlusTree<BackupLocation>(100);
+                TreeIndexStore = new BPlusTree<List<byte[]>>(100);
             }
         }
-        
+
         /// <summary>
         /// Adds a hash and corresponding BackupLocation to the Index.
         /// </summary>
@@ -50,10 +52,10 @@ namespace BackupCore
         /// True if we already have the hash stored. False if we need to
         /// save the corresponding block.
         /// </returns>
-        public bool AddHash(byte[] hash, BackupLocation blocation)
+        public bool AddHashList(byte[] hash, List<byte[]> hashlist)
         {
             // Adds a hash and Backup Location to the BlockHashStore
-            return TreeIndexStore.AddHash(hash, blocation);
+            return TreeIndexStore.AddHash(hash, hashlist);
         }
 
         public bool ContainsHash(byte[] hash)
@@ -65,26 +67,9 @@ namespace BackupCore
             return false;
         }
 
-        public BackupLocation GetBackupLocation(byte[] hash)
+        public List<byte[]> GetHashList(byte[] hash)
         {
             return TreeIndexStore.GetRecord(hash);
-        }
-
-        public byte[] ReconstructFileData(List<byte[]> blockhashes)
-        {
-            MemoryStream file = new MemoryStream();
-            foreach (var hash in blockhashes)
-            {
-                BackupLocation blockloc = GetBackupLocation(hash);
-                FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
-                byte[] buffer = new byte[blockstream.Length];
-                blockstream.Read(buffer, 0, blockloc.ByteLength);
-                file.Write(buffer, 0, blockloc.ByteLength);
-                blockstream.Close();
-            }
-            byte[] filedata = file.ToArray();
-            file.Close();
-            return filedata;
         }
 
         public byte[] serialize()
@@ -97,13 +82,17 @@ namespace BackupCore
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
 
             List<byte[]> binkeyvals = new List<byte[]>();
-            foreach (KeyValuePair<byte[], BackupLocation> kvp in TreeIndexStore)
+            foreach (KeyValuePair<byte[], List<byte[]>> kvp in TreeIndexStore)
             {
                 byte[] keybytes = kvp.Key;
-                byte[] backuplocationbytes = kvp.Value.serialize();
-                byte[] binkeyval = new byte[keybytes.Length + backuplocationbytes.Length];
+                byte[] hashlistbytes = new byte[kvp.Value.Count * ValueHashLength];
+                for (int i = 0; i < kvp.Value.Count; i++)
+                {
+                    Array.Copy(kvp.Value[i], 0, hashlistbytes, i * ValueHashLength, ValueHashLength);
+                }
+                byte[] binkeyval = new byte[keybytes.Length + hashlistbytes.Length];
                 Array.Copy(keybytes, binkeyval, keybytes.Length);
-                Array.Copy(backuplocationbytes, 0, binkeyval, keybytes.Length, backuplocationbytes.Length);
+                Array.Copy(hashlistbytes, 0, binkeyval, keybytes.Length, hashlistbytes.Length);
                 binkeyvals.Add(binkeyval);
             }
             bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
@@ -119,11 +108,17 @@ namespace BackupCore
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];
-                byte[] backuplocationbytes = new byte[binkvp.Length - keysize];
+                byte[] hashlistbytes = new byte[binkvp.Length - keysize];
                 Array.Copy(binkvp, keybytes, keysize);
-                Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
-
-                this.AddHash(keybytes, BackupLocation.deserialize(backuplocationbytes));
+                Array.Copy(binkvp, keysize, hashlistbytes, 0, binkvp.Length - keysize);
+                List<byte[]> hashlist = new List<byte[]>();
+                for (int i = 0; i < hashlistbytes.Length / ValueHashLength; i++)
+                {
+                    byte[] hash = new byte[ValueHashLength];
+                    Array.Copy(hashlistbytes, i * ValueHashLength, hash, 0, ValueHashLength);
+                    hashlist.Add(hash);
+                }
+                this.AddHashList(keybytes, hashlist);
             }
         }
 

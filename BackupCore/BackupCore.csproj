@@ -65,6 +65,7 @@
     <Compile Include="BPlusTree.cs" />
     <Compile Include="BPlusTreeNode.cs" />
     <Compile Include="Core.cs" />
+    <Compile Include="FileBlockHashListStore.cs" />
     <Compile Include="HashBin.cs" />
     <Compile Include="HashBlockPair.cs" />
     <Compile Include="BlockHashStore.cs" />

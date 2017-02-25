@@ -8,20 +8,20 @@ using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    class BPlusTreeNode : INotifyPropertyChanged
+    class BPlusTreeNode<T> : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
-        private BPlusTreeNode parent;
-        private BPlusTreeNode next;
+        private BPlusTreeNode<T> parent;
+        private BPlusTreeNode<T> next;
 
         private ObservableCollection<byte[]> keys;
-        private ObservableCollection<BPlusTreeNode> children;
-        private ObservableCollection<BackupLocation> values;
+        private ObservableCollection<BPlusTreeNode<T>> children;
+        private ObservableCollection<T> values;
         
         public string NodeID { get; private set; }
         
-        public BPlusTreeNode Parent
+        public BPlusTreeNode<T> Parent
         {
             get { return parent; }
             set
@@ -35,7 +35,7 @@ namespace BackupCore
         }
 
         // Only for leaf nodes makes a linked list for efficient in-order traversal
-        public BPlusTreeNode Next
+        public BPlusTreeNode<T> Next
         {
             get { return next; }
             set
@@ -67,7 +67,7 @@ namespace BackupCore
         public bool IsLeafNode { get; private set; }
 
         // Size m
-        public ObservableCollection<BPlusTreeNode> Children
+        public ObservableCollection<BPlusTreeNode<T>> Children
         {
             get { return children; }
             set
@@ -81,7 +81,7 @@ namespace BackupCore
         }
 
         // Size m-1
-        public ObservableCollection<BackupLocation> Values
+        public ObservableCollection<T> Values
         {
             get { return values; }
             set
@@ -94,7 +94,7 @@ namespace BackupCore
             }
         }
 
-        public BPlusTreeNode(BPlusTreeNode parent, bool isleafnode, int nodesize, BPlusTreeNode next=null)
+        public BPlusTreeNode(BPlusTreeNode<T> parent, bool isleafnode, int nodesize, BPlusTreeNode<T> next=null)
         {
             Parent = parent;
             NodeSize = nodesize;
@@ -102,12 +102,12 @@ namespace BackupCore
             Keys = new ObservableCollection<byte[]>();
             if (IsLeafNode)
             {
-                Values = new ObservableCollection<BackupLocation>();
+                Values = new ObservableCollection<T>();
                 Next = next;
             }
             else
             {
-                Children = new ObservableCollection<BPlusTreeNode>();
+                Children = new ObservableCollection<BPlusTreeNode<T>>();
             }
         }
 
