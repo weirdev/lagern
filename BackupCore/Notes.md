@@ -11,7 +11,6 @@
 
 *********************
 IN PROGRESS
-BlobStore handles saving of data to disk
 Reference count data blocks
 	Delete backups
 		Consider hashes as backup identifiers (like git)
@@ -32,6 +31,10 @@ Multiple base folders
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder
+Optimize B+ tree BlobStore
+	store some nodes out of memory?
+	optimize node size
+	bulk loading of tree
 
 Special handling for zip files (including Office .***x files)?
 	Deduplication wont work for compressed formats (I think?)

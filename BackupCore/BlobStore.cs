@@ -50,10 +50,15 @@ namespace BackupCore
         /// True if we already have the hash stored. False if we need to
         /// save the corresponding block.
         /// </returns>
-        public bool AddHash(byte[] hash, BlobLocation blocation)
+        private bool AddHash(byte[] hash, BlobLocation blocation)
         {
             // Adds a hash and Blob Location to the BlockHashStore
-            return TreeIndexStore.AddHash(hash, blocation);
+            BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
+            if (existingblocation != null)
+            {
+                existingblocation.ReferenceCount += 1;
+            }
+            return existingblocation != null;
         }
 
         public void AddBlob(byte[] hash, byte[] blob, BlobLocation.BlobTypes type)

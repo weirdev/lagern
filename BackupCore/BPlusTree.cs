@@ -10,7 +10,7 @@ using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    public class BPlusTree<T> : IEnumerable<KeyValuePair<byte[], T>>
+    public class BPlusTree<T> : IEnumerable<KeyValuePair<byte[], T>> where T : class
     {
 
         private BPlusTreeNode<T> Root { get; set; }
@@ -39,21 +39,16 @@ namespace BackupCore
         /// <param name="hash"></param>
         /// <param name="blocation"></param>
         /// <returns>True if hash already exists in tree, False otherwise.</returns>
-        public bool AddHash(byte[] hash, T blocation)
+        public T AddHash(byte[] hash, T blocation)
         {
             // Traverse down the tree
             BPlusTreeNode<T> node = FindLeafNode(hash);
 
-            bool dosave = AddKeyToNode(node, hash, blocation);
-            
-            if (!dosave)
-            {
-                //PrintTree();
-            }
+            T dosave = AddKeyToNode(node, hash, blocation);
             return dosave;
         }
 
-        private bool AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation)
+        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation)
         {
             if (node.IsLeafNode != true)
             {
@@ -63,16 +58,14 @@ namespace BackupCore
             // Look for key in node
             int position = 0;
             for (; position < node.Keys.Count && !HashTools.ByteArrayLessThanEqualTo(hash, node.Keys[position]); position++) { }
-            // Hash already exists in BPlusTree, return true
+            // Hash already exists in BPlusTree, return value
             if (position < node.Keys.Count && node.Keys[position].SequenceEqual(hash))
             {
-                return true;
+                return node.Values[position];
             }
             // Hash not in tree, belongs in position
             else
             {
-
-
                 // Go ahead and add the new key/value then split as normal
                 node.Keys.Insert(position, hash);
                 node.Values.Insert(position, blocation);
@@ -80,6 +73,14 @@ namespace BackupCore
                 // Is this node full?
                 if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
                 {
+                    if (node.Parent == null) // node=Root is leaf (only node)
+                    {
+                        // Create new left node root
+                        BPlusTreeNode<T> newroot = new BPlusTreeNode<T>(null, false, NodeSize);
+                        Root = newroot;
+                        node.Parent = Root;
+                        Root.Children.Add(node); // Dont add key (Key added below, should always have one more child than key)
+                    }
                     // Create a new node and add half of this node's keys/ values to it
                     BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, true, NodeSize, node.Next);
                     node.Next = newnode;
@@ -94,7 +95,7 @@ namespace BackupCore
                     // Add the new node to its parent
                     AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
                 }
-                return false;
+                return null;
             }
         }
 
@@ -152,6 +153,152 @@ namespace BackupCore
                     root.Children.Add(node);
                     root.Children.Add(newnode);
                     Root = root;
+                }
+            }
+        }
+
+        public void RemoveKey(byte[] hash)
+        {
+            // indexing may be off here
+            Stack<int> parentpositions = new Stack<int>();
+            BPlusTreeNode<T> node = Root;
+            while (!node.IsLeafNode)
+            {
+                int position = 0;
+                for (; position < node.Keys.Count && !HashTools.ByteArrayLessThan(hash, node.Keys[position]); position++) { }
+                node = node.Children[position];
+                parentpositions.Push(position);
+            }
+            // Leaf node reached, remove key and value
+            for (int i = 0; i < node.Keys.Count; i++)
+            {
+                if (node.Keys[i].SequenceEqual(hash))
+                {
+                    node.Keys.RemoveAt(i);
+                    node.Values.RemoveAt(i);
+                    break;
+                }
+            }
+            if (node.Parent != null && node.Keys.Count < NodeSize / 2) // Not at root && too small
+            {
+                // All leaf nodes always at same depth
+                int parentpos = parentpositions.Pop();
+                if (parentpos - 1 >= 0 && node.Parent.Children[parentpos - 1].Keys.Count > NodeSize / 2) // left neighbor more than half full?
+                {
+                    // Steal entry from left neighbor
+                    node.Keys.Insert(0, node.Parent.Children[parentpos - 1].Keys[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
+                    node.Values.Insert(0, node.Parent.Children[parentpos - 1].Values[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
+                    node.Parent.Children[parentpos - 1].Keys.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
+                    node.Parent.Children[parentpos - 1].Values.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
+                    // Update split point above
+                    node.Parent.Keys[parentpos - 1] = node.Keys[0];
+                }
+                else if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
+                {
+                    // Steal entry from right neighbor
+                    node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[0]);
+                    node.Values.Add(node.Parent.Children[parentpos + 1].Values[0]);
+                    node.Parent.Children[parentpos + 1].Keys.RemoveAt(0);
+                    node.Parent.Children[parentpos + 1].Values.RemoveAt(0);
+                    // Update split point in node above
+                    node.Parent.Keys[parentpos] = node.Parent.Children[parentpos + 1].Keys[0];
+                }
+                else if (parentpos - 1 >= 0) //  && node.Parent.Children[parentpos - 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                {
+                    // Merge with left neighbor
+                    // Pull down key from parent (inverse of bubbling up key on a split)
+                    node.Parent.Children[parentpos - 1].Keys.Add(node.Parent.Keys[parentpos - 1]);
+                    for (int i=0; i<node.Keys.Count; i++)
+                    {
+                        node.Parent.Children[parentpos - 1].Keys.Add(node.Keys[i]);
+                        node.Parent.Children[parentpos - 1].Values.Add(node.Values[i]);
+                    }
+                    node.Parent.Children[parentpos - 1].Next = node.Next;
+                    node.Parent.Children[parentpos] = node.Parent.Children[parentpos - 1]; // More efficient to add entries to left node, but we will keep the node at parentpos, so update parents reference
+                    RemoveInternalNodeEntry(node.Parent, parentpos - 1, parentpositions);
+                }
+                else // if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                {
+                    // Merge with right neighbor
+                    // Pull down key from parent (inverse of bubbling up key on a split)
+                    node.Keys.Add(node.Parent.Keys[parentpos]);
+                    for (int i = 0; i < node.Keys.Count; i++)
+                    {
+                        node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[i]);
+                        node.Values.Add(node.Parent.Children[parentpos + 1].Values[i]);
+                    }
+                    node.Next = node.Parent.Children[parentpos + 1].Next;
+                    node.Parent.Children[parentpos + 1] = node; // More efficient to add entries to left node, but we will keep the node at parentpos + 1, so update parents reference
+                    RemoveInternalNodeEntry(node.Parent, parentpos, parentpositions);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Remove a key and the corresponding child from an internal node.
+        /// May bubble up all the way to root.
+        /// </summary>
+        /// <param name="node"></param>
+        /// <param name="hash"></param>
+        private void RemoveInternalNodeEntry(BPlusTreeNode<T> node, int keypos, Stack<int> parentpositions)
+        {
+            node.Keys.RemoveAt(keypos);
+            node.Children.RemoveAt(keypos);
+            if (node.Parent == null) // At root?
+            {
+                if (node.Keys.Count == 0) // Root only has one child
+                {
+                    Root = node.Children[0]; // Single child becomes root
+                }
+            }
+            else if (node.Keys.Count < NodeSize / 2) // too small ?
+            {
+                int parentpos = parentpositions.Pop();
+                if (parentpos - 1 >= 0 && node.Parent.Children[parentpos - 1].Keys.Count > NodeSize / 2) // left neighbor more than half full?
+                {
+                    // Steal entry from left neighbor
+                    node.Keys.Insert(0, node.Parent.Children[parentpos - 1].Keys[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
+                    node.Children.Insert(0, node.Parent.Children[parentpos - 1].Children[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
+                    node.Parent.Children[parentpos - 1].Keys.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
+                    node.Parent.Children[parentpos - 1].Children.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
+                    // Update split point above
+                    node.Parent.Keys[parentpos - 1] = node.Keys[0];
+                }
+                else if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
+                {
+                    // Steal entry from right neighbor
+                    node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[0]);
+                    node.Children.Add(node.Parent.Children[parentpos + 1].Children[0]);
+                    node.Parent.Children[parentpos + 1].Keys.RemoveAt(0);
+                    node.Parent.Children[parentpos + 1].Children.RemoveAt(0);
+                    // Update split point in node above
+                    node.Parent.Keys[parentpos] = node.Parent.Children[parentpos + 1].Keys[0];
+                }
+                else if (parentpos - 1 >= 0) //  && node.Parent.Children[parentpos - 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                {
+                    // Merge with left neighbor
+                    // Pull down key from parent (inverse of bubbling up key on a split)
+                    node.Parent.Children[parentpos - 1].Keys.Add(node.Parent.Keys[parentpos - 1]);
+                    for (int i = 0; i < node.Keys.Count; i++)
+                    {
+                        node.Parent.Children[parentpos - 1].Keys.Add(node.Keys[i]);
+                        node.Parent.Children[parentpos - 1].Children.Add(node.Children[i]);
+                    }
+                    node.Parent.Children[parentpos] = node.Parent.Children[parentpos - 1]; // More efficient to add entries to left node, but we will keep the node at parentpos, so update parents reference
+                    RemoveInternalNodeEntry(node.Parent, parentpos - 1, parentpositions);
+                }
+                else // if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                {
+                    // Merge with right neighbor
+                    // Pull down key from parent (inverse of bubbling up key on a split)
+                    node.Keys.Add(node.Parent.Keys[parentpos]);
+                    for (int i = 0; i < node.Keys.Count; i++)
+                    {
+                        node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[i]);
+                        node.Children.Add(node.Parent.Children[parentpos + 1].Children[i]);
+                    }
+                    node.Parent.Children[parentpos] = node.Parent.Children[parentpos + 1]; // More efficient to add entries to left node, but we will keep the node at parentpos + 1, so update parents reference
+                    RemoveInternalNodeEntry(node.Parent, parentpos, parentpositions);
                 }
             }
         }
@@ -240,15 +387,10 @@ namespace BackupCore
         private void Initialize()
         {
 
-            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, false, NodeSize);
+            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, true, NodeSize);
             Root = root;
-            BPlusTreeNode<T> rootchild2 = new BPlusTreeNode<T>(Root, true, NodeSize);
-            BPlusTreeNode<T> rootchild1 = new BPlusTreeNode<T>(Root, true, NodeSize, rootchild2);
-            root.Children.Add(rootchild1);
-            root.Children.Add(rootchild2);
-            root.Keys.Add(HashTools.HexStringToByteArray("8000000000000000000000000000000000000000"));
 
-            Head = rootchild1;
+            Head = Root;
         }
     }
 }

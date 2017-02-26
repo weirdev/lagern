@@ -17,15 +17,15 @@ namespace BackupCoreTest
         {
             BPTree = new BPlusTree<BlobLocation>(100);
 
-            BlobLocation bl1 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere1", 0, 40);
+            testblob1 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere1", 0, 40);
             BlobLocation bl2 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere2", 4, 401);
             BlobLocation bl3 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere3", 0, 440);
             BlobLocation bl4 = new BlobLocation(BlobLocation.BlobTypes.FileBlock, "somewhere4", 300, 74000);
 
             var rng = new Random();
 
-            byte[] key1 = new byte[20];
-            rng.NextBytes(key1);
+            testkey1 = new byte[20];
+            rng.NextBytes(testkey1);
             byte[] key2 = new byte[20];
             rng.NextBytes(key2);
             byte[] key3 = new byte[20];
@@ -35,16 +35,18 @@ namespace BackupCoreTest
             byte[] key5 = new byte[20];
             rng.NextBytes(key5);
 
-            BPTree.AddHash(key1, bl1);
+            BPTree.AddHash(testkey1, testblob1);
             BPTree.AddHash(key2, bl2);
             BPTree.AddHash(key3, bl3);
             BPTree.AddHash(key4, bl4);
 
             BPTree.AddHash(key5, bl4);
-            BPTree.AddHash(key1, bl1);
+            BPTree.AddHash(testkey1, testblob1);
         }
 
         public BPlusTree<BlobLocation> BPTree { get; set; }
+        public BlobLocation testblob1 { get; set; }
+        public byte[] testkey1 { get; set; }
 
         private TestContext testContextInstance;
 
@@ -86,20 +88,39 @@ namespace BackupCoreTest
         //
         #endregion
 
-        /* // Serialize no longer in B+ tree generic class
-         * // TODO: Add serialization tests for classes using/inheriting B+ tree
+        // Serialize no longer in B+ tree generic class
+        // TODO: Add serialization tests for classes using/inheriting B+ tree
+
         [TestMethod]
-        public void TestSerializeDeserialize()
+        public void TestAddRemove()
         {
-            List<KeyValuePair<byte[], BackupLocation>> orig = new List<KeyValuePair<byte[], BackupLocation>>(BPTree);
-            BPTree.deserialize(BPTree.serialize());
-            List<KeyValuePair<byte[], BackupLocation>> deser = new List<KeyValuePair<byte[], BackupLocation>>(BPTree);
-            for (int i = 0; i < orig.Count; i++)
-            {
-                Assert.IsTrue(orig[i].Key.SequenceEqual(deser[i].Key));
-                Assert.AreEqual(orig[i].Value, deser[i].Value);
-            }
+            List<KeyValuePair<byte[], BlobLocation>> treecontents1 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
+            BPTree.RemoveKey(testkey1);
+            List<KeyValuePair<byte[], BlobLocation>> treecontents2 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
+            BPTree.AddHash(testkey1, testblob1);
+            List<KeyValuePair<byte[], BlobLocation>> treecontents3 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
+            Assert.IsFalse(TreeContentsMatch(treecontents1, treecontents2));
+            Assert.IsTrue(TreeContentsMatch(treecontents1, treecontents3));
         }
-        */
+
+        private bool TreeContentsMatch(List<KeyValuePair<byte[], BlobLocation>> tc1, List<KeyValuePair<byte[], BlobLocation>> tc2)
+        {
+            if (tc1.Count != tc2.Count)
+            {
+                return false;
+            }
+            for (int i = 0; i < tc1.Count; i++)
+            {
+                if (tc1[i].Value != tc2[i].Value)
+                {
+                    return false;
+                }
+                if (!tc1[i].Key.SequenceEqual(tc2[i].Key))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 }
