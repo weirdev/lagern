@@ -8,14 +8,13 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    class BackupStore : IList<BackupRecord>, ICustomSerializable<BackupStore>
+    class BackupStore : IEnumerable<BackupRecord>, ICustomSerializable<BackupStore>
     {
         List<BackupRecord> backups;
         Dictionary<string, int> backupidx = new Dictionary<string, int>();
         public BlobStore Blobs { get; set; }
         public BackupStore(string metadatapath, BlobStore blobstore)
         {
-
             try
             {
                 using (FileStream fs = new FileStream(metadatapath, FileMode.Open, FileAccess.Read))
@@ -43,7 +42,13 @@ namespace BackupCore
 
         public void AddBackup(string message, byte[] metadatatreehash)
         {
-            backups.Add(new BackupRecord(message, metadatatreehash));
+            BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
+            backups.Add(newbackup);
+            string hashstring = HashTools.ByteArrayToHexViaLookup32(newbackup.MetadataTreeHash).ToLower();
+            if (!backupidx.ContainsKey(hashstring))
+            {
+                backupidx.Add(hashstring, backups.Count - 1);
+            }
         }
 
         public int Count
@@ -54,11 +59,67 @@ namespace BackupCore
             }
         }
 
-        public bool IsReadOnly
+        public ICollection<string> Keys
         {
             get
             {
-                return ((IList<BackupRecord>)backups).IsReadOnly;
+                return backupidx.Keys;
+            }
+        }
+
+        public ICollection<BackupRecord> Values
+        {
+            get
+            {
+                return backups;
+            }
+        }
+
+        public BackupRecord this[string key]
+        {
+            get
+            {
+                if (key == null)
+                {
+                    key = HashTools.ByteArrayToHexViaLookup32(this[this.Count - 1].MetadataTreeHash);
+                }
+                else
+                {
+                    Tuple<bool, string> match = HashByPrefix(key);
+                    if (match == null || match.Item1 == true)
+                    {
+                        throw new KeyNotFoundException();
+                    }
+                    key = match.Item2;
+                }
+                key = key.ToLower();
+                return backups[backupidx[key]];
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="prefix"></param>
+        /// <returns>Null if no matches, (true, null) for multiple matches, (false, hashstring) for exact match.</returns>
+        private Tuple<bool, string> HashByPrefix(string prefix)
+        {
+            // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
+            // also if this becomes an issue, keep a s
+            prefix = prefix.ToLower();
+            List<string> hashes = new List<string>(backupidx.Keys);
+            List<string> matches = new List<string>(from h in hashes where h.Substring(0, prefix.Length) == prefix select h);
+            if (matches.Count == 0)
+            {
+                return null;
+            }
+            else if (matches.Count > 1)
+            {
+                return new Tuple<bool, string>(true, null);
+            }
+            else
+            {
+                return new Tuple<bool, string>(false, matches[0]);
             }
         }
 
@@ -68,16 +129,11 @@ namespace BackupCore
             {
                 return ((IList<BackupRecord>)backups)[index];
             }
-
-            set
-            {
-                ((IList<BackupRecord>)backups)[index] = value;
-            }
         }
 
         public void SynchronizeCacheToDisk(string path)
         {
-            
+
             using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
             {
                 using (BinaryWriter writer = new BinaryWriter(fs))
@@ -92,47 +148,12 @@ namespace BackupCore
             return ((IList<BackupRecord>)backups).IndexOf(item);
         }
 
-        public void Insert(int index, BackupRecord item)
-        {
-            ((IList<BackupRecord>)backups).Insert(index, item);
-        }
-
-        public void RemoveAt(int index)
-        {
-            ((IList<BackupRecord>)backups).RemoveAt(index);
-        }
-
-        public void Add(BackupRecord item)
-        {
-            ((IList<BackupRecord>)backups).Add(item);
-        }
-
-        public void Clear()
-        {
-            ((IList<BackupRecord>)backups).Clear();
-        }
-
         public bool Contains(BackupRecord item)
         {
             return ((IList<BackupRecord>)backups).Contains(item);
         }
 
-        public void CopyTo(BackupRecord[] array, int arrayIndex)
-        {
-            ((IList<BackupRecord>)backups).CopyTo(array, arrayIndex);
-        }
-
-        public bool Remove(BackupRecord item)
-        {
-            return ((IList<BackupRecord>)backups).Remove(item);
-        }
-
         public IEnumerator<BackupRecord> GetEnumerator()
-        {
-            return ((IList<BackupRecord>)backups).GetEnumerator();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
         {
             return ((IList<BackupRecord>)backups).GetEnumerator();
         }
@@ -145,6 +166,16 @@ namespace BackupCore
         private List<BackupRecord> deserialize(byte[] data)
         {
             return new List<BackupRecord>(from bin in BinaryEncoding.enum_decode(data) select BackupRecord.deserialize(bin));
+        }
+
+        public bool ContainsKey(string key)
+        {
+            return backupidx.ContainsKey(key);
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable<BackupRecord>)backups).GetEnumerator();
         }
     }
 }

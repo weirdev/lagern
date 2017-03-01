@@ -12,20 +12,20 @@ namespace BackupConsole
         private static readonly ArgumentScanner browse_scanner = BrowseArgScannerFactory();
 
         BackupCore.Core BCore;
-        int BackupIndex;
+        string BackupHash;
         BackupCore.MetadataTree backuptree;
         BackupCore.MetadataNode currentnode;
 
-        public BackupBrowser(int backupindex)
+        public BackupBrowser(string backuphash)
         {
-            BackupIndex = backupindex;
+            BackupHash = backuphash;
             string destination = Program.ReadSetting("dest");
             if (destination == null)
             { 
                 throw new Exception("A backup destination must be specified with \"set dest <path>\"");
             }
             BCore = new BackupCore.Core(Program.cwd, destination);
-            backuptree = BCore.GetMetadataTree(BackupIndex);
+            backuptree = BCore.GetMetadataTree(BackupHash);
             currentnode = backuptree.Root;
         }
 
@@ -33,7 +33,7 @@ namespace BackupConsole
         {
             while (true)
             {
-                Console.Write(String.Format("backup {0}:{1}> ", BackupIndex, currentnode.Path));
+                Console.Write(String.Format("backup {0}:{1}> ", BackupHash, currentnode.Path));
                 string command = Console.ReadLine();
                 string[] args = command.Split();
                 try
@@ -72,7 +72,7 @@ namespace BackupConsole
                                 restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
                             }
                         }
-                        Program.RestoreFile(filerelpath, restorepath, BackupIndex);
+                        Program.RestoreFile(filerelpath, restorepath, BackupHash);
                     }
                     else if (parsed.Item1 == "help")
                     {

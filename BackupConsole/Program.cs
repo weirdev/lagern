@@ -60,16 +60,15 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "restore")
                 {
-                    // "restore <filerelpath> [-i <>] [-r <>]"
+                    // "restore <filerelpath> [-b <>] [-r <>]"
                     string filerelpath = parsed.Item2["filerelpath"];
                     // If no restoreto path given, restore
                     // to cwd / its relative path
                     string restorepath = Path.Combine(cwd, filerelpath);
-                    // TODO: Perhaps replace backup indexes with hashes of the metadata tree file?
-                    int backupindex = -1; // default to the latest backup
-                    if (parsed.Item3.ContainsKey("i"))
+                    string backuphash = null;
+                    if (parsed.Item3.ContainsKey("b"))
                     {
-                        backupindex = Convert.ToInt32(parsed.Item3["i"]);
+                        backuphash = parsed.Item3["b"];
                     }
                     if (parsed.Item3.ContainsKey("r"))
                     {
@@ -82,7 +81,7 @@ namespace BackupConsole
                             restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
                         }
                     }
-                    RestoreFile(filerelpath, restorepath, backupindex);
+                    RestoreFile(filerelpath, restorepath, backuphash);
                 }
                 else if (parsed.Item1 == "list")
                 {
@@ -96,15 +95,15 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "browse")
                 {
-                    // "browse [-i <>]"
-                    int backupindex = -1;
-                    if (parsed.Item3.ContainsKey("i"))
+                    // "browse [<backuphash>]"
+                    string backuphash = null;
+                    if (parsed.Item2.ContainsKey("backuphash"))
                     {
-                        backupindex = Convert.ToInt32(parsed.Item3["i"]);
+                        backuphash = parsed.Item2["backuphash"];
                     }
                     try
                     {
-                        var browser = new BackupBrowser(backupindex);
+                        var browser = new BackupBrowser(backuphash);
                         browser.CommandLoop();
                     }
                     catch (Exception e)
@@ -131,9 +130,9 @@ namespace BackupConsole
             scanner.AddCommand("set <setting> <value>");
             scanner.AddCommand("clear <setting>");
             scanner.AddCommand("run [<message>]");
-            scanner.AddCommand("restore <filerelpath> [-i <>] [-r <>]");
+            scanner.AddCommand("restore <filerelpath> [-b <>] [-r <>]");
             scanner.AddCommand("list [<listcount>]");
-            scanner.AddCommand("browse [-i <>]");
+            scanner.AddCommand("browse [<backuphash>]");
             scanner.AddCommand("help");
             return scanner;
         }
@@ -158,7 +157,7 @@ namespace BackupConsole
             bcore.RunBackupSync(message);
         }
 
-        public static void RestoreFile(string filerelpath, string restorepath, int backupindex)
+        public static void RestoreFile(string filerelpath, string restorepath, string backuphash)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -167,7 +166,7 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            bcore.WriteOutFile(filerelpath, restorepath, backupindex);
+            bcore.WriteOutFile(filerelpath, restorepath, backuphash);
         }
 
         private static void ListBackups(int show=-1)

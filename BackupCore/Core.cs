@@ -19,7 +19,7 @@ namespace BackupCore
 
         // BlockHashStore holding BackupLocations indexed by hashes (in bytes)
         private BlobStore Blobs { get; set; }
-        private BackupStore MetaStore { get; set; }
+        private BackupStore BUStore { get; set; }
 
         public Core(string src, string dst)
         {
@@ -33,7 +33,7 @@ namespace BackupCore
             }
 
             Blobs = new BlobStore(Path.Combine(backuppath_dst, "index", "hashindex"), backuppath_dst);
-            MetaStore = new BackupStore(Path.Combine(backuppath_dst, "index", "metadata"), Blobs);
+            BUStore = new BackupStore(Path.Combine(backuppath_dst, "index", "metadata"), Blobs);
         }
         
         public void RunBackupAsync(string message)
@@ -74,13 +74,13 @@ namespace BackupCore
             List<byte[]> newmtreehashes = BackupFileDataAsync(mtreestream);
             byte[] newmtreehash = BackupHashList(newmtreehashes);
 
-            MetaStore.AddBackup(message, newmtreehash);
+            BUStore.AddBackup(message, newmtreehash);
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
             Blobs.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
             // Save metadata
-            MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
+            BUStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
 
         public void RunBackupSync(string message)
@@ -118,13 +118,13 @@ namespace BackupCore
             List<byte[]> newmtreehashes = BackupFileDataSync(mtreestream);
             byte[] newmtreehash = BackupHashList(newmtreehashes);
 
-            MetaStore.AddBackup(message, newmtreehash);
+            BUStore.AddBackup(message, newmtreehash);
 
             // Save "index"
             // Writeout entire cached index
             Blobs.SynchronizeCacheToDisk();
             // Save metadata
-            MetaStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
+            BUStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -134,13 +134,9 @@ namespace BackupCore
         /// <param name="relfilepath"></param>
         /// <param name="restorepath"></param>
         /// <param name="backupindex"></param>
-        public void WriteOutFile(string relfilepath, string restorepath, int backupindex=-1)
+        public void WriteOutFile(string relfilepath, string restorepath, string backuphash=null)
         {
-            if (backupindex == -1)
-            {
-                backupindex = MetaStore.Count - 1;
-            }
-            MetadataTree mtree = MetadataTree.deserialize(Blobs.ReconstructFileData(MetaStore[backupindex].MetadataTreeHash));
+            MetadataTree mtree = MetadataTree.deserialize(Blobs.ReconstructFileData(BUStore[backuphash].MetadataTreeHash));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = Blobs.ReconstructFileData(filemeta.FileHash);
             // TODO: autoreplacing of '/' with '\\'
@@ -149,20 +145,16 @@ namespace BackupCore
                 writer.Write(filedata, 0, filedata.Length);
                 // Flush the writer in order to get a correct stream position for truncating
                 writer.Flush();
-                // Set the stream length to the current position in order to truncate leftover text
+                // Set the stream length to the current position in order to truncate leftover data in original file
                 writer.SetLength(writer.Position);
 
             }
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        public MetadataTree GetMetadataTree(int backupindex)
+        public MetadataTree GetMetadataTree(string backuphash)
         {
-            if (backupindex == -1)
-            {
-                backupindex = MetaStore.Count - 1;
-            }
-            return MetadataTree.deserialize(Blobs.ReconstructFileData(MetaStore[backupindex].MetadataTreeHash));
+            return MetadataTree.deserialize(Blobs.ReconstructFileData(BUStore[backuphash].MetadataTreeHash));
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -386,7 +378,7 @@ namespace BackupCore
         {
             FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
             fm.FileHash = filehash;
-            lock (MetaStore)
+            lock (BUStore)
             {
                 mtree.AddFile(Path.GetDirectoryName(relpath), fm);
             }
@@ -403,7 +395,7 @@ namespace BackupCore
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public IEnumerable<Tuple<string, DateTime, string>> GetBackups()
         {// TODO: does this need to exist here
-            return from backup in MetaStore select new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(backup.MetadataTreeHash).ToLower(), backup.BackupTime, backup.BackupMessage);
+            return from backup in BUStore select new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(backup.MetadataTreeHash).ToLower(), backup.BackupTime, backup.BackupMessage);
         }
     }
 }

@@ -11,6 +11,9 @@
 
 *********************
 IN PROGRESS
+ArgParser
+	"-l <>" => "-l <longname>"
+		wont need Item3 of returned tuple
 Reference count data blocks
 	Delete backups
 		Consider hashes as backup identifiers (like git)
@@ -21,6 +24,13 @@ Backup commands from backup destination
 	restore after have lost src
 	restore to different place
 Progress report/bar
+Path handling
+	Custom utility class may be helpful
+Switch between backups when browsing a backup
+	Looking at /a/dir/ in backup f12da...
+		Switch to /a/dir/ in next, previous or specified backup
+	Handle directory no longer there
+		Move tracking not necessary
 Ignore patterns
 Handle common things that could go wrong
 	warn when lack permission to backup file
@@ -35,12 +45,10 @@ Optimize B+ tree BlobStore
 	store some nodes out of memory?
 	optimize node size
 	bulk loading of tree
-
-Special handling for zip files (including Office .***x files)?
-	Deduplication wont work for compressed formats (I think?)
-	silently expand archive for saving
-	Issues:
-		compressed for a reason, deduplication may be far less efficient than compression for an edited paper, etc.
+Reverse references in BlobStore?
+	Every blob knows hash of every structure that points at it?
+	Could list every backup containing file
+	Use worth the complexity?
 
 **********************
 WHAT'S GOING ON

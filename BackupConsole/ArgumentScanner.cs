@@ -29,6 +29,7 @@ namespace BackupConsole
 
         public Tuple<string, Dictionary<string, string>, Dictionary<string, string>> ParseInput(string[] args)
         {
+            // TODO: fail more often (gracefully) for bad inputs
             if (args.Length >= 1)
             {
                 if (Commands.ContainsKey(args[0]))
