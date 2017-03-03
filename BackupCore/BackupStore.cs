@@ -12,9 +12,10 @@ namespace BackupCore
     {
         List<BackupRecord> backups;
         Dictionary<string, int> backupidx = new Dictionary<string, int>();
-        public BlobStore Blobs { get; set; }
-        public BackupStore(string metadatapath, BlobStore blobstore)
+        private Core BCore { get; set; }
+        public BackupStore(string metadatapath, Core core)
         {
+            BCore = core;
             try
             {
                 using (FileStream fs = new FileStream(metadatapath, FileMode.Open, FileAccess.Read))
@@ -27,7 +28,7 @@ namespace BackupCore
             }
             catch (Exception)
             {
-                Console.WriteLine("Reading old metadata failed. Initializing new metadata store...");
+                Console.WriteLine("Reading old backup failed. Initializing new backup store...");
                 backups = new List<BackupRecord>();
             }
             for (int i = 0; i < backups.Count; i++)
@@ -43,12 +44,24 @@ namespace BackupCore
         public void AddBackup(string message, byte[] metadatatreehash)
         {
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
+            
             backups.Add(newbackup);
             string hashstring = HashTools.ByteArrayToHexViaLookup32(newbackup.MetadataTreeHash).ToLower();
             if (!backupidx.ContainsKey(hashstring))
             {
                 backupidx.Add(hashstring, backups.Count - 1);
             }
+        }
+
+        public void Remove(string backuphash)
+        {
+            Tuple<bool, string> match = HashByPrefix(backuphash);
+            if (match == null || match.Item1 == true)
+            {
+                throw new KeyNotFoundException();
+            }
+            backuphash = match.Item2;
+            Blobs.Rem
         }
 
         public int Count
@@ -86,6 +99,7 @@ namespace BackupCore
                 else
                 {
                     Tuple<bool, string> match = HashByPrefix(key);
+                    // TODO: Better error messages depending on return value of HashByPrefix()
                     if (match == null || match.Item1 == true)
                     {
                         throw new KeyNotFoundException();
@@ -158,16 +172,6 @@ namespace BackupCore
             return ((IList<BackupRecord>)backups).GetEnumerator();
         }
 
-        public byte[] serialize()
-        {
-            return BinaryEncoding.enum_encode(from b in backups select b.serialize());
-        }
-
-        private List<BackupRecord> deserialize(byte[] data)
-        {
-            return new List<BackupRecord>(from bin in BinaryEncoding.enum_decode(data) select BackupRecord.deserialize(bin));
-        }
-
         public bool ContainsKey(string key)
         {
             return backupidx.ContainsKey(key);
@@ -176,6 +180,16 @@ namespace BackupCore
         IEnumerator IEnumerable.GetEnumerator()
         {
             return ((IEnumerable<BackupRecord>)backups).GetEnumerator();
+        }
+
+        public byte[] serialize()
+        {
+            return BinaryEncoding.enum_encode(from b in backups select b.serialize());
+        }
+
+        private List<BackupRecord> deserialize(byte[] data)
+        {
+            return new List<BackupRecord>(from bin in BinaryEncoding.enum_decode(data) select BackupRecord.deserialize(bin));
         }
     }
 }
