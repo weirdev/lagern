@@ -70,7 +70,7 @@ namespace BackupCore
 
             // Add new metadatatree to metastore
             byte[] newmtreebytes = newmetatree.serialize();
-            byte[] newmtreehash = StoreDataAsync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            byte[] newmtreehash = Blobs.StoreDataAsync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
 
             BUStore.AddBackup(message, newmtreehash);
 
@@ -112,7 +112,7 @@ namespace BackupCore
 
             // Add new metadatatree to metastore
             byte[] newmtreebytes = newmetatree.serialize();
-            byte[] newmtreehash = StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
 
             BUStore.AddBackup(message, newmtreehash);
 
@@ -132,9 +132,9 @@ namespace BackupCore
         /// <param name="backupindex"></param>
         public void WriteOutFile(string relfilepath, string restorepath, string backuphash=null)
         {
-            MetadataTree mtree = MetadataTree.deserialize(Blobs.ReconstructFileData(BUStore[backuphash].MetadataTreeHash));
+            MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore[backuphash].MetadataTreeHash));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
-            byte[] filedata = Blobs.ReconstructFileData(filemeta.FileHash);
+            byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
             // TODO: autoreplacing of '/' with '\\'
             using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
             {
@@ -150,7 +150,7 @@ namespace BackupCore
 
         public MetadataTree GetMetadataTree(string backuphash)
         {
-            return MetadataTree.deserialize(Blobs.ReconstructFileData(BUStore[backuphash].MetadataTreeHash));
+            return MetadataTree.deserialize(Blobs.GetBlob(BUStore[backuphash].MetadataTreeHash));
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -224,106 +224,10 @@ namespace BackupCore
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(backuppath_src, relpath)));
         }
 
-        /// <summary>
-        /// Wraps other storedata method using input stream. Creates MemoryStream from inputdata.
-        /// </summary>
-        /// <param name="inputdata"></param>
-        /// <param name="type"></param>
-        /// <param name="filehash"></param>
-        /// <param name="hashblockqueue"></param>
-        protected void SplitData(byte[] inputdata, BlobLocation.BlobTypes type, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
-        {
-            SplitData(new MemoryStream(inputdata), type, filehash, hashblockqueue);
-        }
-
-        /// <summary>
-        /// Chunks and saves data to blobstore. Operates on stream input, so Filestreams can be used and entire files need not be loaded into memory.
-        /// </summary>
-        /// <param name="inputstream"></param>
-        /// <param name="type"></param>
-        /// <param name="filehash"></param>
-        /// <param name="hashblockqueue"></param>
-        protected void SplitData(Stream inputstream, BlobLocation.BlobTypes type, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
-        {
-            // https://rsync.samba.org/tech_report/node3.html
-            List<byte> newblock = new List<byte>();
-            byte[] alphachksum = new byte[16];
-            byte[] betachksum = new byte[16];
-            SHA1 sha1filehasher = SHA1.Create();
-            SHA1 sha1blockhasher = SHA1.Create();
-
-
-            int readsize = 8388608;
-            int rollwindowsize = 32;
-            try
-            {
-                for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
-                {
-                    byte[] readin;
-                    if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
-                    {
-                        readin = new byte[readsize];
-                        inputstream.Read(readin, 0, readsize);
-                    }
-                    else // < readsize bytes left to read
-                    {
-                        readin = new byte[inputstream.Length % readsize];
-                        inputstream.Read(readin, 0, (int)(inputstream.Length % readsize));
-                    }
-                    for (int j = 0; j < readin.Length; j++) // Byte by byte
-                    {
-                        newblock.Add(readin[j]);
-                        HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
-                        if (newblock.Count > rollwindowsize)
-                        {
-                            HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
-                            byte[] shifted = new byte[16];
-                            shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
-                            shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
-                            HashTools.BytesDifference(betachksum, shifted);
-                        }
-                        HashTools.BytesSum(betachksum, alphachksum);
-                        
-
-                        if (alphachksum[15] == 0xFF && betachksum[0] == 0xFF && betachksum[15] == 0xFE) // (256*256*128)^-1 => expected value (/2) = ~4MB
-                        {
-                            byte[] block = newblock.ToArray();
-                            if (i >= inputstream.Length && j >= readin.Length) // Need to use TransformFinalBlock if at end of input
-                            {
-                                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                            }
-                            else
-                            {
-                                sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
-                            }
-                            hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                            newblock = new List<byte>();
-                        }
-                    }
-                }
-                if (newblock.Count != 0) // Create block from remaining bytes
-                {
-                    byte[] block = newblock.ToArray();
-                    sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                    hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                }
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Error");
-            }
-            finally
-            {
-                inputstream.Close();
-            }
-            Array.Copy(sha1filehasher.Hash, filehash, sha1filehasher.Hash.Length);
-            hashblockqueue.CompleteAdding();
-        }
-
         protected void BackupFileAsync(string relpath, MetadataTree mtree)
         {
             FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
-            byte[] filehash = StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
+            byte[] filehash = Blobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
             BackupFileMetadata(relpath, filehash, mtree);
         }
 
@@ -331,91 +235,8 @@ namespace BackupCore
         protected void BackupFileSync(string relpath, MetadataTree mtree)
         {
             FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
-            byte[] filehash = StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
+            byte[] filehash = Blobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
             BackupFileMetadata(relpath, filehash, mtree);
-        }
-
-        protected byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
-        {
-            return StoreDataAsync(new MemoryStream(inputdata), type);
-        }
-
-        protected byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
-        {
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            byte[] filehash = new byte[20]; // Overall hash of file
-            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, type, filehash, fileblockqueue));
-
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
-            {
-                HashBlockPair block;
-                if (fileblockqueue.TryTake(out block))
-                {
-                    Blobs.AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
-                }
-            }
-            if (blockshashes.Count > 1)
-            {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
-                {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
-                }
-                Blobs.AddMultiBlockReferenceBlob(filehash, hashlist, BlobLocation.BlobTypes.FileBlob);
-            }
-            else
-            {
-                // Just the one block, so change its type to FileBlob
-                Blobs.GetBackupLocation(filehash).BlobType = BlobLocation.BlobTypes.FileBlob; // filehash should match individual block hash used earlier since total file == single block
-            }
-            return filehash;
-        }
-
-        protected byte[] StoreDataSync(byte[] inputdata, BlobLocation.BlobTypes type)
-        {
-            return StoreDataSync(new MemoryStream(inputdata), type);
-        }
-
-        /// <summary>
-        /// Backup data sychronously.
-        /// </summary>
-        /// <param name="relpath"></param>
-        /// <returns>A list of hashes representing the file contents.</returns>
-        protected byte[] StoreDataSync(Stream readerbuffer, BlobLocation.BlobTypes type)
-        {
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            byte[] filehash = new byte[20]; // Overall hash of file
-            SplitData(readerbuffer, type, filehash, fileblockqueue);
-
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
-            {
-                HashBlockPair block;
-                if (fileblockqueue.TryTake(out block))
-                {
-                    Blobs.AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
-                }
-            }
-            if (blockshashes.Count > 1)
-            {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
-                {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
-                }
-                Blobs.AddMultiBlockReferenceBlob(filehash, hashlist, BlobLocation.BlobTypes.FileBlob);
-            }
-            else
-            {
-                // Just the one block, so change its type to FileBlob
-                Blobs.GetBackupLocation(filehash).BlobType = BlobLocation.BlobTypes.FileBlob; // filehash should match individual block hash used earlier since total file == single block
-            }
-            return filehash;
         }
 
         protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
