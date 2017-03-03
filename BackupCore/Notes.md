@@ -1,23 +1,10 @@
-﻿1. xdelta or equivalent on saved metadata/blocklist
-
-2. *belay this* combine metadata/blocklist save as in original folder structure 
-
-3. save metadata in tree structure (just like a filesystem)
-	metadata = (filename,
-				list of hashes describing content,
-				size,
-				revelent timestamps,
-				[eventually full NTFS metadata including extended attributes])
-
-*********************
+﻿*********************
 IN PROGRESS
 ArgParser
 	"-l <>" => "-l <longname>"
 		wont need Item3 of returned tuple
 Reference count data blocks
 	Delete backups
-		Consider hashes as backup identifiers (like git)
-		Backup id would then be "stable"
 	Show total and "additional" space used by each backup
 		additional=space regained by deleting backup and leaving all others
 Backup commands from backup destination
@@ -31,13 +18,34 @@ Switch between backups when browsing a backup
 		Switch to /a/dir/ in next, previous or specified backup
 	Handle directory no longer there
 		Move tracking not necessary
-Ignore patterns
+Ignore/Save patterns
+	Git like system for tracking?
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
 	crash mid operations
 	more...
+"Enhanced data"
+	NTFS Permissions support
+		Ability to escalate this application's own permissions
+			Only when needed
+	NTFS extended attributes
+	Ability to save/restore enhance or "dumb" data
+		Save/restore w/ & w/o permissions
+			Detect restore to machine without user/group corresponding to permissions being applied
+		Save/restore w/ & w/o extended attributes
+	Special link support
 Multiple base folders
+	Multiple bacups with different settings to same destination
+		"dumb" binary backup of entire partition
+		"smart" backup of files folders
+		Data deduplicated itra- and inter- backup source
+			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
+Linux (POSIX) support
+	Server (destination) side
+	Dumb client side
+	Generic permissions support
+		Handle restoring to different OS/permissions scheme than saved to
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder

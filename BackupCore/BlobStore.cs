@@ -136,30 +136,22 @@ namespace BackupCore
             return TreeIndexStore.GetRecord(hash) != null;
         }
 
-        public BlobLocation GetBackupLocation(byte[] hash)
+        public BlobLocation GetBlobLocation(byte[] hash)
         {
             return TreeIndexStore.GetRecord(hash);
         }
 
         public byte[] GetBlob(byte[] filehash)
         {
-            BlobLocation blobbl = GetBackupLocation(filehash);
+            BlobLocation blobbl = GetBlobLocation(filehash);
             if (blobbl.IsMultiBlockReference) // File is comprised of multiple blocks
             {
-                FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blobbl.RelativeFilePath));
-                List<byte[]> blockhashes = new List<byte[]>();
-                for (int i = 0; i < blockhashstream.Length / filehash.Length; i++)
-                {
-                    byte[] buffer = new byte[filehash.Length];
-                    blockhashstream.Read(buffer, i * filehash.Length, filehash.Length);
-                    blockhashes.Add(buffer);
-                }
-                blockhashstream.Close();
+                var blockhashes = GetHashListFromBlob(blobbl);
 
                 MemoryStream file = new MemoryStream();
                 foreach (var hash in blockhashes)
                 {
-                    BlobLocation blockloc = GetBackupLocation(hash);
+                    BlobLocation blockloc = GetBlobLocation(hash);
                     FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
                     byte[] buffer = new byte[blockstream.Length];
                     blockstream.Read(buffer, 0, blockloc.ByteLength);
@@ -177,6 +169,24 @@ namespace BackupCore
                 blockstream.Read(buffer, 0, blobbl.ByteLength);
                 return buffer;
             }
+        }
+
+        private List<byte[]> GetHashListFromBlob(BlobLocation blocation)
+        {
+            if (!blocation.IsMultiBlockReference)
+            {
+                throw new ArgumentException("blobhash must be of a blob with IsMultiBlockReference=true");
+            }
+            FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+            List<byte[]> blockhashes = new List<byte[]>();
+            for (int i = 0; i < blockhashstream.Length / 20; i++)
+            {
+                byte[] buffer = new byte[20];
+                blockhashstream.Read(buffer, i * 20, 20);
+                blockhashes.Add(buffer);
+            }
+            blockhashstream.Close();
+            return blockhashes;
         }
 
         /// <summary>
@@ -304,12 +314,12 @@ namespace BackupCore
                 {
                     Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
                 }
-                this.AddMultiBlockReferenceBlob(filehash, hashlist, BlobLocation.BlobTypes.FileBlob);
+                AddMultiBlockReferenceBlob(filehash, hashlist, type);
             }
             else
             {
-                // Just the one block, so change its type to FileBlob
-                this.GetBackupLocation(filehash).BlobType = BlobLocation.BlobTypes.FileBlob; // filehash should match individual block hash used earlier since total file == single block
+                // Just the one block, so change its type to `type`
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
             }
             return filehash;
         }
@@ -348,14 +358,48 @@ namespace BackupCore
                 {
                     Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
                 }
-                this.AddMultiBlockReferenceBlob(filehash, hashlist, BlobLocation.BlobTypes.FileBlob);
+                AddMultiBlockReferenceBlob(filehash, hashlist, type);
             }
             else
             {
                 // Just the one block, so change its type to FileBlob
-                this.GetBackupLocation(filehash).BlobType = BlobLocation.BlobTypes.FileBlob; // filehash should match individual block hash used earlier since total file == single block
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
             }
             return filehash;
+        }
+
+        public void DereferenceOneDegree(byte[] blobhash)
+        {
+            BlobLocation blocation = GetBlobLocation(blobhash);
+            blocation.ReferenceCount -= 1;
+            if (blocation.IsMultiBlockReference)
+            {
+                foreach (var hash in GetHashListFromBlob(blocation))
+                {
+                    DereferenceOneDegree(hash);
+                }
+            }
+            switch (blocation.BlobType)
+            {
+                case BlobLocation.BlobTypes.Simple:
+                    break;
+                case BlobLocation.BlobTypes.FileBlob:
+                    break;
+                case BlobLocation.BlobTypes.MetadataTree:
+                    MetadataTree mtree = MetadataTree.deserialize(GetBlob(blobhash));
+                    foreach (var filehash in mtree.GetAllFileHashes())
+                    {
+                        DereferenceOneDegree(filehash);
+                    }
+                    break;
+                default:
+                    break;
+            }
+            if (blocation.ReferenceCount <= 0)
+            {
+                File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                TreeIndexStore.RemoveKey(blobhash);
+            }
         }
 
         public byte[] serialize()

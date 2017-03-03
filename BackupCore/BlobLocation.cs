@@ -15,15 +15,20 @@ namespace BackupCore
         // of the new combination blob
         public string RelativeFilePath { get; set; }
         public BlobTypes BlobType { get; set; }
+        /// <summary>
+        /// Is this Blob comprised of several blocks? i.e. Is this block a list of hashes referencing blocks that make up this Blob?
+        /// </summary>
+        public bool IsMultiBlockReference { get; set; }
         public int BytePosition { get; set; }
         public int ByteLength { get; set; }
         public int ReferenceCount { get; set; }
 
-        public BlobLocation(BlobTypes blobtype, string relpath, int bytepos, int bytelen) : this(blobtype, relpath, bytepos, bytelen, 1) { }
+        public BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen) : this(blobtype, ismultiblockref, relpath, bytepos, bytelen, 1) { }
 
-        private BlobLocation(BlobTypes blobtype, string relpath, int bytepos, int bytelen, int referencecount)
+        private BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen, int referencecount)
         {
             RelativeFilePath = relpath;
+            IsMultiBlockReference = ismultiblockref;
             BytePosition = bytepos;
             ByteLength = bytelen;
             ReferenceCount = referencecount;
@@ -57,6 +62,9 @@ namespace BackupCore
             // -v3
             // Required: breaks compatability
             // ReferenceCount = BitConverter.GetBytes(int)
+            // -v4
+            // Required
+            // IsMultiBlockReference = BitConverter.GetBytes(bool)
 
             bldata.Add("RelativeFilePath-v1", Encoding.ASCII.GetBytes(RelativeFilePath));
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
@@ -65,6 +73,8 @@ namespace BackupCore
             bldata.Add("BlobType-v2", BitConverter.GetBytes(ByteLength));
 
             bldata.Add("ReferenceCount-v3", BitConverter.GetBytes(ReferenceCount));
+
+            bldata.Add("IsMultiBlockReference-v4", BitConverter.GetBytes(IsMultiBlockReference));
 
             return BinaryEncoding.dict_encode(bldata);
         }
@@ -80,13 +90,16 @@ namespace BackupCore
 
             int referencecount = BitConverter.ToInt32(savedobjects["ReferenceCount-v3"], 0);
 
-            return new BlobLocation((BlobTypes)blobtypeint, relfilepath, byteposition, bytelength, referencecount);
+            bool ismultiblockref = BitConverter.ToBoolean(savedobjects["IsMultiBlockReference-v4"], 0);
+
+            return new BlobLocation((BlobTypes)blobtypeint, ismultiblockref, relfilepath, byteposition, bytelength, referencecount);
         }
 
         public enum BlobTypes
         {
-            FileBlock=0,
-            HashList=1
+            Simple=0,
+            FileBlob=1,
+            MetadataTree=2
         }
     }
 }

@@ -16,6 +16,10 @@ namespace BackupCore
             get { return _message; }
             set { _message = value == null ? "" : value; }
         }
+        private byte[] UUID { get; set; }
+
+        static Random UUIDGenerator = new Random();
+        
         public byte[] MetadataTreeHash { get; set; }
 
         public BackupRecord(string message, byte[] treehash)
@@ -23,13 +27,16 @@ namespace BackupCore
             BackupTime = DateTime.UtcNow;
             BackupMessage = message;
             MetadataTreeHash = treehash;
+            UUID = new byte[16];
+            UUIDGenerator.NextBytes(UUID);
         }
 
-        private BackupRecord(DateTime backuptime, string message, byte[] treehash)
+        private BackupRecord(DateTime backuptime, string message, byte[] treehash, byte[] uuid)
         {
             BackupTime = backuptime;
             BackupMessage = message;
             MetadataTreeHash = treehash;
+            UUID = uuid;
         }
 
         public byte[] serialize()
@@ -44,11 +51,17 @@ namespace BackupCore
             // Breaks compatability
             // v1 - MetadataTreeHashes +
             // MetadataTreeHash = byte[]
+
+            // -v3
+            // v2 +
+            // UUID = byte[]
             
             brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
             brdata.Add("BackupMessage-v1", Encoding.ASCII.GetBytes(BackupMessage));
 
             brdata.Add("MetadataTreeHash-v2", MetadataTreeHash);
+
+            brdata.Add("UUID-v3", UUID);
             
             return BinaryEncoding.dict_encode(brdata);
         }
@@ -66,9 +79,21 @@ namespace BackupCore
             {
                 backupmessage = null;
             }
+
             byte[] metadatatreehash = savedobjects["MetadataTreeHash-v2"];
 
-            return new BackupRecord(backuptime, backupmessage, metadatatreehash);
+            byte[] uuid;
+            if (savedobjects.ContainsKey("UUID-v3"))
+            {
+                uuid = savedobjects["UUID-v3"];
+            }
+            else
+            {
+                uuid = new byte[16];
+                UUIDGenerator.NextBytes(uuid);
+            }
+            
+            return new BackupRecord(backuptime, backupmessage, metadatatreehash, uuid);
         }
     }
 }

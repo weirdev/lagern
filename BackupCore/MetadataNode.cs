@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using System.Collections;
 
 namespace BackupCore
 {
@@ -114,6 +115,21 @@ namespace BackupCore
         public void AddFile(FileMetadata metadata)
         {
             Files[metadata.FileName] = metadata;
+        }
+        
+        public IEnumerable<byte[]> GetAllFileHashes()
+        {
+            foreach (var f in Files)
+            {
+                yield return f.Value.FileHash;
+            }
+            foreach (var d in Directories)
+            {
+                foreach (var f in d.Value.GetAllFileHashes())
+                {
+                    yield return f;
+                }
+            }
         }
 
         /// <summary>

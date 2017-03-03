@@ -101,5 +101,78 @@ namespace BackupCore
             }
             return md5hashes;
         }
+
+        public static void ByteSum(byte[] asum, byte b)
+        {
+            int carry = 0;
+            int sum;
+            sum = asum[0] + b;
+            asum[0] = (byte)(sum & 0xFF);
+            carry = sum >> 8;
+            for (int i = 1; carry != 0 && i < asum.Length; i++)
+            {
+                sum = asum[i] + carry;
+                asum[i] = (byte)(sum & 0xFF);
+                carry = sum >> 8;
+            }
+        }
+
+        public static void BytesSum(byte[] asum, byte[] b)
+        {
+            int carry = 0;
+            int sum;
+            for (int i = 0; i < asum.Length; i++)
+            {
+                sum = asum[i] + b[i] + carry;
+                asum[i] = (byte)(sum & 0xFF);
+                carry = sum >> 8;
+            }
+        }
+
+        public static void ByteDifference(byte[] adiff, byte b)
+        {
+            int carry = 0;
+            int diff;
+            diff = adiff[0] - b;
+            adiff[0] = (byte)(diff & 0xFF);
+            carry = diff >= 0 ? 0 : 1;
+            for (int i = 1; carry != 0 && i < adiff.Length; i++)
+            {
+                diff = adiff[i] - carry;
+                adiff[i] = (byte)(diff & 0xFF);
+                carry = diff >= 0 ? 0 : 1;
+            }
+        }
+
+        public static void BytesDifference(byte[] adiff, byte[] b)
+        {
+            int carry = 0;
+            int diff;
+            for (int i = 0; i < adiff.Length; i++)
+            {
+                diff = adiff[i] - b[i] - carry;
+                adiff[i] = (byte)(diff & 0xFF);
+                carry = diff >= 0 ? 0 : 1;
+            }
+        }
+
+        public static void BytesLeftShift(byte[] shift, int amount)
+        {
+            if (amount >= 8)
+            {
+                int byteshifts = amount / 8;
+                byte[] sh = new byte[shift.Length];
+                Array.Copy(shift, 0, sh, byteshifts, shift.Length - byteshifts);
+                amount = amount % 8;
+            }
+            int carry = 0;
+            int shifted;
+            for (int i = 0; i < shift.Length; i++)
+            {
+                shifted = (shift[i] << amount) + carry;
+                shift[i] = (byte)(shifted & 0xFF);
+                carry = shifted >> 8;
+            }
+        }
     }
 }

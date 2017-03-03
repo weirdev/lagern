@@ -258,9 +258,18 @@ namespace BackupCore
             return from backup in BUStore select new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(backup.MetadataTreeHash).ToLower(), backup.BackupTime, backup.BackupMessage);
         }
 
-        public void RemoveBackup(string backuphash)
+        public void RemoveBackup(string backuphashprefix)
         {
-            throw new NotImplementedException();
+            Tuple<bool, string> match = BUStore.HashByPrefix(backuphashprefix);
+            // TODO: Better error messages depending on return value of HashByPrefix()
+            if (match == null || match.Item1 == true)
+            {
+                throw new KeyNotFoundException();
+            }
+            string backuphashstring = match.Item2;
+            BUStore.Remove(backuphashstring);
+            byte[] backuphash = HashTools.HexStringToByteArray(backuphashstring);
+            Blobs.DereferenceOneDegree(backuphash);
         }
     }
 }

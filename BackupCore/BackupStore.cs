@@ -61,7 +61,7 @@ namespace BackupCore
                 throw new KeyNotFoundException();
             }
             backuphash = match.Item2;
-            Blobs.Rem
+            BCore.RemoveBackup(backuphash);
         }
 
         public int Count
@@ -116,13 +116,13 @@ namespace BackupCore
         /// </summary>
         /// <param name="prefix"></param>
         /// <returns>Null if no matches, (true, null) for multiple matches, (false, hashstring) for exact match.</returns>
-        private Tuple<bool, string> HashByPrefix(string prefix)
+        public Tuple<bool, string> HashByPrefix(string prefix)
         {
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
             // also if this becomes an issue, keep a s
             prefix = prefix.ToLower();
             List<string> hashes = new List<string>(backupidx.Keys);
-            List<string> matches = new List<string>(from h in hashes where h.Substring(0, prefix.Length) == prefix select h);
+            List<string> matches = new List<string>(from h in hashes where h.Substring(0, prefix.Length).ToLower() == prefix.ToLower() select h);
             if (matches.Count == 0)
             {
                 return null;
@@ -133,7 +133,7 @@ namespace BackupCore
             }
             else
             {
-                return new Tuple<bool, string>(false, matches[0]);
+                return new Tuple<bool, string>(false, matches[0].ToLower());
             }
         }
 

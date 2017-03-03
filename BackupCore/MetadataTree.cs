@@ -115,6 +115,11 @@ namespace BackupCore
             GetDirectory(dirpath).AddFile(metadata);
         }
 
+        public IEnumerable<byte[]> GetAllFileHashes()
+        {
+            return Root.GetAllFileHashes();
+        }
+
         /// <summary>
         /// Serializes the metadata store.
         /// As of now the "store" is just the root node and its descendents.
