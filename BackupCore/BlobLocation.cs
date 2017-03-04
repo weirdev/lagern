@@ -27,6 +27,7 @@ namespace BackupCore
 
         private BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen, int referencecount)
         {
+            BlobType = blobtype;
             RelativeFilePath = relpath;
             IsMultiBlockReference = ismultiblockref;
             BytePosition = bytepos;
@@ -70,7 +71,7 @@ namespace BackupCore
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
 
-            bldata.Add("BlobType-v2", BitConverter.GetBytes(ByteLength));
+            bldata.Add("BlobType-v2", BitConverter.GetBytes((int)BlobType));
 
             bldata.Add("ReferenceCount-v3", BitConverter.GetBytes(ReferenceCount));
 

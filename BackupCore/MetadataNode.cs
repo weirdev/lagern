@@ -125,6 +125,10 @@ namespace BackupCore
             }
             foreach (var d in Directories)
             {
+                if (d.Key == "." || d.Key == "..")
+                {
+                    continue;
+                }
                 foreach (var f in d.Value.GetAllFileHashes())
                 {
                     yield return f;

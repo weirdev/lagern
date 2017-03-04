@@ -58,6 +58,12 @@ namespace BackupConsole
                     }
                     RunBackup(message);
                 }
+                else if (parsed.Item1 == "delete")
+                {
+                    // "delete <backuphash>"
+                    string backuphash = parsed.Item2["backuphash"];
+                    DeleteBackup(backuphash);
+                }
                 else if (parsed.Item1 == "restore")
                 {
                     // "restore <filerelpath> [-b <>] [-r <>]"
@@ -72,7 +78,7 @@ namespace BackupConsole
                     }
                     if (parsed.Item3.ContainsKey("r"))
                     {
-                        if (parsed.Item3["r"] == "\\")
+                        if (parsed.Item3["r"] == ".")
                         {
                             restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
                         }
@@ -130,6 +136,7 @@ namespace BackupConsole
             scanner.AddCommand("set <setting> <value>");
             scanner.AddCommand("clear <setting>");
             scanner.AddCommand("run [<message>]");
+            scanner.AddCommand("delete <backuphash>");
             scanner.AddCommand("restore <filerelpath> [-b <>] [-r <>]");
             scanner.AddCommand("list [<listcount>]");
             scanner.AddCommand("browse [<backuphash>]");
@@ -155,6 +162,18 @@ namespace BackupConsole
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
             bcore.RunBackupSync(message);
+        }
+
+        private static void DeleteBackup(string backuphash)
+        {
+            string destination = ReadSetting("dest");
+            if (destination == null)
+            {
+                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                return;
+            }
+            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            bcore.RemoveBackup(backuphash);
         }
 
         public static void RestoreFile(string filerelpath, string restorepath, string backuphash)

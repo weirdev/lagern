@@ -262,14 +262,17 @@ namespace BackupCore
         {
             Tuple<bool, string> match = BUStore.HashByPrefix(backuphashprefix);
             // TODO: Better error messages depending on return value of HashByPrefix()
+            // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
             if (match == null || match.Item1 == true)
             {
                 throw new KeyNotFoundException();
             }
             string backuphashstring = match.Item2;
             BUStore.Remove(backuphashstring);
+            BUStore.SynchronizeCacheToDisk();
             byte[] backuphash = HashTools.HexStringToByteArray(backuphashstring);
             Blobs.DereferenceOneDegree(backuphash);
+            Blobs.SynchronizeCacheToDisk();
         }
     }
 }

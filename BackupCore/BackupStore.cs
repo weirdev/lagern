@@ -11,10 +11,13 @@ namespace BackupCore
     class BackupStore : IEnumerable<BackupRecord>, ICustomSerializable<BackupStore>
     {
         List<BackupRecord> backups;
-        Dictionary<string, int> backupidx = new Dictionary<string, int>();
+        Dictionary<string, int> backupidx;
         private Core BCore { get; set; }
+        public string DiskStorePath { get; set; }
+
         public BackupStore(string metadatapath, Core core)
         {
+            DiskStorePath = metadatapath;
             BCore = core;
             try
             {
@@ -31,6 +34,12 @@ namespace BackupCore
                 Console.WriteLine("Reading old backup failed. Initializing new backup store...");
                 backups = new List<BackupRecord>();
             }
+            CreateHashLookup();
+        }
+
+        private void CreateHashLookup()
+        {
+            backupidx = new Dictionary<string, int>();
             for (int i = 0; i < backups.Count; i++)
             {
                 string hashhex = HashTools.ByteArrayToHexViaLookup32(backups[i].MetadataTreeHash).ToLower();
@@ -55,13 +64,15 @@ namespace BackupCore
 
         public void Remove(string backuphash)
         {
-            Tuple<bool, string> match = HashByPrefix(backuphash);
-            if (match == null || match.Item1 == true)
+            byte[] hash = HashTools.HexStringToByteArray(backuphash);
+            for (int i = 0; i < backups.Count; i++)
             {
-                throw new KeyNotFoundException();
+                if (backups[i].MetadataTreeHash.SequenceEqual(hash))
+                {
+                    backups.RemoveAt(i);
+                    return;
+                }
             }
-            backuphash = match.Item2;
-            BCore.RemoveBackup(backuphash);
         }
 
         public int Count
@@ -145,9 +156,12 @@ namespace BackupCore
             }
         }
 
-        public void SynchronizeCacheToDisk(string path)
+        public void SynchronizeCacheToDisk(string path=null)
         {
-
+            if (path == null)
+            {
+                path = DiskStorePath;
+            }
             using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
             {
                 using (BinaryWriter writer = new BinaryWriter(fs))

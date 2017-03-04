@@ -167,6 +167,7 @@ namespace BackupCore
                 FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blobbl.RelativeFilePath));
                 byte[] buffer = new byte[blockstream.Length];
                 blockstream.Read(buffer, 0, blobbl.ByteLength);
+                blockstream.Close();
                 return buffer;
             }
         }
