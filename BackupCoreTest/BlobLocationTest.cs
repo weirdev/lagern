@@ -10,9 +10,9 @@ namespace BackupCoreTest
     /// Summary description for BackupLocationTest
     /// </summary>
     [TestClass]
-    public class BackupLocationTest
+    public class BlobLocationTest
     {
-        public BackupLocationTest()
+        public BlobLocationTest()
         {
             //
             // TODO: Add constructor logic here

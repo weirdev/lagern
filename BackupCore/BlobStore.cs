@@ -12,7 +12,7 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    class BlobStore : ICustomSerializable<BlobStore>
+    public class BlobStore : ICustomSerializable<BlobStore>
     {
         // TODO: Consider some inheritance relationship between this class and BPlusTree
         public BPlusTree<BlobLocation> TreeIndexStore { get; private set; }
@@ -26,21 +26,23 @@ namespace BackupCore
             StorePath = indexpath;
             BlockSaveDirectory = blocksavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
-
-            try
+            if (indexpath != null)
             {
-                using (FileStream fs = new FileStream(indexpath, FileMode.Open, FileAccess.Read))
+                try
                 {
-                    using (BinaryReader reader = new BinaryReader(fs))
+                    using (FileStream fs = new FileStream(indexpath, FileMode.Open, FileAccess.Read))
                     {
-                        this.deserialize(reader.ReadBytes((int)fs.Length));
+                        using (BinaryReader reader = new BinaryReader(fs))
+                        {
+                            this.deserialize(reader.ReadBytes((int)fs.Length));
+                        }
                     }
                 }
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Reading old index failed. Initializing new index...");
-                TreeIndexStore = new BPlusTree<BlobLocation>(100);
+                catch (Exception)
+                {
+                    Console.WriteLine("Reading old index failed. Initializing new index...");
+                    TreeIndexStore = new BPlusTree<BlobLocation>(100);
+                }
             }
         }
         
@@ -197,9 +199,9 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblockqueue"></param>
-        protected void SplitData(byte[] inputdata, BlobLocation.BlobTypes type, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
+        protected void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
         {
-            SplitData(new MemoryStream(inputdata), type, filehash, hashblockqueue);
+            SplitData(new MemoryStream(inputdata), filehash, hashblockqueue);
         }
 
         /// <summary>
@@ -209,78 +211,69 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblockqueue"></param>
-        protected void SplitData(Stream inputstream, BlobLocation.BlobTypes type, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
+        public void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
         {
             // https://rsync.samba.org/tech_report/node3.html
             List<byte> newblock = new List<byte>();
-            byte[] alphachksum = new byte[16];
-            byte[] betachksum = new byte[16];
+            byte[] alphachksum = new byte[2];
+            byte[] betachksum = new byte[2];
             SHA1 sha1filehasher = SHA1.Create();
             SHA1 sha1blockhasher = SHA1.Create();
 
 
             int readsize = 8388608;
             int rollwindowsize = 32;
-            try
+            for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
             {
-                for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
+                byte[] readin;
+                if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
                 {
-                    byte[] readin;
-                    if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
+                    readin = new byte[readsize];
+                    inputstream.Read(readin, 0, readsize);
+                }
+                else // < readsize bytes left to read
+                {
+                    readin = new byte[inputstream.Length % readsize];
+                    inputstream.Read(readin, 0, (int)(inputstream.Length % readsize));
+                }
+                for (int j = 0; j < readin.Length; j++) // Byte by byte
+                {
+                    newblock.Add(readin[j]);
+                    HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
+                    if (newblock.Count > rollwindowsize)
                     {
-                        readin = new byte[readsize];
-                        inputstream.Read(readin, 0, readsize);
+                        HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
+                        byte[] shifted = new byte[2];
+                        shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
+                        shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
+                        HashTools.BytesDifference(betachksum, shifted);
                     }
-                    else // < readsize bytes left to read
-                    {
-                        readin = new byte[inputstream.Length % readsize];
-                        inputstream.Read(readin, 0, (int)(inputstream.Length % readsize));
-                    }
-                    for (int j = 0; j < readin.Length; j++) // Byte by byte
-                    {
-                        newblock.Add(readin[j]);
-                        HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
-                        if (newblock.Count > rollwindowsize)
-                        {
-                            HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
-                            byte[] shifted = new byte[16];
-                            shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
-                            shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
-                            HashTools.BytesDifference(betachksum, shifted);
-                        }
-                        HashTools.BytesSum(betachksum, alphachksum);
+                    HashTools.BytesSum(betachksum, alphachksum);
 
 
-                        if (alphachksum[15] == 0xFF && betachksum[0] == 0xFF && betachksum[15] == 0xFE) // (256*256*128)^-1 => expected value (/2) = ~4MB
+                    if (alphachksum[0] == 0xFF && betachksum[0] == 0xFF && betachksum[1] < 0x02) // (256*256*128)^-1 => expected value (/2) = ~4MB
+                    {
+                        byte[] block = newblock.ToArray();
+                        if (i >= inputstream.Length && j >= readin.Length) // Need to use TransformFinalBlock if at end of input
                         {
-                            byte[] block = newblock.ToArray();
-                            if (i >= inputstream.Length && j >= readin.Length) // Need to use TransformFinalBlock if at end of input
-                            {
-                                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                            }
-                            else
-                            {
-                                sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
-                            }
-                            hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                            newblock = new List<byte>();
+                            sha1filehasher.TransformFinalBlock(block, 0, block.Length);
                         }
+                        else
+                        {
+                            sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
+                        }
+                        hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
+                        newblock = new List<byte>();
+                        alphachksum = new byte[2];
+                        betachksum = new byte[2];
                     }
                 }
-                if (newblock.Count != 0) // Create block from remaining bytes
-                {
-                    byte[] block = newblock.ToArray();
-                    sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                    hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                }
             }
-            catch (Exception)
+            if (newblock.Count != 0) // Create block from remaining bytes
             {
-                Console.WriteLine("Error");
-            }
-            finally
-            {
-                inputstream.Close();
+                byte[] block = newblock.ToArray();
+                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
+                hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
             }
             Array.Copy(sha1filehasher.Hash, filehash, sha1filehasher.Hash.Length);
             hashblockqueue.CompleteAdding();
@@ -295,7 +288,7 @@ namespace BackupCore
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
-            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, type, filehash, fileblockqueue));
+            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblockqueue));
 
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
@@ -339,7 +332,7 @@ namespace BackupCore
         {
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
-            SplitData(readerbuffer, type, filehash, fileblockqueue);
+            SplitData(readerbuffer, filehash, fileblockqueue);
 
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)

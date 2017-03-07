@@ -15,11 +15,14 @@ namespace Testing
             //BPlusTreeTest bpt_test = new BPlusTreeTest();
             //bpt_test.TestSerializeDeserialize();
 
-            BackupRun();
+            //BackupRun();
 
             //BinaryEncodingTest betest = new BinaryEncodingTest();
             //betest.TestDictEncodeDecode();
             //betest.TestEnumEncodeDecode();
+
+            BlobStoreTest bstest = new BlobStoreTest();
+            bstest.TestSplitData();
         }
 
         static void BackupRun()
