@@ -16,6 +16,8 @@ namespace BackupConsole
 
         public static void Main(string[] args)
         {
+            // TODO: Get rid of this large try,catch block and catch errors closer to where they occur
+            // ... in Core, during parsing, etc.
             try
             {
                 var parsed = main_scanner.ParseInput(args);
@@ -32,9 +34,13 @@ namespace BackupConsole
                     }
                     else
                     {
-                        foreach (var setval in ReadSettings())
+                        var settings = ReadSettings();
+                        if (settings != null)
                         {
-                            Console.WriteLine(setval.Key + ": " + setval.Value);
+                            foreach (var setval in settings)
+                            {
+                                Console.WriteLine(setval.Key + ": " + setval.Value);
+                            }
                         }
                     }
                 }
@@ -170,10 +176,18 @@ namespace BackupConsole
             string destination = ReadSetting("dest");
             if (destination == null)
             {
-                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                return;
+                if (Directory.Exists("backup")) // We are in a backup destination
+                {
+                    destination = cwd;
+                }
+                else
+                {
+                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                    Console.WriteLine("or this command must be run from an existing backup destination.");
+                    return;
+                }
             }
-            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            BackupCore.Core bcore = new BackupCore.Core(null, destination);
             bcore.RemoveBackup(backuphash);
         }
 
@@ -182,10 +196,18 @@ namespace BackupConsole
             string destination = ReadSetting("dest");
             if (destination == null)
             {
-                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                return;
+                if (Directory.Exists("backup")) // We are in a backup destination
+                {
+                    destination = cwd;
+                }
+                else
+                {
+                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                    Console.WriteLine("or this command must be run from an existing backup destination.");
+                    return;
+                }
             }
-            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            BackupCore.Core bcore = new BackupCore.Core(null, destination);
             bcore.WriteOutFile(filerelpath, restorepath, backuphash);
         }
 
@@ -194,10 +216,18 @@ namespace BackupConsole
             string destination = ReadSetting("dest");
             if (destination == null)
             {
-                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                return;
+                if (Directory.Exists("backup")) // We are in a backup destination
+                {
+                    destination = cwd;
+                }
+                else
+                {
+                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                    Console.WriteLine("or this command must be run from an existing backup destination.");
+                    return;
+                }
             }
-            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            BackupCore.Core bcore = new BackupCore.Core(null, destination);
             var backups = bcore.GetBackups().ToArray();
             show = show == -1 ? backups.Length : show;
             show = backups.Length < show ? backups.Length : show;

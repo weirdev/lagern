@@ -1,16 +1,9 @@
 ﻿*********************
 IN PROGRESS
-Backup commands from backup destination
-	restore after have lost src
-	restore to different place
-	.backup file in destination
-		specifies src parameter
-		rename <dest>/index/ to <dest>/backup/
-			presence of backup folder indicates is destination
-				for now destination cant be src
-Progress report/bar
 Path handling
 	Custom utility class may be helpful
+.Net Core port
+	Make primary instance of project?
 Switch between backups when browsing a backup
 	Looking at /a/dir/ in backup f12da...
 		Switch to /a/dir/ in next, previous or specified backup
@@ -55,6 +48,7 @@ Optimize B+ tree BlobStore
 	store some nodes out of memory?
 	optimize node size
 	bulk loading of tree
+	Progress report/bar
 Reverse references in BlobStore?
 	Every blob knows hash of every structure that points at it?
 	Could list every backup containing file

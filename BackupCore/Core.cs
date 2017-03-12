@@ -17,6 +17,12 @@ namespace BackupCore
 
         public string backuppath_dst { get; set; }
 
+        public string backupindexdir { get; set; }
+
+        public string backuphashindex { get; set; }
+
+        public string backupbackuplist { get; set; }
+
         // BlockHashStore holding BackupLocations indexed by hashes (in bytes)
         private BlobStore Blobs { get; set; }
         private BackupStore BUStore { get; set; }
@@ -26,14 +32,19 @@ namespace BackupCore
             backuppath_src = src;
             backuppath_dst = dst;
 
+            backupindexdir = Path.Combine(backuppath_dst, "backup");
+
             // Make sure we have an index folder to write to later
-            if (!Directory.Exists(Path.Combine(backuppath_dst, "index")))
+            if (!Directory.Exists(Path.Combine(backuppath_dst, "backup")))
             {
-                Directory.CreateDirectory(Path.Combine(backuppath_dst, "index"));
+                Directory.CreateDirectory(backupindexdir);
             }
 
-            Blobs = new BlobStore(Path.Combine(backuppath_dst, "index", "hashindex"), backuppath_dst);
-            BUStore = new BackupStore(Path.Combine(backuppath_dst, "index", "metadata"), this);
+            backuphashindex = Path.Combine(backuppath_dst, "backup", "hashindex");
+            backupbackuplist = Path.Combine(backuppath_dst, "backup", "backuplist");
+
+            Blobs = new BlobStore(backuphashindex, backuppath_dst);
+            BUStore = new BackupStore(backupbackuplist, this);
         }
         
         public void RunBackupAsync(string message)
@@ -78,7 +89,7 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             Blobs.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
+            BUStore.SynchronizeCacheToDisk(backupbackuplist);
         }
 
         public void RunBackupSync(string message)
@@ -120,7 +131,7 @@ namespace BackupCore
             // Writeout entire cached index
             Blobs.SynchronizeCacheToDisk();
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(Path.Combine(backuppath_dst, "index", "metadata"));
+            BUStore.SynchronizeCacheToDisk(backupbackuplist);
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
