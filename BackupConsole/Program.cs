@@ -10,7 +10,7 @@ namespace BackupConsole
 {
     public class Program
     {
-        // Current directory (where user launch from)
+        // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
         private static readonly ArgumentScanner main_scanner = MainArgScannerFactory();
 
@@ -91,13 +91,14 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "list")
                 {
-                    // "list [<listcount>]"
+                    // "list [<listcount>] [-s]"
                     int listcount = -1;
                     if (parsed.Item2.ContainsKey("listcount"))
                     {
                         listcount = Convert.ToInt32(parsed.Item2["listcount"]);
                     }
-                    ListBackups(listcount);
+                    bool calculatesizes = parsed.Item3.ContainsKey("s");
+                    ListBackups(parsed.Item3.ContainsKey("s"), listcount);
                 }
                 else if (parsed.Item1 == "browse")
                 {
@@ -138,7 +139,7 @@ namespace BackupConsole
             scanner.AddCommand("run [<message>]");
             scanner.AddCommand("delete <backuphash>");
             scanner.AddCommand("restore <filerelpath> [-b <>] [-r <>]");
-            scanner.AddCommand("list [<listcount>]");
+            scanner.AddCommand("list [<listcount>] [-s]");
             scanner.AddCommand("browse [<backuphash>]");
             scanner.AddCommand("help");
             return scanner;
@@ -188,7 +189,7 @@ namespace BackupConsole
             bcore.WriteOutFile(filerelpath, restorepath, backuphash);
         }
 
-        private static void ListBackups(int show=-1)
+        private static void ListBackups(bool calculatesizes, int show = -1)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -200,11 +201,40 @@ namespace BackupConsole
             var backups = bcore.GetBackups().ToArray();
             show = show == -1 ? backups.Length : show;
             show = backups.Length < show ? backups.Length : show;
-            for (int i = backups.Length - 1; i >= backups.Length - show; i--)
+            TablePrinter table = new TablePrinter();
+            if (calculatesizes)
             {
-                Console.WriteLine(backups[i].Item1.Substring(0, 7) + "\t" + backups[i].Item2.ToLocalTime().ToString() + "\t" +
-                    backups[i].Item3);
+                table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
+                for (int i = backups.Length - 1; i >= backups.Length - show; i--)
+                {
+                    var sizes = bcore.GetBackupSizes(backups[i].Item1);
+                    string message = backups[i].Item3;
+                    int mlength = 40;
+                    if (mlength > message.Length)
+                    {
+                        mlength = message.Length;
+                    }
+                    table.AddBodyRow(new string[] {backups[i].Item1.Substring(0, 7),
+                        backups[i].Item2.ToLocalTime().ToString(), Utilities.BytesFormatter(sizes.Item1),
+                        Utilities.BytesFormatter(sizes.Item2), message.Substring(0, mlength) });
+                }
             }
+            else
+            {
+                table.AddHeaderRow(new string[] { "Hash", "Saved", "Message" });
+                for (int i = backups.Length - 1; i >= backups.Length - show; i--)
+                {
+                    string message = backups[i].Item3;
+                    int mlength = 40;
+                    if (mlength > message.Length)
+                    {
+                        mlength = message.Length;
+                    }
+                    table.AddBodyRow(new string[] { backups[i].Item1.Substring(0, 7),
+                        backups[i].Item2.ToLocalTime().ToString(), message.Substring(0, mlength) });
+                }
+            }
+            Console.WriteLine(table);
         }
 
         public static string ReadSetting(string key)

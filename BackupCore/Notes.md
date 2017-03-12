@@ -1,15 +1,13 @@
 ﻿*********************
 IN PROGRESS
-ArgParser
-	"-l <>" => "-l <longname>"
-		wont need Item3 of returned tuple
-Reference count data blocks
-	Delete backups
-	Show total and "additional" space used by each backup
-		additional=space regained by deleting backup and leaving all others
 Backup commands from backup destination
 	restore after have lost src
 	restore to different place
+	.backup file in destination
+		specifies src parameter
+		rename <dest>/index/ to <dest>/backup/
+			presence of backup folder indicates is destination
+				for now destination cant be src
 Progress report/bar
 Path handling
 	Custom utility class may be helpful
@@ -20,11 +18,15 @@ Switch between backups when browsing a backup
 		Move tracking not necessary
 Ignore/Save patterns
 	Git like system for tracking?
+	Ability to add backup with some old (unchecked) data and some new/updated (checked) data
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
 	crash mid operations
 	more...
+ArgParser
+	"-l <>" => "-l <longname>"
+		wont need Item3 of returned tuple
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions

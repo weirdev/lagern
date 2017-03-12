@@ -219,6 +219,11 @@ namespace BackupCore
             filequeue.CompleteAdding();
         }
 
+        public Tuple<int, int> GetBackupSizes(string backuphashstring)
+        {
+            return Blobs.GetSizes(HashTools.HexStringToByteArray(backuphashstring));
+        }
+
         private void BackupDirectory(string relpath, MetadataTree mtree)
         {
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(backuppath_src, relpath)));
