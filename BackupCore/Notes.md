@@ -4,6 +4,7 @@ Path handling
 	Custom utility class may be helpful
 .Net Core port
 	Make primary instance of project?
+	Test under linux
 Switch between backups when browsing a backup
 	Looking at /a/dir/ in backup f12da...
 		Switch to /a/dir/ in next, previous or specified backup
@@ -20,6 +21,14 @@ Handle common things that could go wrong
 ArgParser
 	"-l <>" => "-l <longname>"
 		wont need Item3 of returned tuple
+		create mapping from short to longnames
+			only use longnames to access parsed data
+Test support for large backup sets
+	Optimize B+ tree BlobStore
+		bulk loading of tree
+		store some nodes out of memory?
+		optimize node size
+		Progress report/bar
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions
@@ -36,19 +45,11 @@ Multiple base folders
 		"smart" backup of files folders
 		Data deduplicated itra- and inter- backup source
 			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
-Linux (POSIX) support
-	Server (destination) side
-	Dumb client side
-	Generic permissions support
-		Handle restoring to different OS/permissions scheme than saved to
+Generic permissions support ie. Linux (POSIX)
+	Handle restoring to different OS/permissions scheme than saved to
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder
-Optimize B+ tree BlobStore
-	store some nodes out of memory?
-	optimize node size
-	bulk loading of tree
-	Progress report/bar
 Reverse references in BlobStore?
 	Every blob knows hash of every structure that points at it?
 	Could list every backup containing file

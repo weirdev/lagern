@@ -35,7 +35,7 @@ namespace BackupCore
                 }
                 else
                 {
-                    return "\\";
+                    return System.IO.Path.DirectorySeparatorChar.ToString();
                 }
             }
         }

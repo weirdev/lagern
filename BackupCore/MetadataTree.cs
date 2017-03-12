@@ -12,7 +12,10 @@ namespace BackupCore
     {
         public MetadataNode Root { get; set; }
 
-        public MetadataTree() { }
+        public MetadataTree(FileMetadata rootmetadata)
+        {
+            Root = new MetadataNode(rootmetadata, null);
+        }
 
         private MetadataTree(MetadataNode root)
         {
@@ -34,7 +37,7 @@ namespace BackupCore
             int slash = relpath.LastIndexOf(Path.DirectorySeparatorChar);
             if (slash == -1) // file must exist in "root" assume '\\' before path
             {
-                relpath = '\\' + relpath;
+                relpath = Path.DirectorySeparatorChar + relpath;
                 slash = 0;
             }
             MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
@@ -62,7 +65,7 @@ namespace BackupCore
         /// <returns></returns>
         private MetadataNode GetDirectory(string path, MetadataNode current_dir)
         {
-            if (path.StartsWith("\\"))
+            if (path.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 path = path.Substring(1);
             }
@@ -95,14 +98,7 @@ namespace BackupCore
         /// <param name="metadata"></param>
         public void AddDirectory(string dirpath, FileMetadata metadata)
         {
-            if (dirpath == "\\")
-            {
-                Root = new MetadataNode(metadata, null);
-            }
-            else
-            {
-                GetDirectory(dirpath).AddDirectory(metadata);
-            }
+            GetDirectory(dirpath).AddDirectory(metadata);
         }
 
         /// <summary>

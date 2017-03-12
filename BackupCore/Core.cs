@@ -49,9 +49,8 @@ namespace BackupCore
         
         public void RunBackupAsync(string message)
         {
-            MetadataTree newmetatree = new MetadataTree();
-
-            newmetatree.AddDirectory("\\", new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(backuppath_src));
+            
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             Task getfilestask = Task.Run(() => GetFilesAndDirectories(filequeue, directoryqueue));
@@ -94,9 +93,8 @@ namespace BackupCore
 
         public void RunBackupSync(string message)
         {
-            MetadataTree newmetatree = new MetadataTree();
-
-            newmetatree.AddDirectory("\\", new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(backuppath_src));
+            
             BlockingCollection<string> filequeue = new BlockingCollection<string>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
             GetFilesAndDirectories(filequeue, directoryqueue);
@@ -146,7 +144,6 @@ namespace BackupCore
             MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore[backuphash].MetadataTreeHash));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
-            // TODO: autoreplacing of '/' with '\\'
             using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
             {
                 writer.Write(filedata, 0, filedata.Length);
