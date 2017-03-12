@@ -1,7 +1,5 @@
 ﻿*********************
 IN PROGRESS
-Path handling
-	Custom utility class may be helpful
 .Net Core port
 	Make primary instance of project?
 	Test under linux
