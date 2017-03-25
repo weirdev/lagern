@@ -35,8 +35,8 @@ namespace BackupConsole
                     Console.WriteLine("or this command must be run from an existing backup destination.");
                     return;
                 }
-                BCore = new BackupCore.Core(Program.cwd, destination);
             }
+            BCore = new BackupCore.Core(Program.cwd, destination);
             backuptree = BCore.GetMetadataTree(BackupHash);
             currentnode = backuptree.Root;
         }
@@ -45,7 +45,8 @@ namespace BackupConsole
         {
             while (true)
             {
-                Console.Write(String.Format("backup {0}:{1}> ", BackupHash, currentnode.Path));
+                int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
+                Console.Write(String.Format("backup {0}:{1}> ", BackupHash.Substring(0, hashdisplen), currentnode.Path));
                 string command = Console.ReadLine();
                 string[] args = command.Split();
                 try
@@ -86,6 +87,26 @@ namespace BackupConsole
                         }
                         Program.RestoreFile(filerelpath, restorepath, BackupHash);
                     }
+                    else if (parsed.Item1 == "cb")
+                    {
+                        // "cb [<backuphash>] [-o <>]"
+                        string backuphash = BackupHash;
+                        int offset = 0;
+                        if (!parsed.Item2.ContainsKey("backuphash") && !parsed.Item3.ContainsKey("o"))
+                        {
+                            ShowCommands();
+                            return;
+                        }
+                        if (parsed.Item2.ContainsKey("backuphash"))
+                        {
+                            backuphash = parsed.Item2["backuphash"];
+                        }
+                        if (parsed.Item3.ContainsKey("o"))
+                        {
+                            offset = Convert.ToInt32(parsed.Item3["o"]);
+                        }
+                        ChangeBackup(backuphash, offset);
+                    }
                     else if (parsed.Item1 == "help")
                     {
                         ShowCommands();
@@ -106,6 +127,7 @@ namespace BackupConsole
             scanner.AddCommand("restore <filerelpath> [-r <>]");
             scanner.AddCommand("exit");
             scanner.AddCommand("help");
+            scanner.AddCommand("cb [<backuphash>] [-o <>]");
             return scanner;
         }
 
@@ -166,6 +188,21 @@ namespace BackupConsole
                 return;
             }
             currentnode = dir;
+        }
+
+        private void ChangeBackup(string backuphash, int offset=0)
+        {
+            string curpath = currentnode.Path;
+            var targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, offset);
+            BackupHash = targetbackuphashandrecord.Item1;
+            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
+            backuptree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
+            currentnode = backuptree.GetDirectory(curpath);
+            if (currentnode == null)
+            {
+                currentnode = backuptree.Root;
+            }
+            Console.WriteLine("Switching to backup {0}:\"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
         }
     }
 }

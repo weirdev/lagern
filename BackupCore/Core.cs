@@ -24,8 +24,8 @@ namespace BackupCore
         public string backupbackuplist { get; set; }
 
         // BlockHashStore holding BackupLocations indexed by hashes (in bytes)
-        private BlobStore Blobs { get; set; }
-        private BackupStore BUStore { get; set; }
+        public BlobStore Blobs { get; set; }
+        public BackupStore BUStore { get; set; }
 
         public Core(string src, string dst)
         {
@@ -44,7 +44,7 @@ namespace BackupCore
             backupbackuplist = Path.Combine(backuppath_dst, "backup", "backuplist");
 
             Blobs = new BlobStore(backuphashindex, backuppath_dst);
-            BUStore = new BackupStore(backupbackuplist, this);
+            BUStore = new BackupStore(backupbackuplist, Blobs);
         }
         
         public void RunBackupAsync(string message)
@@ -139,9 +139,9 @@ namespace BackupCore
         /// <param name="relfilepath"></param>
         /// <param name="restorepath"></param>
         /// <param name="backupindex"></param>
-        public void WriteOutFile(string relfilepath, string restorepath, string backuphash=null)
+        public void WriteOutFile(string relfilepath, string restorepath, string backuphashprefix=null)
         {
-            MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore[backuphash].MetadataTreeHash));
+            MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
             using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
@@ -156,9 +156,9 @@ namespace BackupCore
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        public MetadataTree GetMetadataTree(string backuphash)
+        public MetadataTree GetMetadataTree(string backuphashprefix)
         {
-            return MetadataTree.deserialize(Blobs.GetBlob(BUStore[backuphash].MetadataTreeHash));
+            return MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
@@ -268,24 +268,19 @@ namespace BackupCore
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public IEnumerable<Tuple<string, DateTime, string>> GetBackups()
         {// TODO: does this need to exist here
-            return from backup in BUStore select new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(backup.MetadataTreeHash).ToLower(), backup.BackupTime, backup.BackupMessage);
+            List<Tuple<string, DateTime, string>> backups = new List<Tuple<string, DateTime, string>>();
+            foreach (var bh in BUStore.backuphashes)
+            {
+                var br = BUStore.GetBackupRecord(bh);
+                backups.Add(new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(bh).ToLower(),
+                    br.BackupTime, br.BackupMessage));
+            }
+            return backups;
         }
 
         public void RemoveBackup(string backuphashprefix)
         {
-            Tuple<bool, string> match = BUStore.HashByPrefix(backuphashprefix);
-            // TODO: Better error messages depending on return value of HashByPrefix()
-            // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
-            if (match == null || match.Item1 == true)
-            {
-                throw new KeyNotFoundException();
-            }
-            string backuphashstring = match.Item2;
-            BUStore.Remove(backuphashstring);
-            BUStore.SynchronizeCacheToDisk();
-            byte[] backuphash = HashTools.HexStringToByteArray(backuphashstring);
-            Blobs.DereferenceOneDegree(backuphash);
-            Blobs.SynchronizeCacheToDisk();
+            BUStore.RemoveBackup(backuphashprefix);
         }
     }
 }

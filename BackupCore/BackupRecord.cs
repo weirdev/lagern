@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    class BackupRecord : ICustomSerializable<BackupRecord>
+    public class BackupRecord : ICustomSerializable<BackupRecord>
     {
         public DateTime BackupTime { get; set; }
         // Prevent BackupMessage from being null

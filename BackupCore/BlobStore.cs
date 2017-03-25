@@ -299,37 +299,39 @@ namespace BackupCore
         private void GetReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
+            BlobLocation blocation = GetBlobLocation(blobhash);
             if (hashfreqsize.ContainsKey(hashstring))
             {
                 hashfreqsize[hashstring][0] = (int)hashfreqsize[hashstring][0] + 1;
             }
             else
             {
-                BlobLocation blocation = GetBlobLocation(blobhash);
-                if (blocation.IsMultiBlockReference)
+                hashfreqsize.Add(hashstring, new object[] { 1, blocation });
+            }
+            if (blocation.IsMultiBlockReference)
+            {
+                foreach (var hash in GetHashListFromBlob(blocation))
                 {
-                    foreach (var hash in GetHashListFromBlob(blocation))
-                    {
-                        GetReferenceFrequencies(hash, hashfreqsize);
-                    }
-                }
-                else
-                {
-                    switch (blocation.BlobType)
-                    {
-                        case BlobLocation.BlobTypes.MetadataTree:
-                            MetadataTree mtree = MetadataTree.deserialize(GetBlob(blobhash));
-                            foreach (var filehash in mtree.GetAllFileHashes())
-                            {
-                                GetReferenceFrequencies(filehash, hashfreqsize);
-                            }
-                            break;
-                        default: // BlobLocation.BlobTypes.Simple || BlobLocation.BlobTypes.FileBlob
-                            hashfreqsize.Add(hashstring, new object[] { 1, blocation });
-                            break;
-                    }
+                    GetReferenceFrequencies(hash, hashfreqsize);
                 }
             }
+            switch (blocation.BlobType)
+            {
+                case BlobLocation.BlobTypes.MetadataTree:
+                    MetadataTree mtree = MetadataTree.deserialize(GetBlob(blobhash));
+                    foreach (var filehash in mtree.GetAllFileHashes())
+                    {
+                        GetReferenceFrequencies(filehash, hashfreqsize);
+                    }
+                    break;
+                case BlobLocation.BlobTypes.BackupRecord:
+                    BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
+                    GetReferenceFrequencies(br.MetadataTreeHash, hashfreqsize);
+                    break;
+                default: // BlobLocation.BlobTypes.Simple || BlobLocation.BlobTypes.FileBlob
+                    break;
+            }
+            
         }
 
         public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
@@ -438,6 +440,10 @@ namespace BackupCore
                     {
                         DereferenceOneDegree(filehash);
                     }
+                    break;
+                case BlobLocation.BlobTypes.BackupRecord:
+                    BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
+                    DereferenceOneDegree(br.MetadataTreeHash);
                     break;
                 default:
                     break;

@@ -8,118 +8,123 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    class BackupStore : IEnumerable<BackupRecord>, ICustomSerializable<BackupStore>
+    public class BackupStore : ICustomSerializable<BackupStore>
     {
-        List<BackupRecord> backups;
-        Dictionary<string, int> backupidx;
-        private Core BCore { get; set; }
+        public List<byte[]> backuphashes;
+        private BlobStore Blobs { get; set; }
         public string DiskStorePath { get; set; }
 
-        public BackupStore(string metadatapath, Core core)
+        public BackupStore(string metadatapath, BlobStore blobs)
         {
             DiskStorePath = metadatapath;
-            BCore = core;
+            Blobs = blobs;
             try
             {
                 using (FileStream fs = new FileStream(metadatapath, FileMode.Open, FileAccess.Read))
                 {
                     using (BinaryReader reader = new BinaryReader(fs))
                     {
-                        backups = deserialize(reader.ReadBytes((int)fs.Length));
+                        backuphashes = deserialize(reader.ReadBytes((int)fs.Length));
                     }
                 }
             }
             catch (Exception)
             {
                 Console.WriteLine("Reading old backup failed. Initializing new backup store...");
-                backups = new List<BackupRecord>();
-            }
-            CreateHashLookup();
-        }
-
-        private void CreateHashLookup()
-        {
-            backupidx = new Dictionary<string, int>();
-            for (int i = 0; i < backups.Count; i++)
-            {
-                string hashhex = HashTools.ByteArrayToHexViaLookup32(backups[i].MetadataTreeHash).ToLower();
-                if (!backupidx.ContainsKey(hashhex)) // We dont care about duplicates, just as long as we point to one of them
-                {
-                    backupidx.Add(hashhex, i);
-                }
+                backuphashes = new List<byte[]>();
             }
         }
 
         public void AddBackup(string message, byte[] metadatatreehash)
         {
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
-            
-            backups.Add(newbackup);
-            string hashstring = HashTools.ByteArrayToHexViaLookup32(newbackup.MetadataTreeHash).ToLower();
-            if (!backupidx.ContainsKey(hashstring))
-            {
-                backupidx.Add(hashstring, backups.Count - 1);
-            }
+            byte[] brbytes = newbackup.serialize();
+            byte[] backuphash = Blobs.StoreDataSync(brbytes, BlobLocation.BlobTypes.BackupRecord);
+            backuphashes.Add(backuphash);
+
         }
 
-        public void Remove(string backuphash)
+        public void RemoveBackup(string backuphashprefix)
         {
-            byte[] hash = HashTools.HexStringToByteArray(backuphash);
-            for (int i = 0; i < backups.Count; i++)
+            Tuple<bool, byte[]> match = HashByPrefix(backuphashprefix);
+            // TODO: Better error messages depending on return value of HashByPrefix()
+            // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
+            if (match == null || match.Item1 == true)
             {
-                if (backups[i].MetadataTreeHash.SequenceEqual(hash))
+                throw new KeyNotFoundException();
+            }
+            byte[] backuphash = match.Item2;
+            for (int i = 0; i < backuphashes.Count; i++)
+            {
+                if (backuphashes[i].SequenceEqual(backuphash))
                 {
-                    backups.RemoveAt(i);
-                    return;
+                    backuphashes.RemoveAt(i);
                 }
             }
+            SynchronizeCacheToDisk();
+            Blobs.DereferenceOneDegree(backuphash);
+            Blobs.SynchronizeCacheToDisk();
         }
 
-        public int Count
+        public BackupRecord GetBackupRecord()
         {
-            get
+            return GetBackupRecord(backuphashes[backuphashes.Count - 1]);
+        }
+
+        public BackupRecord GetBackupRecord(string prefix)
+        {
+            if (prefix == null)
             {
-                return ((IList<BackupRecord>)backups).Count;
+                return GetBackupRecord();
             }
-        }
-
-        public ICollection<string> Keys
-        {
-            get
+            var match = HashByPrefix(prefix);
+            if (match == null || match.Item1 == true)
             {
-                return backupidx.Keys;
+                throw new KeyNotFoundException();
             }
+            return GetBackupRecord(match.Item2);
         }
 
-        public ICollection<BackupRecord> Values
+        public BackupRecord GetBackupRecord(byte[] hash)
         {
-            get
+            if (hash == null)
             {
-                return backups;
+                return GetBackupRecord();
             }
+            return BackupRecord.deserialize(Blobs.GetBlob(hash));
         }
-
-        public BackupRecord this[string key]
+        
+        public Tuple<string, BackupRecord> GetBackupHashAndRecord(string prefix, int offset)
         {
-            get
+            var match = HashByPrefix(prefix);
+            if (match == null || match.Item1 == true)
             {
-                if (key == null)
+                // TODO: throw this exception out of HashByPrefix?
+                throw new KeyNotFoundException();
+            }
+            int pidx = 0;
+            for (int i = 0; i < backuphashes.Count; i++)
+            {
+                if (backuphashes[i].SequenceEqual(match.Item2))
                 {
-                    key = HashTools.ByteArrayToHexViaLookup32(this[this.Count - 1].MetadataTreeHash);
+                    pidx = i;
+                    break;
                 }
-                else
-                {
-                    Tuple<bool, string> match = HashByPrefix(key);
-                    // TODO: Better error messages depending on return value of HashByPrefix()
-                    if (match == null || match.Item1 == true)
-                    {
-                        throw new KeyNotFoundException();
-                    }
-                    key = match.Item2;
-                }
-                key = key.ToLower();
-                return backups[backupidx[key]];
             }
+            int bidx = pidx + offset;
+            if (bidx >= 0 && bidx < backuphashes.Count)
+            {
+                return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(backuphashes[bidx]).ToLower(), GetBackupRecord(backuphashes[bidx]));
+            }
+            else
+            {
+                throw new IndexOutOfRangeException();
+            }
+        }
+
+        public List<BackupRecord> GetAllBackupRecords()
+        {
+            return new List<BackupRecord>(from hash in backuphashes select GetBackupRecord(hash));
         }
 
         /// <summary>
@@ -127,12 +132,12 @@ namespace BackupCore
         /// </summary>
         /// <param name="prefix"></param>
         /// <returns>Null if no matches, (true, null) for multiple matches, (false, hashstring) for exact match.</returns>
-        public Tuple<bool, string> HashByPrefix(string prefix)
+        public Tuple<bool, byte[]> HashByPrefix(string prefix)
         {
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
             // also if this becomes an issue, keep a s
             prefix = prefix.ToLower();
-            List<string> hashes = new List<string>(backupidx.Keys);
+            List<string> hashes = new List<string>(from hash in backuphashes select HashTools.ByteArrayToHexViaLookup32(hash));
             List<string> matches = new List<string>(from h in hashes where h.Substring(0, prefix.Length).ToLower() == prefix.ToLower() select h);
             if (matches.Count == 0)
             {
@@ -140,19 +145,11 @@ namespace BackupCore
             }
             else if (matches.Count > 1)
             {
-                return new Tuple<bool, string>(true, null);
+                return new Tuple<bool, byte[]>(true, null);
             }
             else
             {
-                return new Tuple<bool, string>(false, matches[0].ToLower());
-            }
-        }
-
-        public BackupRecord this[int index]
-        {
-            get
-            {
-                return ((IList<BackupRecord>)backups)[index];
+                return new Tuple<bool, byte[]>(false, HashTools.HexStringToByteArray(matches[0]));
             }
         }
 
@@ -171,39 +168,14 @@ namespace BackupCore
             }
         }
 
-        public int IndexOf(BackupRecord item)
-        {
-            return ((IList<BackupRecord>)backups).IndexOf(item);
-        }
-
-        public bool Contains(BackupRecord item)
-        {
-            return ((IList<BackupRecord>)backups).Contains(item);
-        }
-
-        public IEnumerator<BackupRecord> GetEnumerator()
-        {
-            return ((IList<BackupRecord>)backups).GetEnumerator();
-        }
-
-        public bool ContainsKey(string key)
-        {
-            return backupidx.ContainsKey(key);
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return ((IEnumerable<BackupRecord>)backups).GetEnumerator();
-        }
-
         public byte[] serialize()
         {
-            return BinaryEncoding.enum_encode(from b in backups select b.serialize());
+            return BinaryEncoding.enum_encode(backuphashes);
         }
 
-        private List<BackupRecord> deserialize(byte[] data)
+        private List<byte[]> deserialize(byte[] data)
         {
-            return new List<BackupRecord>(from bin in BinaryEncoding.enum_decode(data) select BackupRecord.deserialize(bin));
+            return new List<byte[]>(BinaryEncoding.enum_decode(data));
         }
     }
 }

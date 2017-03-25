@@ -8,6 +8,7 @@ Switch between backups when browsing a backup
 		Switch to /a/dir/ in next, previous or specified backup
 	Handle directory no longer there
 		Move tracking not necessary
+List all backups while browsing
 Ignore/Save patterns
 	Git like system for tracking?
 	Ability to add backup with some old (unchecked) data and some new/updated (checked) data
@@ -21,6 +22,9 @@ ArgParser
 		wont need Item3 of returned tuple
 		create mapping from short to longnames
 			only use longnames to access parsed data
+	can require only one or at least one of a set of options
+		'|' or '^' between options
+		options inside [] ?
 Test support for large backup sets
 	Optimize B+ tree BlobStore
 		bulk loading of tree
