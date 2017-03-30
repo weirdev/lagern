@@ -14,14 +14,13 @@ namespace BackupConsole
 
         private static readonly ArgumentScanner browse_scanner = BrowseArgScannerFactory();
 
-        BackupCore.Core BCore;
-        string BackupHash;
-        BackupCore.MetadataTree backuptree;
-        BackupCore.MetadataNode currentnode;
+        BackupCore.Core BCore { get; set; }
+        string BackupHash { get; set; }
+        BackupCore.MetadataTree BackupTree { get; set; }
+        BackupCore.MetadataNode CurrentNode { get; set; }
 
         public BackupBrowser(string backuphash)
         {
-            BackupHash = backuphash;
             string destination = Program.ReadSetting("dest");
             if (destination == null)
             {
@@ -37,8 +36,19 @@ namespace BackupConsole
                 }
             }
             BCore = new BackupCore.Core(Program.cwd, destination);
-            backuptree = BCore.GetMetadataTree(BackupHash);
-            currentnode = backuptree.Root;
+            Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
+            if (backuphash == null)
+            {
+                targetbackuphashandrecord = BCore.BUStore.GetFirstBackupHashAndRecord();
+            }
+            else
+            {
+                targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, 0);
+            }
+            BackupHash = targetbackuphashandrecord.Item1;
+            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
+            BackupTree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
+            CurrentNode = BackupTree.Root;
         }
 
         public void CommandLoop()
@@ -46,7 +56,7 @@ namespace BackupConsole
             while (true)
             {
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
-                Console.Write(String.Format("backup {0}:{1}> ", BackupHash.Substring(0, hashdisplen), currentnode.Path));
+                Console.Write(String.Format("backup {0}:{1}> ", BackupHash.Substring(0, hashdisplen), CurrentNode.Path));
                 string command = Console.ReadLine();
                 string[] args = command.Split();
                 try
@@ -70,7 +80,7 @@ namespace BackupConsole
                     else if (parsed.Item1 == "restore")
                     {
                         // "restore <filerelpath> [-r <>]"
-                        string filerelpath = Path.Combine(currentnode.Path, parsed.Item2["filerelpath"]);
+                        string filerelpath = Path.Combine(CurrentNode.Path, parsed.Item2["filerelpath"]);
                         // If no restoreto path given, restore
                         // to cwd / its relative path
                         string restorepath = Path.Combine(Program.cwd, filerelpath);
@@ -141,7 +151,7 @@ namespace BackupConsole
 
         private void ListDirectory()
         {
-            BackupCore.MetadataNode dir = currentnode;
+            BackupCore.MetadataNode dir = CurrentNode;
 
             List<BackupCore.MetadataNode> childdirectories = new List<BackupCore.MetadataNode>(from cdir in dir.Directories where cdir.Key!=".." select cdir.Value);
             childdirectories.Sort(delegate (BackupCore.MetadataNode x, BackupCore.MetadataNode y)
@@ -171,11 +181,11 @@ namespace BackupConsole
             {
                 if (directory.StartsWith(Path.DirectorySeparatorChar.ToString()))
                 {
-                    dir = backuptree.GetDirectory(directory);
+                    dir = BackupTree.GetDirectory(directory);
                 }
                 else
                 {
-                    dir = backuptree.GetDirectory(Path.Combine(currentnode.Path, directory));
+                    dir = BackupTree.GetDirectory(Path.Combine(CurrentNode.Path, directory));
                 }
             }
             catch (Exception)
@@ -187,22 +197,22 @@ namespace BackupConsole
                 Console.WriteLine("Cannot find directory specified");
                 return;
             }
-            currentnode = dir;
+            CurrentNode = dir;
         }
 
         private void ChangeBackup(string backuphash, int offset=0)
         {
-            string curpath = currentnode.Path;
+            string curpath = CurrentNode.Path;
             var targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            backuptree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
-            currentnode = backuptree.GetDirectory(curpath);
-            if (currentnode == null)
+            BackupTree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
+            CurrentNode = BackupTree.GetDirectory(curpath);
+            if (CurrentNode == null)
             {
-                currentnode = backuptree.Root;
+                CurrentNode = BackupTree.Root;
             }
-            Console.WriteLine("Switching to backup {0}:\"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
+            Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
         }
     }
 }

@@ -94,7 +94,7 @@ namespace BackupCore
             return BackupRecord.deserialize(Blobs.GetBlob(hash));
         }
         
-        public Tuple<string, BackupRecord> GetBackupHashAndRecord(string prefix, int offset)
+        public Tuple<string, BackupRecord> GetBackupHashAndRecord(string prefix, int offset=0)
         {
             var match = HashByPrefix(prefix);
             if (match == null || match.Item1 == true)
@@ -120,6 +120,11 @@ namespace BackupCore
             {
                 throw new IndexOutOfRangeException();
             }
+        }
+
+        public Tuple<string, BackupRecord> GetFirstBackupHashAndRecord()
+        {
+            return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(backuphashes[backuphashes.Count - 1]).ToLower(), GetBackupRecord(backuphashes[backuphashes.Count - 1]));
         }
 
         public List<BackupRecord> GetAllBackupRecords()

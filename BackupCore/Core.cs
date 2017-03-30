@@ -156,11 +156,6 @@ namespace BackupCore
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        public MetadataTree GetMetadataTree(string backuphashprefix)
-        {
-            return MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
-        }
-
         protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
         {
             if (path == null)
