@@ -1,22 +1,30 @@
 ﻿*********************
 IN PROGRESS
-.Net Core port
-	Make primary instance of project?
-	Test under linux
-Switch between backups when browsing a backup
-	Looking at /a/dir/ in backup f12da...
-		Switch to /a/dir/ in next, previous or specified backup
-	Handle directory no longer there
-		Move tracking not necessary
 List all backups while browsing
+Ability to add new backup (commit) only updating (checking for changes) some files
+	Metadata heuristics to determine this
+		size, date modified
+	This is new default behavior
+		Give command line switch to force checking of all files
 Ignore/Save patterns
 	Git like system for tracking?
-	Ability to add backup with some old (unchecked) data and some new/updated (checked) data
+	Use patterns to classify files for checking for changes
+		Some files data only scanned if added manually
+		Some scanned only based on metadata heuristics (default)
+			Date modified changed so scan
+		Some scanned every time regardless of metadata
+			Always do this when force scan switch is used
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
-	crash mid operations
+	crash mid operations prints error
 	more...
+Test support for large backup sets
+	Optimize B+ tree BlobStore
+		bulk loading of tree
+		store some nodes out of memory?
+		optimize node size
+		Progress report/bar
 ArgParser
 	"-l <>" => "-l <longname>"
 		wont need Item3 of returned tuple
@@ -25,12 +33,9 @@ ArgParser
 	can require only one or at least one of a set of options
 		'|' or '^' between options
 		options inside [] ?
-Test support for large backup sets
-	Optimize B+ tree BlobStore
-		bulk loading of tree
-		store some nodes out of memory?
-		optimize node size
-		Progress report/bar
+.Net Core port
+	Make primary instance of project?
+	Test under linux
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions
@@ -47,6 +52,8 @@ Multiple base folders
 		"smart" backup of files folders
 		Data deduplicated itra- and inter- backup source
 			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
+Transfer a single backup to existing/new different backup destination
+	Would show up as new base folder
 Generic permissions support ie. Linux (POSIX)
 	Handle restoring to different OS/permissions scheme than saved to
 Replicate source file tree (as last backed up) in destination
