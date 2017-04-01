@@ -1,11 +1,6 @@
 ﻿*********************
 IN PROGRESS
 List all backups while browsing
-Ability to add new backup (commit) only updating (checking for changes) some files
-	Metadata heuristics to determine this
-		size, date modified
-	This is new default behavior
-		Give command line switch to force checking of all files
 Ignore/Save patterns
 	Git like system for tracking?
 	Use patterns to classify files for checking for changes
@@ -14,6 +9,8 @@ Ignore/Save patterns
 			Date modified changed so scan
 		Some scanned every time regardless of metadata
 			Always do this when force scan switch is used
+Specify a previous backup to use as previous backup when performing a differential backup
+	Currently we just use the last backup made
 Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
@@ -41,7 +38,7 @@ ArgParser
 		Ability to escalate this application's own permissions
 			Only when needed
 	NTFS extended attributes
-	Ability to save/restore enhance or "dumb" data
+	Ability to save/restore enhanced or "dumb" data
 		Save/restore w/ & w/o permissions
 			Detect restore to machine without user/group corresponding to permissions being applied
 		Save/restore w/ & w/o extended attributes

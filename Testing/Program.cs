@@ -33,7 +33,7 @@ namespace Testing
             backupper.RunBackupSync(null);
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
-            backupper.WriteOutFile("moreshit.txt", Path.Combine(backupper.backuppath_dst, "moreshit.txt"));
+            backupper.WriteOutFile("moreshit.txt", Path.Combine(backupper.BackuppathDst, "moreshit.txt"));
             Console.Out.WriteLine("Done.");
             Console.In.ReadLine();
         }

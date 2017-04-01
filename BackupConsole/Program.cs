@@ -56,13 +56,14 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "run")
                 {
-                    // "run [<message>]"
+                    // "run [<message>] [-s]"
                     string message = null;
                     if (parsed.Item2.ContainsKey("message"))
                     {
                         message = parsed.Item2["message"];
                     }
-                    RunBackup(message);
+                    bool diffbackup = !parsed.Item3.ContainsKey("s"); // force scan
+                    RunBackup(message, diffbackup);
                 }
                 else if (parsed.Item1 == "delete")
                 {
@@ -142,7 +143,7 @@ namespace BackupConsole
             scanner.AddCommand("show [<setting>]");
             scanner.AddCommand("set <setting> <value>");
             scanner.AddCommand("clear <setting>");
-            scanner.AddCommand("run [<message>]");
+            scanner.AddCommand("run [-s] [<message>]");
             scanner.AddCommand("delete <backuphash>");
             scanner.AddCommand("restore <filerelpath> [-b <>] [-r <>]");
             scanner.AddCommand("list [<listcount>] [-s]");
@@ -159,7 +160,7 @@ namespace BackupConsole
             }
         }
 
-        private static void RunBackup(string message=null)
+        private static void RunBackup(string message=null, bool diffbackup=true)
         {
             string destination = ReadSetting("dest");
             if (destination == null)
@@ -168,7 +169,7 @@ namespace BackupConsole
                 return;
             }
             BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
-            bcore.RunBackupSync(message);
+            bcore.RunBackupSync(message, diffbackup);
         }
 
         private static void DeleteBackup(string backuphash)

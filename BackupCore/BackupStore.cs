@@ -10,7 +10,7 @@ namespace BackupCore
 {
     public class BackupStore : ICustomSerializable<BackupStore>
     {
-        public List<byte[]> backuphashes;
+        public List<byte[]> BackupHashes { get; set; }
         private BlobStore Blobs { get; set; }
         public string DiskStorePath { get; set; }
 
@@ -24,14 +24,14 @@ namespace BackupCore
                 {
                     using (BinaryReader reader = new BinaryReader(fs))
                     {
-                        backuphashes = deserialize(reader.ReadBytes((int)fs.Length));
+                        BackupHashes = deserialize(reader.ReadBytes((int)fs.Length));
                     }
                 }
             }
             catch (Exception)
             {
                 Console.WriteLine("Reading old backup failed. Initializing new backup store...");
-                backuphashes = new List<byte[]>();
+                BackupHashes = new List<byte[]>();
             }
         }
 
@@ -40,7 +40,7 @@ namespace BackupCore
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
             byte[] brbytes = newbackup.serialize();
             byte[] backuphash = Blobs.StoreDataSync(brbytes, BlobLocation.BlobTypes.BackupRecord);
-            backuphashes.Add(backuphash);
+            BackupHashes.Add(backuphash);
 
         }
 
@@ -54,11 +54,11 @@ namespace BackupCore
                 throw new KeyNotFoundException();
             }
             byte[] backuphash = match.Item2;
-            for (int i = 0; i < backuphashes.Count; i++)
+            for (int i = 0; i < BackupHashes.Count; i++)
             {
-                if (backuphashes[i].SequenceEqual(backuphash))
+                if (BackupHashes[i].SequenceEqual(backuphash))
                 {
-                    backuphashes.RemoveAt(i);
+                    BackupHashes.RemoveAt(i);
                 }
             }
             SynchronizeCacheToDisk();
@@ -68,7 +68,11 @@ namespace BackupCore
 
         public BackupRecord GetBackupRecord()
         {
-            return GetBackupRecord(backuphashes[backuphashes.Count - 1]);
+            if (BackupHashes.Count > 0)
+            {
+                return GetBackupRecord(BackupHashes[BackupHashes.Count - 1]);
+            }
+            return null;
         }
 
         public BackupRecord GetBackupRecord(string prefix)
@@ -103,18 +107,18 @@ namespace BackupCore
                 throw new KeyNotFoundException();
             }
             int pidx = 0;
-            for (int i = 0; i < backuphashes.Count; i++)
+            for (int i = 0; i < BackupHashes.Count; i++)
             {
-                if (backuphashes[i].SequenceEqual(match.Item2))
+                if (BackupHashes[i].SequenceEqual(match.Item2))
                 {
                     pidx = i;
                     break;
                 }
             }
             int bidx = pidx + offset;
-            if (bidx >= 0 && bidx < backuphashes.Count)
+            if (bidx >= 0 && bidx < BackupHashes.Count)
             {
-                return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(backuphashes[bidx]).ToLower(), GetBackupRecord(backuphashes[bidx]));
+                return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(BackupHashes[bidx]).ToLower(), GetBackupRecord(BackupHashes[bidx]));
             }
             else
             {
@@ -124,12 +128,12 @@ namespace BackupCore
 
         public Tuple<string, BackupRecord> GetFirstBackupHashAndRecord()
         {
-            return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(backuphashes[backuphashes.Count - 1]).ToLower(), GetBackupRecord(backuphashes[backuphashes.Count - 1]));
+            return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(BackupHashes[BackupHashes.Count - 1]).ToLower(), GetBackupRecord(BackupHashes[BackupHashes.Count - 1]));
         }
 
         public List<BackupRecord> GetAllBackupRecords()
         {
-            return new List<BackupRecord>(from hash in backuphashes select GetBackupRecord(hash));
+            return new List<BackupRecord>(from hash in BackupHashes select GetBackupRecord(hash));
         }
 
         /// <summary>
@@ -142,7 +146,7 @@ namespace BackupCore
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
             // also if this becomes an issue, keep a s
             prefix = prefix.ToLower();
-            List<string> hashes = new List<string>(from hash in backuphashes select HashTools.ByteArrayToHexViaLookup32(hash));
+            List<string> hashes = new List<string>(from hash in BackupHashes select HashTools.ByteArrayToHexViaLookup32(hash));
             List<string> matches = new List<string>(from h in hashes where h.Substring(0, prefix.Length).ToLower() == prefix.ToLower() select h);
             if (matches.Count == 0)
             {
@@ -175,7 +179,7 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            return BinaryEncoding.enum_encode(backuphashes);
+            return BinaryEncoding.enum_encode(BackupHashes);
         }
 
         private List<byte[]> deserialize(byte[] data)

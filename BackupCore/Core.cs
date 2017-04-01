@@ -13,15 +13,15 @@ namespace BackupCore
 {
     public class Core
     {
-        public string backuppath_src { get; set; }
+        public string BackuppathSrc { get; set; }
 
-        public string backuppath_dst { get; set; }
+        public string BackuppathDst { get; set; }
 
-        public string backupindexdir { get; set; }
+        public string BackupIndexDir { get; set; }
 
-        public string backuphashindex { get; set; }
+        public string HashIndexFile { get; set; }
 
-        public string backupbackuplist { get; set; }
+        public string BackupListFile { get; set; }
 
         // BlockHashStore holding BackupLocations indexed by hashes (in bytes)
         public BlobStore Blobs { get; set; }
@@ -29,37 +29,54 @@ namespace BackupCore
 
         public Core(string src, string dst)
         {
-            backuppath_src = src;
-            backuppath_dst = dst;
+            BackuppathSrc = src;
+            BackuppathDst = dst;
 
-            backupindexdir = Path.Combine(backuppath_dst, "backup");
+            BackupIndexDir = Path.Combine(BackuppathDst, "backup");
 
             // Make sure we have an index folder to write to later
-            if (!Directory.Exists(Path.Combine(backuppath_dst, "backup")))
+            if (!Directory.Exists(Path.Combine(BackuppathDst, "backup")))
             {
-                Directory.CreateDirectory(backupindexdir);
+                Directory.CreateDirectory(BackupIndexDir);
             }
 
-            backuphashindex = Path.Combine(backuppath_dst, "backup", "hashindex");
-            backupbackuplist = Path.Combine(backuppath_dst, "backup", "backuplist");
+            HashIndexFile = Path.Combine(BackuppathDst, "backup", "hashindex");
+            BackupListFile = Path.Combine(BackuppathDst, "backup", "backuplist");
 
-            Blobs = new BlobStore(backuphashindex, backuppath_dst);
-            BUStore = new BackupStore(backupbackuplist, Blobs);
+            Blobs = new BlobStore(HashIndexFile, BackuppathDst);
+            BUStore = new BackupStore(BackupListFile, Blobs);
         }
         
-        public void RunBackupAsync(string message)
+        public void RunBackupAsync(string message, bool differentialbackup=true)
         {
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
-            BlockingCollection<string> filequeue = new BlockingCollection<string>();
+            BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
+            BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
-            Task getfilestask = Task.Run(() => GetFilesAndDirectories(filequeue, directoryqueue));
-            
+
+            if (differentialbackup)
+            {
+                BackupRecord previousbackup = BUStore.GetBackupRecord();
+                if (previousbackup != null)
+                {
+                    MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
+                    Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree));
+                }
+                else
+                {
+                    differentialbackup = false;
+                }
+            }
+            if (!differentialbackup)
+            {
+                Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue));
+            }
+
             List<Task> backupops = new List<Task>();
             while (!directoryqueue.IsCompleted)
             {
-                string directory;
-                if (directoryqueue.TryTake(out directory))
+                if (directoryqueue.TryTake(out string directory))
                 {
                     // We do not backup diretories asychronously
                     // becuase a. they should not take long anyway
@@ -68,12 +85,18 @@ namespace BackupCore
                     BackupDirectory(directory, newmetatree);
                 }
             }
-            while (!filequeue.IsCompleted)
+            while (!scanfilequeue.IsCompleted)
             {
-                string file;
-                if (filequeue.TryTake(out file))
+                if (scanfilequeue.TryTake(out string file))
                 {
                     backupops.Add(Task.Run(() => BackupFileAsync(file, newmetatree)));
+                }
+            }
+            while (!noscanfilequeue.IsCompleted)
+            {
+                if (noscanfilequeue.TryTake(out Tuple<string, FileMetadata> dir_fmeta))
+                {
+                    newmetatree.AddFile(dir_fmeta.Item1, dir_fmeta.Item2);
                 }
             }
             Task.WaitAll(backupops.ToArray());
@@ -88,21 +111,38 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             Blobs.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(backupbackuplist);
+            BUStore.SynchronizeCacheToDisk(BackupListFile);
         }
 
-        public void RunBackupSync(string message)
+        public void RunBackupSync(string message, bool differentialbackup=true)
         {
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(backuppath_src));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
-            BlockingCollection<string> filequeue = new BlockingCollection<string>();
+            BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
+            BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
-            GetFilesAndDirectories(filequeue, directoryqueue);
+
+            if (differentialbackup)
+            {
+                BackupRecord previousbackup = BUStore.GetBackupRecord();
+                if (previousbackup != null)
+                {
+                    MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
+                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree);
+                }
+                else
+                {
+                    differentialbackup = false;
+                }
+            }
+            if (!differentialbackup)
+            {
+                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue);
+            }
 
             while (!directoryqueue.IsCompleted)
             {
-                string directory;
-                if (directoryqueue.TryTake(out directory))
+                if (directoryqueue.TryTake(out string directory))
                 {
                     // We backup directories first because
                     // the metadatastore needs to have stored directories
@@ -110,12 +150,18 @@ namespace BackupCore
                     BackupDirectory(directory, newmetatree);
                 }
             }
-            while (!filequeue.IsCompleted)
+            while (!scanfilequeue.IsCompleted)
             {
-                string file;
-                if (filequeue.TryTake(out file))
+                if (scanfilequeue.TryTake(out string file))
                 {
                     BackupFileSync(file, newmetatree);
+                }
+            }
+            while (!noscanfilequeue.IsCompleted)
+            {
+                if (noscanfilequeue.TryTake(out Tuple<string, FileMetadata> dir_fmeta))
+                {
+                    newmetatree.AddFile(dir_fmeta.Item1, dir_fmeta.Item2);
                 }
             }
 
@@ -129,7 +175,7 @@ namespace BackupCore
             // Writeout entire cached index
             Blobs.SynchronizeCacheToDisk();
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(backupbackuplist);
+            BUStore.SynchronizeCacheToDisk(BackupListFile);
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -144,7 +190,8 @@ namespace BackupCore
             MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
             FileMetadata filemeta = mtree.GetFile(relfilepath);
             byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
-            using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate)) // the more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
+            // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
+            using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate))
             {
                 writer.Write(filedata, 0, filedata.Length);
                 // Flush the writer in order to get a correct stream position for truncating
@@ -156,14 +203,14 @@ namespace BackupCore
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        protected void GetFilesAndDirectories(BlockingCollection<string> filequeue, BlockingCollection<string> directoryqueue, string path=null)
+        protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null)
         {
             if (path == null)
             {
-                path = backuppath_src;
+                path = BackuppathSrc;
             }
 
-            // TODO: Bigger stack?
+            // TODO: Bigger inital stack size?
             Stack<string> dirs = new Stack<string>(20);
 
             dirs.Push(path);
@@ -190,7 +237,7 @@ namespace BackupCore
                 foreach (var sd in subDirs)
                 {
                     dirs.Push(sd);
-                    string relpath = sd.Substring(backuppath_src.Length + 1);
+                    string relpath = sd.Substring(BackuppathSrc.Length + 1);
                     directoryqueue.Add(relpath);
                 }
 
@@ -214,12 +261,28 @@ namespace BackupCore
                 foreach (var file in files)
                 {
                     // Convert file path to a relative path
-                    string relpath = file.Substring(backuppath_src.Length + 1);
-                    filequeue.Add(relpath);
+                    string relpath = file.Substring(BackuppathSrc.Length + 1);
+                    bool dontscan = false;
+                    if (previousmtree != null)
+                    {
+                        FileMetadata previousfm = previousmtree.GetFile(relpath);
+                        FileMetadata curfm = new FileMetadata(relpath);
+                        if (previousfm != null && previousfm.FileSize == curfm.FileSize
+                            && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                        {
+                            noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                            dontscan = true;
+                        }
+                    }
+                    if (!dontscan)
+                    {
+                        scanfilequeue.Add(relpath);
+                    }
                 }
             }
             directoryqueue.CompleteAdding();
-            filequeue.CompleteAdding();
+            scanfilequeue.CompleteAdding();
+            noscanfilequeue.CompleteAdding();
         }
 
         public Tuple<int, int> GetBackupSizes(string backuphashstring)
@@ -229,12 +292,12 @@ namespace BackupCore
 
         private void BackupDirectory(string relpath, MetadataTree mtree)
         {
-            mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(backuppath_src, relpath)));
+            mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackuppathSrc, relpath)));
         }
 
         protected void BackupFileAsync(string relpath, MetadataTree mtree)
         {
-            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
+            FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
             byte[] filehash = Blobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
             BackupFileMetadata(relpath, filehash, mtree);
         }
@@ -242,14 +305,14 @@ namespace BackupCore
         // TODO: This should be a relative filepath
         protected void BackupFileSync(string relpath, MetadataTree mtree)
         {
-            FileStream readerbuffer = File.OpenRead(Path.Combine(backuppath_src, relpath));
+            FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
             byte[] filehash = Blobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
             BackupFileMetadata(relpath, filehash, mtree);
         }
 
         protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
         {
-            FileMetadata fm = new FileMetadata(Path.Combine(backuppath_src, relpath));
+            FileMetadata fm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
             fm.FileHash = filehash;
             lock (BUStore)
             {
@@ -264,7 +327,7 @@ namespace BackupCore
         public IEnumerable<Tuple<string, DateTime, string>> GetBackups()
         {// TODO: does this need to exist here
             List<Tuple<string, DateTime, string>> backups = new List<Tuple<string, DateTime, string>>();
-            foreach (var bh in BUStore.backuphashes)
+            foreach (var bh in BUStore.BackupHashes)
             {
                 var br = BUStore.GetBackupRecord(bh);
                 backups.Add(new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(bh).ToLower(),
