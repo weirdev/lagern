@@ -60,13 +60,19 @@ namespace BackupConsole
             Dictionary<string, bool> PossibleFlags { get; set; } = new Dictionary<string, bool>();
             ArgumentNode ChildNode { get; set; } = null;
 
-            public ArgumentNode(string commandstring)
+            public ArgumentNode(string commandstring, Dictionary<string, bool> possibleflags=null)
             {
                 // "subcommand <requiredparam1> <requiredparam2> [-a <>] [-b] [<optionalparam1> <optionalparam2> [<optionalparam3> [-c]]] [-d <>]"
                 // <Key=subcommand, [requiredparam1, requiredparam2], {a:"", b:null, d:""}, <Key=null, [optionalparam1, optionalparam2], {}, <Key=null, [optionalparam3], {c:null}, null>>>
                 // subcommand val val -b -a val val val val -c (no d)
 
                 // TODO: long/descriptive flag names, (ignored) comments on commands as part of command strings?
+
+                // Flags can appear anywhere so add parent node's flags
+                if (possibleflags != null)
+                {
+                    PossibleFlags = possibleflags;
+                }
 
                 int bracketcounter = 0;
                 int open = -1;
@@ -100,7 +106,7 @@ namespace BackupConsole
                             }
                             else // is optional param(s)
                             {
-                                ChildNode = new ArgumentNode(contents);
+                                ChildNode = new ArgumentNode(contents, PossibleFlags);
                             }
                             if (i != commandstring.Length - 1)
                             {
