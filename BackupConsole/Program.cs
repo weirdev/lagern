@@ -105,7 +105,7 @@ namespace BackupConsole
                         listcount = Convert.ToInt32(parsed.Item2["listcount"]);
                     }
                     bool calculatesizes = parsed.Item3.ContainsKey("s");
-                    ListBackups(parsed.Item3.ContainsKey("s"), listcount);
+                    ListBackups(GetCore(), parsed.Item3.ContainsKey("s"), listcount);
                 }
                 else if (parsed.Item1 == "browse")
                 {
@@ -162,73 +162,24 @@ namespace BackupConsole
 
         private static void RunBackup(string message=null, bool diffbackup=true)
         {
-            string destination = ReadSetting("dest");
-            if (destination == null)
-            {
-                Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                return;
-            }
-            BackupCore.Core bcore = new BackupCore.Core(cwd, destination);
+            var bcore = GetCore();
             bcore.RunBackupSync(message, diffbackup);
         }
 
         private static void DeleteBackup(string backuphash)
         {
-            string destination = ReadSetting("dest");
-            if (destination == null)
-            {
-                if (Directory.Exists("backup")) // We are in a backup destination
-                {
-                    destination = cwd;
-                }
-                else
-                {
-                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                    Console.WriteLine("or this command must be run from an existing backup destination.");
-                    return;
-                }
-            }
-            BackupCore.Core bcore = new BackupCore.Core(null, destination);
+            var bcore = GetCore();
             bcore.RemoveBackup(backuphash);
         }
 
         public static void RestoreFile(string filerelpath, string restorepath, string backuphash)
         {
-            string destination = ReadSetting("dest");
-            if (destination == null)
-            {
-                if (Directory.Exists("backup")) // We are in a backup destination
-                {
-                    destination = cwd;
-                }
-                else
-                {
-                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                    Console.WriteLine("or this command must be run from an existing backup destination.");
-                    return;
-                }
-            }
-            BackupCore.Core bcore = new BackupCore.Core(null, destination);
+            var bcore = GetCore();
             bcore.WriteOutFile(filerelpath, restorepath, backuphash);
         }
 
-        private static void ListBackups(bool calculatesizes, int show = -1)
+        internal static void ListBackups(BackupCore.Core bcore, bool calculatesizes, int show = -1)
         {
-            string destination = ReadSetting("dest");
-            if (destination == null)
-            {
-                if (Directory.Exists("backup")) // We are in a backup destination
-                {
-                    destination = cwd;
-                }
-                else
-                {
-                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                    Console.WriteLine("or this command must be run from an existing backup destination.");
-                    return;
-                }
-            }
-            BackupCore.Core bcore = new BackupCore.Core(null, destination);
             var backups = bcore.GetBackups().ToArray();
             show = show == -1 ? backups.Length : show;
             show = backups.Length < show ? backups.Length : show;
@@ -266,6 +217,25 @@ namespace BackupConsole
                 }
             }
             Console.WriteLine(table);
+        }
+
+        private static BackupCore.Core GetCore()
+        {
+            string destination = ReadSetting("dest");
+            if (destination == null)
+            {
+                if (Directory.Exists("backup")) // We are in a backup destination
+                {
+                    destination = cwd;
+                }
+                else
+                {
+                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
+                    Console.WriteLine("or this command must be run from an existing backup destination.");
+                    return null;
+                }
+            }
+            return new BackupCore.Core(null, destination);
         }
 
         public static string ReadSetting(string key)

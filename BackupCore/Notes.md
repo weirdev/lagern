@@ -1,6 +1,5 @@
 ﻿*********************
 IN PROGRESS
-List all backups while browsing
 Ignore/Save patterns
 	Git like system for tracking?
 	Use patterns to classify files for checking for changes

@@ -117,6 +117,17 @@ namespace BackupConsole
                         }
                         ChangeBackup(backuphash, offset);
                     }
+                    else if (parsed.Item1 == "list")
+                    {
+                        // "list [<listcount>] [-s]"
+                        int listcount = -1;
+                        if (parsed.Item2.ContainsKey("listcount"))
+                        {
+                            listcount = Convert.ToInt32(parsed.Item2["listcount"]);
+                        }
+                        bool calculatesizes = parsed.Item3.ContainsKey("s");
+                        Program.ListBackups(BCore, parsed.Item3.ContainsKey("s"), listcount);
+                    }
                     else if (parsed.Item1 == "help")
                     {
                         ShowCommands();
@@ -136,6 +147,7 @@ namespace BackupConsole
             scanner.AddCommand("ls");
             scanner.AddCommand("restore <filerelpath> [-r <>]");
             scanner.AddCommand("exit");
+            scanner.AddCommand("list [<listcount>] [-s]");
             scanner.AddCommand("help");
             scanner.AddCommand("cb [<backuphash>] [-o <>]");
             return scanner;
