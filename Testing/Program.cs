@@ -21,8 +21,12 @@ namespace Testing
             //betest.TestDictEncodeDecode();
             //betest.TestEnumEncodeDecode();
 
-            BlobStoreTest bstest = new BlobStoreTest();
-            bstest.TestSplitData();
+            //BlobStoreTest bstest = new BlobStoreTest();
+            //bstest.TestSplitData();
+
+            CoreTest ctest = new CoreTest();
+            ctest.TestCheckTrackFile();
+            ctest.TestCheckTrackAnyDirectoryChild();
         }
 
         static void BackupRun()

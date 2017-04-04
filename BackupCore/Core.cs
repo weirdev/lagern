@@ -47,7 +47,7 @@ namespace BackupCore
             BUStore = new BackupStore(BackupListFile, Blobs);
         }
         
-        public void RunBackupAsync(string message, bool differentialbackup=true)
+        public void RunBackupAsync(string message, bool differentialbackup=true, string[] trackpaters=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -61,7 +61,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
-                    Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree));
+                    Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
                 }
                 else
                 {
@@ -70,7 +70,7 @@ namespace BackupCore
             }
             if (!differentialbackup)
             {
-                Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue));
+                Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters));
             }
 
             List<Task> backupops = new List<Task>();
@@ -114,7 +114,7 @@ namespace BackupCore
             BUStore.SynchronizeCacheToDisk(BackupListFile);
         }
 
-        public void RunBackupSync(string message, bool differentialbackup=true)
+        public void RunBackupSync(string message, bool differentialbackup=true, string[] trackpaterns=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -128,7 +128,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
-                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree);
+                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaterns);
                 }
                 else
                 {
@@ -137,7 +137,7 @@ namespace BackupCore
             }
             if (!differentialbackup)
             {
-                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue);
+                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaterns);
             }
 
             while (!directoryqueue.IsCompleted)
@@ -203,7 +203,8 @@ namespace BackupCore
             filemeta.WriteOutMetadata(restorepath);
         }
 
-        protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null)
+        protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
+            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, string[] trackpaterns=null)
         {
             if (path == null)
             {
@@ -236,9 +237,17 @@ namespace BackupCore
                 
                 foreach (var sd in subDirs)
                 {
-                    dirs.Push(sd);
-                    string relpath = sd.Substring(BackuppathSrc.Length + 1);
-                    directoryqueue.Add(relpath);
+                    bool trackdir = true;
+                    if (trackpaterns != null)
+                    {
+                        trackdir = CheckTrackAnyDirectoryChild(sd.Substring(BackuppathSrc.Length + 1), trackpaterns);
+                    }
+                    if (trackdir)
+                    {
+                        dirs.Push(sd);
+                        string relpath = sd.Substring(BackuppathSrc.Length + 1);
+                        directoryqueue.Add(relpath);
+                    }
                 }
 
                 string[] files = null;
@@ -260,29 +269,179 @@ namespace BackupCore
 
                 foreach (var file in files)
                 {
-                    // Convert file path to a relative path
-                    string relpath = file.Substring(BackuppathSrc.Length + 1);
-                    bool dontscan = false;
-                    if (previousmtree != null)
+                    bool trackfile = true;
+                    if (trackpaterns != null)
                     {
-                        FileMetadata previousfm = previousmtree.GetFile(relpath);
-                        FileMetadata curfm = new FileMetadata(relpath);
-                        if (previousfm != null && previousfm.FileSize == curfm.FileSize
-                            && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
-                        {
-                            noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                            dontscan = true;
-                        }
+                        trackfile = CheckTrackFile(file.Substring(BackuppathSrc.Length + 1), trackpaterns);
                     }
-                    if (!dontscan)
+                    if (trackfile)
                     {
-                        scanfilequeue.Add(relpath);
+                        // Convert file path to a relative path
+                        string relpath = file.Substring(BackuppathSrc.Length + 1);
+                        bool dontscan = false;
+                        if (previousmtree != null)
+                        {
+                            FileMetadata previousfm = previousmtree.GetFile(relpath);
+                            FileMetadata curfm = new FileMetadata(relpath);
+                            if (previousfm != null && previousfm.FileSize == curfm.FileSize
+                                && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                            {
+                                noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                                dontscan = true;
+                            }
+                        }
+                        if (!dontscan)
+                        {
+                            scanfilequeue.Add(relpath);
+                        }
                     }
                 }
             }
             directoryqueue.CompleteAdding();
             scanfilequeue.CompleteAdding();
             noscanfilequeue.CompleteAdding();
+        }
+
+        public static bool PathMatchesPattern(string path, string pattern)
+        {
+            if (pattern == "*")
+            {
+                return true;
+            }
+            int wildpos = pattern.IndexOf('*');
+            if (wildpos >= 0)
+            {
+                string prefix = pattern.Substring(0, wildpos);
+                if (prefix.Length > 0)
+                {
+                    if (path.Length >= prefix.Length && prefix == path.Substring(0, prefix.Length))
+                    {
+                        string wsuffix = pattern.Substring(wildpos, pattern.Length - wildpos);
+                        return PathMatchesPattern(path.Substring(prefix.Length), wsuffix);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    // Strip wildcard
+                    pattern = pattern.Substring(1);
+                    while (path.Length > 0)
+                    {
+                        if (PathMatchesPattern(path, pattern))
+                        {
+                            return true;
+                        }
+                        path = path.Substring(1);
+                    }
+                    return false;
+                }
+            }
+            else
+            {
+                return path == pattern;
+            }
+        }
+
+        /// <summary>
+        /// Checks whether this file is tracked based on trackpattern
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="trackpatterns"></param>
+        /// <returns></returns>
+        public static bool CheckTrackFile(string file, string[] trackpatterns)
+        {
+            bool track = false;
+            foreach (var pattern in trackpatterns)
+            {
+                if (track)
+                {
+                    if (pattern[0] == '^')
+                    {
+                        if (PathMatchesPattern(file, pattern.Substring(1)))
+                        {
+                            track = false;
+                        }
+                    }
+                }
+                else
+                {
+                    if (pattern[0] != '^')
+                    {
+                        if (PathMatchesPattern(file, pattern))
+                        {
+                            track = true;
+                        }
+                    }
+                }
+            }
+            return track;
+        }
+
+        /// <summary>
+        /// Checks whether any directory child (files, sub directories, files in sub directories...) might possibly be tracked.
+        /// </summary>
+        /// <param name="folder"></param>
+        /// <param name="trackpatterns"></param>
+        /// <returns></returns>
+        public static bool CheckTrackAnyDirectoryChild(string directory, string[] trackpatterns)
+        {
+            bool track = false;
+            foreach (var pattern in trackpatterns)
+            {
+                if (track)
+                {
+                    if (pattern[0] == '^')
+                    {
+                        // Can only exclude if there is a trailing wildcard after 
+                        // the rest of the pattern matches to this directory
+                        if (pattern[pattern.Length - 1] == '*')
+                        {
+                            if (pattern.Length == 2) // just "^*"
+                            {
+                                track = false;
+                            }
+                            else if (PathMatchesPattern(directory, pattern.Substring(1, pattern.Length - 1)))
+                            {
+                                track = false;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (pattern[0] != '^')
+                    {
+                        int wildpos = pattern.IndexOf('*');
+                        if (wildpos == 0)
+                        {
+                            track = true;
+                        }
+                        else if (wildpos > 0)
+                        {
+                            string prefix = pattern.Substring(0, wildpos);
+                            if (prefix.Length >= directory.Length)
+                            {
+                                if (prefix.StartsWith(directory))
+                                {
+                                    track = true;
+                                }
+                            }
+                            else
+                            {
+                                if (directory.StartsWith(prefix))
+                                {
+                                    track = true;
+                                }
+                            }
+                        }
+
+                    }
+                }
+            }
+            return track;
         }
 
         public Tuple<int, int> GetBackupSizes(string backuphashstring)
@@ -312,8 +471,10 @@ namespace BackupCore
 
         protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
         {
-            FileMetadata fm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
-            fm.FileHash = filehash;
+            FileMetadata fm = new FileMetadata(Path.Combine(BackuppathSrc, relpath))
+            {
+                FileHash = filehash
+            };
             lock (BUStore)
             {
                 mtree.AddFile(Path.GetDirectoryName(relpath), fm);

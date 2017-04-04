@@ -1,13 +1,33 @@
 ﻿*********************
 IN PROGRESS
 Ignore/Save patterns
-	Git like system for tracking?
+	Use order-ranked list of add/ignore rules
+		Foward slashes only for all systems
+			Allow escaping spaces with \ ?
+		By default, first rule is '*' = include everything in all subdirectories
+		Rules later in the list get higher priority
+		'^'- = ignore rule, otherwise include rule
+		Trailing slash interpreted as /*
+		<path>/* = all files and subdirectories
+		Ex:
+			*    #== /
+			^/pictures
+			/pictures/grandma/  #== /pictures/grandma/*
+			Translates as -> include everything, except /pictures, but do include /picutes/grandma and its children
+		Including a folder assumes including subfolders
+		If files in subfolders not wanted
+			dir/*
+			^dir/*/*
 	Use patterns to classify files for checking for changes
-		Some files data only scanned if added manually
-		Some scanned only based on metadata heuristics (default)
-			Date modified changed so scan
-		Some scanned every time regardless of metadata
-			Always do this when force scan switch is used
+		One list multiple classifications
+			0 = Dont add at all
+			1 = Some files data only scanned on first backup
+				Changes ignored
+			2 = Some scanned only based on metadata heuristics (mirrors default behavior when no lists present)
+				Date modified changed so scan
+			3 = Some scanned every time regardless of metadata
+				Always do this when force scan switch is used
+Dont overwrite old indexes on load failure without confirmation
 Specify a previous backup to use as previous backup when performing a differential backup
 	Currently we just use the last backup made
 Handle common things that could go wrong
@@ -71,3 +91,21 @@ When a file gets backed up, its metadata and data are seperated.
 Data from a file is split into chunks (called blocks) that average ~4KB. For large files that change only a little, this allows only the modified parts to be saved again in the backup. The blocks are stored according to their SHA1 hashes. A hash index (<destination>/index/hashes) keeps track of which hashes (blocks) we have stored. In memory this is a very efficient B+ tree of hashes. Now we save each block as <destination>/<block hash>, but this may be done differently later. For that reason some extra data (relative path, byte offset, block length) is stored in the hash index.
 
 Metadata from a file (right now we don't support all NTFS metadata) is stored, along with the metadata of all other files and directories being backed up, in a metadata index (<destination>/index/metadata). This index rembebers the original file tree of the backup source. The metadata index also contains, for each file, an ordered list of the hashes making up that file.
+
+Uses ranked list of add/ignore rules
+		Foward slashes only for all systems
+			Allow escaping spaces with \ ?
+		By default, first rule is '*' = include everything in all subdirectories
+		Rules later in the list get higher priority
+		'^'- = ignore rule, otherwise include rule
+		Trailing slash interpreted as /*
+		<path>/* = all files and subdirectories
+		Ex:
+			*    #== /
+			^/pictures
+			/pictures/grandma/  #== /pictures/grandma/*
+			Translates as -> include everything, except /pictures, but do include /picutes/grandma and its children
+		Including a folder assumes including subfolders
+		If files in subfolders not wanted
+			dir/*
+			^dir/*/*
