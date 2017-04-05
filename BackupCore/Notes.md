@@ -109,3 +109,12 @@ Uses ranked list of add/ignore rules
 		If files in subfolders not wanted
 			dir/*
 			^dir/*/*
+		Use patterns to classify files for checking for changes
+		One list multiple classifications
+			0 = Dont add at all
+			1 = Some files data only scanned on first backup
+				Changes ignored
+			2 = Some scanned only based on metadata heuristics (mirrors default behavior when no lists present)
+				Date modified changed so scan
+			3 = Some scanned every time regardless of metadata
+				Always do this when force scan switch is used

@@ -18,12 +18,12 @@ namespace BackupCoreTest
         [TestMethod]
         public void TestCheckTrackFile()
         {
-            string[] patterns = new string[]
+            Tuple<int, string>[] patterns = new Tuple<int, string>[]
             {
-                "*",
-                "*/cats",
-                "^*.jpeg",
-                "*/dogs/*.jpeg"
+                new Tuple<int, string>(2, "*"),
+                new Tuple<int, string>(3, "*/cats/*"),
+                new Tuple<int, string>(0, "*.jpeg"),
+                new Tuple<int, string>(1, "*/dogs/*.jpeg")
             };
 
             string[] files = new string[]
@@ -38,23 +38,24 @@ namespace BackupCoreTest
                 "/cats/dogs/goodboy.jpeg"
             };
 
-            bool[] correctoutput = new bool[] { false, false, false, false, true, true, true, true };
+            int[] correctoutput = new int[] { 0, 0, 0, 0, 3, 2, 1, 1 };
             for (int i = 0; i < files.Length; i++)
             {
-                Assert.AreEqual(Core.CheckTrackFile(files[i], patterns), correctoutput[i]);
+                int a = Core.FileTrackClass(files[i], patterns);
+                Assert.AreEqual(Core.FileTrackClass(files[i], patterns), correctoutput[i]);
             }
         }
         
         [TestMethod]
         public void TestCheckTrackAnyDirectoryChild()
         {
-            string[] patterns = new string[]
+            Tuple<int, string>[] patterns = new Tuple<int, string>[]
             {
-                "*",
-                "*/cats",
-                "^*.jpeg",
-                "*/dogs/*.jpeg",
-                "^/dogs*"
+                new Tuple<int, string>(2, "*"),
+                new Tuple<int, string>(1, "*/cats"),
+                new Tuple<int, string>(0, "*.jpeg"),
+                new Tuple<int, string>(3, "*/dogs/*.jpeg"),
+                new Tuple<int, string>(0, "/dogs*")
             };
 
             string[] directories = new string[]

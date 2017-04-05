@@ -47,7 +47,7 @@ namespace BackupCore
             BUStore = new BackupStore(BackupListFile, Blobs);
         }
         
-        public void RunBackupAsync(string message, bool differentialbackup=true, string[] trackpaters=null)
+        public void RunBackupAsync(string message, bool differentialbackup=true, Tuple<int, string>[] trackpaters=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -114,7 +114,7 @@ namespace BackupCore
             BUStore.SynchronizeCacheToDisk(BackupListFile);
         }
 
-        public void RunBackupSync(string message, bool differentialbackup=true, string[] trackpaterns=null)
+        public void RunBackupSync(string message, bool differentialbackup=true, Tuple<int, string>[] trackpaterns=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -204,7 +204,7 @@ namespace BackupCore
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
-            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, string[] trackpaterns=null)
+            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, Tuple<int, string>[] trackpaterns=null)
         {
             if (path == null)
             {
@@ -269,31 +269,57 @@ namespace BackupCore
 
                 foreach (var file in files)
                 {
-                    bool trackfile = true;
+                    int trackclass = 3;
                     if (trackpaterns != null)
                     {
-                        trackfile = CheckTrackFile(file.Substring(BackuppathSrc.Length + 1), trackpaterns);
+                        trackclass = FileTrackClass(file.Substring(BackuppathSrc.Length + 1), trackpaterns);
                     }
-                    if (trackfile)
+                    // Convert file path to a relative path
+                    string relpath = file.Substring(BackuppathSrc.Length + 1);
+                    switch (trackclass)
                     {
-                        // Convert file path to a relative path
-                        string relpath = file.Substring(BackuppathSrc.Length + 1);
-                        bool dontscan = false;
-                        if (previousmtree != null)
-                        {
-                            FileMetadata previousfm = previousmtree.GetFile(relpath);
-                            FileMetadata curfm = new FileMetadata(relpath);
-                            if (previousfm != null && previousfm.FileSize == curfm.FileSize
-                                && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                        case 0: // ignore file completely
+                            break;
+                        case 1: // Dont scan if we have a previous version
+                            bool dontscan = false;
+                            if (previousmtree != null)
                             {
-                                noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                                dontscan = true;
+                                FileMetadata previousfm = previousmtree.GetFile(relpath);
+                                FileMetadata curfm = new FileMetadata(relpath);
+                                if (previousfm != null)
+                                {
+                                    noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                                    dontscan = true;
+                                }
                             }
-                        }
-                        if (!dontscan)
-                        {
+                            if (!dontscan)
+                            {
+                                scanfilequeue.Add(relpath);
+                            }
+                            break;
+                        case 2: // Dont scan if we have a previous version and its metadata indicates no change
+                            dontscan = false;
+                            if (previousmtree != null)
+                            {
+                                FileMetadata previousfm = previousmtree.GetFile(relpath);
+                                FileMetadata curfm = new FileMetadata(relpath);
+                                if (previousfm != null && previousfm.FileSize == curfm.FileSize
+                                    && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                                {
+                                    noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                                    dontscan = true;
+                                }
+                            }
+                            if (!dontscan)
+                            {
+                                scanfilequeue.Add(relpath);
+                            }
+                            break;
+                        case 3: // Scan file
                             scanfilequeue.Add(relpath);
-                        }
+                            break;
+                        default:
+                            break;
                     }
                 }
             }
@@ -351,33 +377,17 @@ namespace BackupCore
         /// <param name="file"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static bool CheckTrackFile(string file, string[] trackpatterns)
+        public static int FileTrackClass(string file, Tuple<int, string>[] trackpatterns)
         {
-            bool track = false;
+            int trackclass = 0;
             foreach (var pattern in trackpatterns)
             {
-                if (track)
+                if (PathMatchesPattern(file, pattern.Item2))
                 {
-                    if (pattern[0] == '^')
-                    {
-                        if (PathMatchesPattern(file, pattern.Substring(1)))
-                        {
-                            track = false;
-                        }
-                    }
-                }
-                else
-                {
-                    if (pattern[0] != '^')
-                    {
-                        if (PathMatchesPattern(file, pattern))
-                        {
-                            track = true;
-                        }
-                    }
+                    trackclass = pattern.Item1;
                 }
             }
-            return track;
+            return trackclass;
         }
 
         /// <summary>
@@ -386,24 +396,24 @@ namespace BackupCore
         /// <param name="folder"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static bool CheckTrackAnyDirectoryChild(string directory, string[] trackpatterns)
+        public static bool CheckTrackAnyDirectoryChild(string directory, Tuple<int, string>[] trackpatterns)
         {
             bool track = false;
             foreach (var pattern in trackpatterns)
             {
                 if (track)
                 {
-                    if (pattern[0] == '^')
+                    if (pattern.Item1 == 0)
                     {
                         // Can only exclude if there is a trailing wildcard after 
                         // the rest of the pattern matches to this directory
-                        if (pattern[pattern.Length - 1] == '*')
+                        if (pattern.Item2[pattern.Item2.Length - 1] == '*')
                         {
-                            if (pattern.Length == 2) // just "^*"
+                            if (pattern.Item2.Length == 1) // just "*"
                             {
                                 track = false;
                             }
-                            else if (PathMatchesPattern(directory, pattern.Substring(1, pattern.Length - 1)))
+                            else if (PathMatchesPattern(directory, pattern.Item2))
                             {
                                 track = false;
                             }
@@ -412,16 +422,16 @@ namespace BackupCore
                 }
                 else
                 {
-                    if (pattern[0] != '^')
+                    if (pattern.Item1 != 0)
                     {
-                        int wildpos = pattern.IndexOf('*');
+                        int wildpos = pattern.Item2.IndexOf('*');
                         if (wildpos == 0)
                         {
                             track = true;
                         }
                         else if (wildpos > 0)
                         {
-                            string prefix = pattern.Substring(0, wildpos);
+                            string prefix = pattern.Item2.Substring(0, wildpos);
                             if (prefix.Length >= directory.Length)
                             {
                                 if (prefix.StartsWith(directory))
