@@ -43,8 +43,36 @@ namespace BackupCore
             HashIndexFile = Path.Combine(BackuppathDst, "backup", "hashindex");
             BackupListFile = Path.Combine(BackuppathDst, "backup", "backuplist");
 
-            Blobs = new BlobStore(HashIndexFile, BackuppathDst);
-            BUStore = new BackupStore(BackupListFile, Blobs);
+            try
+            {
+                using (FileStream fs = new FileStream(HashIndexFile, FileMode.Open, FileAccess.Read))
+                {
+                    using (BinaryReader reader = new BinaryReader(fs))
+                    {
+                        Blobs = BlobStore.deserialize(reader.ReadBytes((int)fs.Length), HashIndexFile, BackuppathDst); // TODO: make deserialize static like in other classes and move call to deserialize out to Core
+                    }
+                }
+                
+            }
+            catch
+            {
+                Blobs = new BlobStore(HashIndexFile, BackuppathDst);
+            }
+
+            try
+            {
+                using (FileStream fs = new FileStream(BackupListFile, FileMode.Open, FileAccess.Read))
+                {
+                    using (BinaryReader reader = new BinaryReader(fs))
+                    {
+                        BUStore = BackupStore.deserialize(reader.ReadBytes((int)fs.Length), BackupListFile, Blobs);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                BUStore = new BackupStore(BackupListFile, Blobs);
+            }
         }
         
         public void RunBackupAsync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null)

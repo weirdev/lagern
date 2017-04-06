@@ -1,33 +1,9 @@
 ﻿*********************
 IN PROGRESS
-Ignore/Save patterns
-	Use order-ranked list of add/ignore rules
-		Foward slashes only for all systems
-			Allow escaping spaces with \ ?
-		By default, first rule is '*' = include everything in all subdirectories
-		Rules later in the list get higher priority
-		'^'- = ignore rule, otherwise include rule
-		Trailing slash interpreted as /*
-		<path>/* = all files and subdirectories
-		Ex:
-			*    #== /
-			^/pictures
-			/pictures/grandma/  #== /pictures/grandma/*
-			Translates as -> include everything, except /pictures, but do include /picutes/grandma and its children
-		Including a folder assumes including subfolders
-		If files in subfolders not wanted
-			dir/*
-			^dir/*/*
-	Use patterns to classify files for checking for changes
-		One list multiple classifications
-			0 = Dont add at all
-			1 = Some files data only scanned on first backup
-				Changes ignored
-			2 = Some scanned only based on metadata heuristics (mirrors default behavior when no lists present)
-				Date modified changed so scan
-			3 = Some scanned every time regardless of metadata
-				Always do this when force scan switch is used
 Dont overwrite old indexes on load failure without confirmation
+	Write out old index without overwriting then rename
+Backup from sub directory of actual backup source
+	When backup command issued, check every ancestor of working directory looking for .backup file
 Specify a previous backup to use as previous backup when performing a differential backup
 	Currently we just use the last backup made
 Handle common things that could go wrong
@@ -97,14 +73,13 @@ Uses ranked list of add/ignore rules
 			Allow escaping spaces with \ ?
 		By default, first rule is '*' = include everything in all subdirectories
 		Rules later in the list get higher priority
-		'^'- = ignore rule, otherwise include rule
 		Trailing slash interpreted as /*
 		<path>/* = all files and subdirectories
 		Ex:
-			*    #== /
-			^/pictures
-			/pictures/grandma/  #== /pictures/grandma/*
-			Translates as -> include everything, except /pictures, but do include /picutes/grandma and its children
+			2 *    #== /
+			0 /pictures
+			3 /pictures/grandma/  #== /pictures/grandma/*
+			Translates as -> include everything 2, except /pictures, but do include /picutes/grandma and its children 3
 		Including a folder assumes including subfolders
 		If files in subfolders not wanted
 			dir/*

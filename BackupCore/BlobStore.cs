@@ -26,26 +26,8 @@ namespace BackupCore
             StorePath = indexpath;
             BlockSaveDirectory = blocksavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
-            if (indexpath != null)
-            {
-                try
-                {
-                    using (FileStream fs = new FileStream(indexpath, FileMode.Open, FileAccess.Read))
-                    {
-                        using (BinaryReader reader = new BinaryReader(fs))
-                        {
-                            this.deserialize(reader.ReadBytes((int)fs.Length));
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Reading old index failed. Initializing new index...");
-                    TreeIndexStore = new BPlusTree<BlobLocation>(100);
-                }
-            }
         }
-        
+
         /// <summary>
         /// Adds a hash and corresponding BackupLocation to the Index.
         /// </summary>
@@ -348,8 +330,7 @@ namespace BackupCore
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
             {
-                HashBlockPair block;
-                if (fileblockqueue.TryTake(out block))
+                if (fileblockqueue.TryTake(out HashBlockPair block))
                 {
                     this.AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
@@ -392,8 +373,7 @@ namespace BackupCore
             List<byte[]> blockshashes = new List<byte[]>();
             while (!fileblockqueue.IsCompleted)
             {
-                HashBlockPair block;
-                if (fileblockqueue.TryTake(out block))
+                if (fileblockqueue.TryTake(out HashBlockPair block))
                 {
                     this.AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
@@ -479,11 +459,13 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(bptdata);
         }
 
-        public void deserialize(byte[] data)
+        public static BlobStore deserialize(byte[] data, string indexpath, string blocksavedir)
         {
+            BlobStore bs = new BlobStore(indexpath, blocksavedir);
+
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
-
+            
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];
@@ -491,8 +473,9 @@ namespace BackupCore
                 Array.Copy(binkvp, keybytes, keysize);
                 Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
 
-                this.AddHash(keybytes, BlobLocation.deserialize(backuplocationbytes));
+                bs.AddHash(keybytes, BlobLocation.deserialize(backuplocationbytes));
             }
+            return bs;
         }
 
         public void SynchronizeCacheToDisk()

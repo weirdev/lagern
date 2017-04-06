@@ -18,21 +18,13 @@ namespace BackupCore
         {
             DiskStorePath = metadatapath;
             Blobs = blobs;
-            try
-            {
-                using (FileStream fs = new FileStream(metadatapath, FileMode.Open, FileAccess.Read))
-                {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        BackupHashes = deserialize(reader.ReadBytes((int)fs.Length));
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Reading old backup failed. Initializing new backup store...");
-                BackupHashes = new List<byte[]>();
-            }
+        }
+
+        private BackupStore(string metadatapath, BlobStore blobs, List<byte[]> backuphashes)
+        {
+            DiskStorePath = metadatapath;
+            Blobs = blobs;
+            BackupHashes = backuphashes;
         }
 
         public void AddBackup(string message, byte[] metadatatreehash)
@@ -182,9 +174,9 @@ namespace BackupCore
             return BinaryEncoding.enum_encode(BackupHashes);
         }
 
-        private List<byte[]> deserialize(byte[] data)
+        public static BackupStore deserialize(byte[] data, string metadatapath, BlobStore blobs)
         {
-            return new List<byte[]>(BinaryEncoding.enum_decode(data));
+            return new BackupStore(metadatapath, blobs, new List<byte[]>(BinaryEncoding.enum_decode(data)));
         }
     }
 }
