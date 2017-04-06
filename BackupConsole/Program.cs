@@ -163,7 +163,8 @@ namespace BackupConsole
         private static void RunBackup(string message=null, bool diffbackup=true)
         {
             var bcore = GetCore();
-            bcore.RunBackupSync(message, diffbackup);
+            var trackclasses = GetTrackClasses();
+            bcore.RunBackupSync(message, diffbackup, trackclasses);
         }
 
         private static void DeleteBackup(string backuphash)
@@ -219,6 +220,31 @@ namespace BackupConsole
             Console.WriteLine(table);
         }
 
+        private static List<Tuple<int, string>> GetTrackClasses()
+        {
+            try
+            {
+                List<Tuple<int, string>> trackclasses = new List<Tuple<int, string>>();
+                using (FileStream fs = new FileStream(Path.Combine(cwd, ".backuptrack"), FileMode.Open))
+                {
+                    using (StreamReader reader = new StreamReader(fs))
+                    {
+                        string line;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            string[] ctp = line.Split(' ');
+                            trackclasses.Add(new Tuple<int, string>(Convert.ToInt32(ctp[0]), ctp[1]));
+                        }
+                    }
+                }
+                return trackclasses;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private static BackupCore.Core GetCore()
         {
             string destination = ReadSetting("dest");
@@ -227,6 +253,7 @@ namespace BackupConsole
                 if (Directory.Exists("backup")) // We are in a backup destination
                 {
                     destination = cwd;
+                    return new BackupCore.Core(null, destination);
                 }
                 else
                 {
@@ -235,7 +262,7 @@ namespace BackupConsole
                     return null;
                 }
             }
-            return new BackupCore.Core(null, destination);
+            return new BackupCore.Core(cwd, destination);
         }
 
         public static string ReadSetting(string key)

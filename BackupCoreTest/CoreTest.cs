@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BackupCore;
+using System.Collections.Generic;
 
 namespace BackupCoreTest
 {
@@ -18,7 +19,7 @@ namespace BackupCoreTest
         [TestMethod]
         public void TestCheckTrackFile()
         {
-            Tuple<int, string>[] patterns = new Tuple<int, string>[]
+            List<Tuple<int, string>> patterns = new List<Tuple<int, string>>
             {
                 new Tuple<int, string>(2, "*"),
                 new Tuple<int, string>(3, "*/cats/*"),
@@ -49,7 +50,7 @@ namespace BackupCoreTest
         [TestMethod]
         public void TestCheckTrackAnyDirectoryChild()
         {
-            Tuple<int, string>[] patterns = new Tuple<int, string>[]
+            List<Tuple<int, string>> patterns = new List<Tuple<int, string>>
             {
                 new Tuple<int, string>(2, "*"),
                 new Tuple<int, string>(1, "*/cats"),

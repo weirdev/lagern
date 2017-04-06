@@ -47,7 +47,7 @@ namespace BackupCore
             BUStore = new BackupStore(BackupListFile, Blobs);
         }
         
-        public void RunBackupAsync(string message, bool differentialbackup=true, Tuple<int, string>[] trackpaters=null)
+        public void RunBackupAsync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -114,7 +114,7 @@ namespace BackupCore
             BUStore.SynchronizeCacheToDisk(BackupListFile);
         }
 
-        public void RunBackupSync(string message, bool differentialbackup=true, Tuple<int, string>[] trackpaterns=null)
+        public void RunBackupSync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaterns=null)
         {
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
@@ -204,7 +204,7 @@ namespace BackupCore
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
-            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, Tuple<int, string>[] trackpaterns=null)
+            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, List<Tuple<int, string>> trackpaterns=null)
         {
             if (path == null)
             {
@@ -377,7 +377,7 @@ namespace BackupCore
         /// <param name="file"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static int FileTrackClass(string file, Tuple<int, string>[] trackpatterns)
+        public static int FileTrackClass(string file, List<Tuple<int, string>> trackpatterns)
         {
             int trackclass = 0;
             foreach (var pattern in trackpatterns)
@@ -396,7 +396,7 @@ namespace BackupCore
         /// <param name="folder"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static bool CheckTrackAnyDirectoryChild(string directory, Tuple<int, string>[] trackpatterns)
+        public static bool CheckTrackAnyDirectoryChild(string directory, List<Tuple<int, string>> trackpatterns)
         {
             bool track = false;
             foreach (var pattern in trackpatterns)
