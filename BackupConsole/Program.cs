@@ -105,7 +105,15 @@ namespace BackupConsole
                         listcount = Convert.ToInt32(parsed.Item2["listcount"]);
                     }
                     bool calculatesizes = parsed.Item3.ContainsKey("s");
-                    ListBackups(GetCore(), parsed.Item3.ContainsKey("s"), listcount);
+                    try
+                    {
+                        BackupCore.Core bcore = GetCore();
+                        ListBackups(bcore, parsed.Item3.ContainsKey("s"), listcount);
+                    }
+                    catch
+                    {
+                        Console.WriteLine("Failed to initialize Backup program");
+                    }
                 }
                 else if (parsed.Item1 == "browse")
                 {
@@ -162,21 +170,42 @@ namespace BackupConsole
 
         private static void RunBackup(string message=null, bool diffbackup=true)
         {
-            var bcore = GetCore();
-            var trackclasses = GetTrackClasses();
-            bcore.RunBackupSync(message, diffbackup, trackclasses);
+            try
+            {
+                var bcore = GetCore();
+                var trackclasses = GetTrackClasses();
+                bcore.RunBackupSync(message, diffbackup, trackclasses);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         private static void DeleteBackup(string backuphash)
         {
-            var bcore = GetCore();
-            bcore.RemoveBackup(backuphash);
+            try
+            { 
+                var bcore = GetCore();
+                bcore.RemoveBackup(backuphash);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         public static void RestoreFile(string filerelpath, string restorepath, string backuphash)
         {
-            var bcore = GetCore();
-            bcore.WriteOutFile(filerelpath, restorepath, backuphash);
+            try
+            {
+                var bcore = GetCore();
+                bcore.WriteOutFile(filerelpath, restorepath, backuphash);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         internal static void ListBackups(BackupCore.Core bcore, bool calculatesizes, int show = -1)
@@ -253,16 +282,50 @@ namespace BackupConsole
                 if (Directory.Exists("backup")) // We are in a backup destination
                 {
                     destination = cwd;
-                    return new BackupCore.Core(null, destination);
+                    try
+                    {
+                        return new BackupCore.Core(null, destination, ContinueOrExitPrompt);
+                    }
+                    catch
+                    {
+                        throw;
+                    }
                 }
                 else
                 {
                     Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
                     Console.WriteLine("or this command must be run from an existing backup destination.");
-                    return null;
+                    throw new Exception(); // TODO: more specific exceptions
                 }
             }
-            return new BackupCore.Core(cwd, destination);
+            try
+            {
+                return new BackupCore.Core(cwd, destination, ContinueOrExitPrompt);
+            }
+            catch
+            {
+                throw;
+            }
+        }
+
+        public static void ContinueOrExitPrompt(string error)
+        {
+            Console.WriteLine(error);
+            Console.Write("Continue (y/n)? ");
+            while (true)
+            {
+                ConsoleKeyInfo k = Console.ReadKey();
+                if (k.KeyChar.ToString().ToLower() == "y")
+                {
+                    Console.WriteLine();
+                    return;
+                }
+                else if (k.KeyChar.ToString().ToLower() == "n")
+                {
+                    Console.WriteLine();
+                    throw new Exception("User chose not to continue");
+                }
+            }
         }
 
         public static string ReadSetting(string key)

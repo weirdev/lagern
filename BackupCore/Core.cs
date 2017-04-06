@@ -27,7 +27,16 @@ namespace BackupCore
         public BlobStore Blobs { get; set; }
         public BackupStore BUStore { get; set; }
 
-        public Core(string src, string dst)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="src"></param>
+        /// <param name="dst"></param>
+        /// <param name="continueorkill">
+        /// Function that takes an error message as input.
+        /// Meant to be used to optionally halt execution in case of errors.
+        /// </param>
+        public Core(string src, string dst, Action<string> continueorkill=null)
         {
             BackuppathSrc = src;
             BackuppathDst = dst;
@@ -54,9 +63,14 @@ namespace BackupCore
                 }
                 
             }
-            catch
+            catch (FileNotFoundException) // Safe to write a new file since one not already there
             {
                 Blobs = new BlobStore(HashIndexFile, BackuppathDst);
+            }
+            catch (Exception) // May not be safe to write new file
+            {
+                continueorkill?.Invoke("Failed to read block index. Continuing may result in block index being overwritten and old blocks being lost.");
+                BUStore = new BackupStore(BackupListFile, Blobs);
             }
 
             try
@@ -69,8 +83,13 @@ namespace BackupCore
                     }
                 }
             }
-            catch (Exception)
+            catch (FileNotFoundException) // Safe to write a new file since one not already there
             {
+                BUStore = new BackupStore(BackupListFile, Blobs);
+            }
+            catch (Exception) // May not be safe to write new file
+            {
+                continueorkill?.Invoke("Failed to read backup index. Continuing may result in backup index being overwritten and old backups being lost.");
                 BUStore = new BackupStore(BackupListFile, Blobs);
             }
         }

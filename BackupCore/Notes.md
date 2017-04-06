@@ -1,7 +1,5 @@
 ﻿*********************
 IN PROGRESS
-Dont overwrite old indexes on load failure without confirmation
-	Write out old index without overwriting then rename
 Backup from sub directory of actual backup source
 	When backup command issued, check every ancestor of working directory looking for .backup file
 Specify a previous backup to use as previous backup when performing a differential backup
@@ -10,6 +8,12 @@ Handle common things that could go wrong
 	warn when lack permission to backup file
 	warn when overwriting existing file when restoring
 	crash mid operations prints error
+	circular links when checking if ancestor is backup source
+	safe writeout of indexes
+		Write out old index without overwriting then rename
+	only one of backup or blob index reset
+		more generally any time they become out of sync
+			"stamp" them with uuid so can detect out of sync?
 	more...
 Test support for large backup sets
 	Optimize B+ tree BlobStore
