@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Threading.Tasks;
-using System.Xml;
 using System.IO;
 
 namespace BackupConsole
@@ -254,7 +251,7 @@ namespace BackupConsole
             try
             {
                 List<Tuple<int, string>> trackclasses = new List<Tuple<int, string>>();
-                using (FileStream fs = new FileStream(Path.Combine(cwd, ".backuptrack"), FileMode.Open))
+                using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), ".backuptrack"), FileMode.Open))
                 {
                     using (StreamReader reader = new StreamReader(fs))
                     {
@@ -279,9 +276,9 @@ namespace BackupConsole
             string destination = ReadSetting("dest");
             if (destination == null)
             {
-                if (Directory.Exists("backup")) // We are in a backup destination
+                destination = GetBUDestinationDir();
+                if (destination != null) // We are in a backup destination
                 {
-                    destination = cwd;
                     try
                     {
                         return new BackupCore.Core(null, destination, ContinueOrExitPrompt);
@@ -298,13 +295,16 @@ namespace BackupConsole
                     throw new Exception(); // TODO: more specific exceptions
                 }
             }
-            try
+            else
             {
-                return new BackupCore.Core(cwd, destination, ContinueOrExitPrompt);
-            }
-            catch
-            {
-                throw;
+                try
+                {
+                    return new BackupCore.Core(cwd, destination, ContinueOrExitPrompt);
+                }
+                catch
+                {
+                    throw;
+                }
             }
         }
 
@@ -365,24 +365,57 @@ namespace BackupConsole
             }
         }
 
+        private static string GetBUSourceDir()
+        {
+            string dir = cwd;
+            do
+            {
+                if (File.Exists(Path.Combine(dir, ".backup")))
+                {
+                    return dir;
+                }
+                dir = Path.GetDirectoryName(dir);
+            } while (dir != null);
+            return null;
+        }
+
+        private static string GetBUDestinationDir()
+        {
+            string dir = cwd;
+            do
+            {
+                if (Directory.Exists(Path.Combine(dir, "backup")))
+                {
+                    return dir;
+                }
+                dir = Path.GetDirectoryName(dir);
+            } while (dir != null);
+            return null;
+        }
+
         private static Dictionary<string, string> ReadSettings()
         {
             try
             {
                 Dictionary<string, string> settings = new Dictionary<string, string>();
-                using (FileStream fs = new FileStream(Path.Combine(cwd, ".backup"), FileMode.Open))
+                string src = GetBUSourceDir();
+                if (src != null)
                 {
-                    using (StreamReader reader = new StreamReader(fs))
+                    using (FileStream fs = new FileStream(Path.Combine(src, ".backup"), FileMode.Open))
                     {
-                        string line;
-                        while ((line = reader.ReadLine()) != null)
+                        using (StreamReader reader = new StreamReader(fs))
                         {
-                            string[] kv = line.Split(' ');
-                            settings[kv[0]] = kv[1];
+                            string line;
+                            while ((line = reader.ReadLine()) != null)
+                            {
+                                string[] kv = line.Split(' ');
+                                settings[kv[0]] = kv[1];
+                            }
                         }
                     }
+                    return settings;
                 }
-                return settings;
+                return null;
             }
             catch (FileNotFoundException)
             {
@@ -392,7 +425,7 @@ namespace BackupConsole
 
         private static void WriteSettings(Dictionary<string, string> settings)
         {
-            using (FileStream fs = new FileStream(Path.Combine(cwd, ".backup"), FileMode.Create))
+            using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), ".backup"), FileMode.Create))
             {
                 using (StreamWriter writer = new StreamWriter(fs))
                 {

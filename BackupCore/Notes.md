@@ -1,7 +1,5 @@
 ﻿*********************
 IN PROGRESS
-Backup from sub directory of actual backup source
-	When backup command issued, check every ancestor of working directory looking for .backup file
 Specify a previous backup to use as previous backup when performing a differential backup
 	Currently we just use the last backup made
 Handle common things that could go wrong
@@ -21,6 +19,12 @@ Test support for large backup sets
 		store some nodes out of memory?
 		optimize node size
 		Progress report/bar
+Reimplement browsing backup made n backups ago
+	Not static if backups deleted, but okay for quick uses
+More flexible "list" command
+	Ranges of n-m backups ago
+		Also by date?
+	Better handling of browsing list of many backups
 ArgParser
 	"-l <>" => "-l <longname>"
 		wont need Item3 of returned tuple

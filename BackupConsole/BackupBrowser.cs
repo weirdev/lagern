@@ -24,18 +24,15 @@ namespace BackupConsole
             string destination = Program.ReadSetting("dest");
             if (destination == null)
             {
-                if (Directory.Exists("backup")) // We are in a backup destination
-                {
-                    destination = cwd;
-                }
-                else
+                destination = GetBUDestinationDir();
+                if (destination == null) // We are not in a backup destination
                 {
                     Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
                     Console.WriteLine("or this command must be run from an existing backup destination.");
                     return;
                 }
             }
-            BCore = new BackupCore.Core(Program.cwd, destination);
+            BCore = new BackupCore.Core(cwd, destination);
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
@@ -83,12 +80,12 @@ namespace BackupConsole
                         string filerelpath = Path.Combine(CurrentNode.Path, parsed.Item2["filerelpath"]);
                         // If no restoreto path given, restore
                         // to cwd / its relative path
-                        string restorepath = Path.Combine(Program.cwd, filerelpath);
+                        string restorepath = Path.Combine(cwd, filerelpath);
                         if (parsed.Item3.ContainsKey("r"))
                         {
                             if (parsed.Item3["r"] == ".")
                             {
-                                restorepath = Path.Combine(Program.cwd, Path.GetFileName(filerelpath));
+                                restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
                             }
                             else
                             {
@@ -151,6 +148,20 @@ namespace BackupConsole
             scanner.AddCommand("help");
             scanner.AddCommand("cb [<backuphash>] [-o <>]");
             return scanner;
+        }
+
+        private  string GetBUDestinationDir()
+        {
+            string dir = cwd;
+            do
+            {
+                if (Directory.Exists(Path.Combine(dir, "backup")))
+                {
+                    return dir;
+                }
+                dir = Path.GetDirectoryName(dir);
+            } while (dir != null);
+            return null;
         }
 
         private static void ShowCommands()
