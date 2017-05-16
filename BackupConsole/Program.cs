@@ -197,7 +197,7 @@ namespace BackupConsole
             try
             {
                 var bcore = GetCore();
-                bcore.WriteOutFile(filerelpath, restorepath, backuphash);
+                bcore.RestoreFileOrDirectory(filerelpath, restorepath, backuphash);
             }
             catch (Exception e)
             {

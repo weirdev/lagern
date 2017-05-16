@@ -1,6 +1,5 @@
 ﻿*********************
 IN PROGRESS
-Restore directories
 Test support for large backup sets
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
@@ -12,6 +11,9 @@ When errors occur while reading/scanning files/directories
 	Give warning
 	When rest of backup has finished
 Add more unit tests
+Refactor metadata node to not include '..' in its public list of directories
+	Maybe dont include '..' in list at all, handle like '.'
+	Then fix every other place already handling '..' explicitly
 Add run command option to force scanning all file contents
 	Also support this in backend
 Specify a previous backup to use as previous backup when performing a differential backup

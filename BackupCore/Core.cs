@@ -255,22 +255,52 @@ namespace BackupCore
         /// <param name="relfilepath"></param>
         /// <param name="restorepath"></param>
         /// <param name="backupindex"></param>
-        public void WriteOutFile(string relfilepath, string restorepath, string backuphashprefix=null)
+        public void RestoreFileOrDirectory(string relfilepath, string restorepath, string backuphashprefix = null)
         {
-            MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
-            FileMetadata filemeta = mtree.GetFile(relfilepath);
-            byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
-            // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
-            using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate))
+            try
             {
-                writer.Write(filedata, 0, filedata.Length);
-                // Flush the writer in order to get a correct stream position for truncating
-                writer.Flush();
-                // Set the stream length to the current position in order to truncate leftover data in original file
-                writer.SetLength(writer.Position);
-
+                MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
+                FileMetadata filemeta = mtree.GetFile(relfilepath);
+                if (filemeta != null)
+                {
+                    byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
+                    // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
+                    using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate))
+                    {
+                        writer.Write(filedata, 0, filedata.Length);
+                        // Flush the writer in order to get a correct stream position for truncating
+                        writer.Flush();
+                        // Set the stream length to the current position in order to truncate leftover data in original file
+                        writer.SetLength(writer.Position);
+                    }
+                    filemeta.WriteOutMetadata(restorepath);
+                }
+                else
+                {
+                    MetadataNode dir = mtree.GetDirectory(relfilepath);
+                    if (dir != null)
+                    {
+                        Directory.CreateDirectory(restorepath);
+                        foreach (var childfile in dir.Files.Values)
+                        {
+                            RestoreFileOrDirectory(Path.Combine(relfilepath, childfile.FileName), Path.Combine(restorepath, childfile.FileName), backuphashprefix);
+                        }
+                        foreach (var childdir in dir.Directories.Keys)
+                        {
+                            if (childdir != "..")
+                            {
+                                RestoreFileOrDirectory(Path.Combine(relfilepath, childdir), Path.Combine(restorepath, childdir), backuphashprefix);
+                            }
+                        }
+                        dir.DirMetadata.WriteOutMetadata(restorepath); // Set metadata after finished changing contents (postorder)
+                    }
+                }
             }
-            filemeta.WriteOutMetadata(restorepath);
+            catch (Exception e)
+            {
+                Console.WriteLine("Error restoring file or directory");
+                throw;
+            }
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 

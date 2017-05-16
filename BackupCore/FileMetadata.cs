@@ -96,7 +96,12 @@ namespace BackupCore
 
         public void WriteOutMetadata(string filepath)
         {
-            FileInfo fi = new FileInfo(filepath);
+            FileSystemInfo fi = new FileInfo(filepath);
+            if ((Attributes & FileAttributes.Directory) == FileAttributes.Directory)
+            {
+                // For some reason cannot assign back to a FileInfo of a directory
+                fi = new DirectoryInfo(filepath);
+            }
             fi.LastAccessTimeUtc = DateAccessedUTC;
             fi.LastWriteTimeUtc = DateModifiedUTC;
             fi.CreationTimeUtc = DateCreatedUTC;

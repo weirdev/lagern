@@ -46,10 +46,6 @@ namespace BackupCore
         
         public MetadataNode GetDirectory(string relpath)
         {
-            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString())) // always start at root of tree, toss first slash
-            {
-                relpath = relpath.Substring(1);
-            }
             if (relpath.EndsWith(Path.DirectorySeparatorChar.ToString()))
             {
                 relpath = relpath.Substring(0, relpath.Length - 1);
