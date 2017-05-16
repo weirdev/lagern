@@ -27,6 +27,24 @@ namespace BackupCore
             BackupHashes = backuphashes;
         }
 
+        /// <summary>
+        /// Attempts to load a BackupStore from a file.
+        /// If loading fails an error is thrown.
+        /// </summary>
+        /// <param name="backuplistfile"></param>
+        /// <param name="blobs"></param>
+        /// <returns>A previously stored BackupStore object</returns>
+        public static BackupStore LoadFromFile(string backuplistfile, BlobStore blobs)
+        {
+            using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
+            {
+                using (BinaryReader reader = new BinaryReader(fs))
+                {
+                    return BackupStore.deserialize(reader.ReadBytes((int)fs.Length), backuplistfile, blobs);
+                }
+            }
+        }
+
         public void AddBackup(string message, byte[] metadatatreehash)
         {
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
@@ -53,9 +71,23 @@ namespace BackupCore
                     BackupHashes.RemoveAt(i);
                 }
             }
-            SynchronizeCacheToDisk();
+            try
+            {
+                SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
             Blobs.DereferenceOneDegree(backuphash);
-            Blobs.SynchronizeCacheToDisk();
+            try
+            {
+                Blobs.SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         public BackupRecord GetBackupRecord()
@@ -154,8 +186,15 @@ namespace BackupCore
             }
         }
 
+        /// <summary>
+        /// Attempts to save the BackupStore to disk.
+        /// If saving fails an error is thrown.
+        /// </summary>
+        /// <param name="path"></param>
         public void SynchronizeCacheToDisk(string path=null)
         {
+            // NOTE: This overwrites the previous file every time.
+            // This should be okay as the serialized BackupStore filesize should always be small.
             if (path == null)
             {
                 path = DiskStorePath;

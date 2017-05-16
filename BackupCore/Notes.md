@@ -1,26 +1,31 @@
 ﻿*********************
 IN PROGRESS
-Specify a previous backup to use as previous backup when performing a differential backup
-	Currently we just use the last backup made
-Handle common things that could go wrong
-	warn when lack permission to backup file
-	warn when overwriting existing file when restoring
-	crash mid operations prints error
-	circular links when checking if ancestor is backup source
-	safe writeout of indexes
-		Write out old index without overwriting then rename
-	only one of backup or blob index reset
-		more generally any time they become out of sync
-			"stamp" them with uuid so can detect out of sync?
-	more...
+Restore directories
 Test support for large backup sets
+	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
 		bulk loading of tree
 		store some nodes out of memory?
 		optimize node size
 		Progress report/bar
+When errors occur while reading/scanning files/directories
+	Give warning
+	When rest of backup has finished
+Add more unit tests
+Add run command option to force scanning all file contents
+	Also support this in backend
+Specify a previous backup to use as previous backup when performing a differential backup
+	Currently we just use the last backup made
 Reimplement browsing backup made n backups ago
 	Not static if backups deleted, but okay for quick uses
+Handle common things that could go wrong
+	circular links when checking if ancestor is backup source
+	safe writeout of indexes
+		Write out old index without overwriting then rename
+	when only one of backup or blob index is updated
+		more generally any time they become out of sync
+			"stamp" them with uuid so can detect out of sync?
+	more...
 More flexible "list" command
 	Ranges of n-m backups ago
 		Also by date?
@@ -34,6 +39,8 @@ ArgParser
 		'|' or '^' between options
 		options inside [] ?
 .Net Core port
+	Begin with .Net standard port of library code
+		.Net standard library will work with Framework and Code versions of project
 	Make primary instance of project?
 	Test under linux
 "Enhanced data"
@@ -79,25 +86,25 @@ Metadata from a file (right now we don't support all NTFS metadata) is stored, a
 Uses ranked list of add/ignore rules
 		Foward slashes only for all systems
 			Allow escaping spaces with \ ?
-		By default, first rule is '*' = include everything in all subdirectories
+		By default, first rule is '2 *' = include everything in all subdirectories
 		Rules later in the list get higher priority
 		Trailing slash interpreted as /*
 		<path>/* = all files and subdirectories
 		Ex:
-			2 *    #== /
+			2 *    #== /*
 			0 /pictures
 			3 /pictures/grandma/  #== /pictures/grandma/*
 			Translates as -> include everything 2, except /pictures, but do include /picutes/grandma and its children 3
 		Including a folder assumes including subfolders
 		If files in subfolders not wanted
-			dir/*
-			^dir/*/*
+			2 dir/*
+			0 dir/*/*
 		Use patterns to classify files for checking for changes
 		One list multiple classifications
 			0 = Dont add at all
-			1 = Some files data only scanned on first backup
+			1 = File data only scanned on first backup
 				Changes ignored
-			2 = Some scanned only based on metadata heuristics (mirrors default behavior when no lists present)
+			2 = Scanned only based on metadata heuristics (default behavior when no lists present)
 				Date modified changed so scan
-			3 = Some scanned every time regardless of metadata
-				Always do this when force scan switch is used
+			3 = Scanned every time regardless of metadata
+				Behavior of 1,2, and 3 when force scan switch is used

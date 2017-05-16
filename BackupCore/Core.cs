@@ -19,7 +19,7 @@ namespace BackupCore
 
         public string BackupIndexDir { get; set; }
 
-        public string HashIndexFile { get; set; }
+        public string BlobIndexFile { get; set; }
 
         public string BackupListFile { get; set; }
 
@@ -49,47 +49,42 @@ namespace BackupCore
                 Directory.CreateDirectory(BackupIndexDir);
             }
 
-            HashIndexFile = Path.Combine(BackuppathDst, "backup", "hashindex");
+            BlobIndexFile = Path.Combine(BackuppathDst, "backup", "hashindex");
             BackupListFile = Path.Combine(BackuppathDst, "backup", "backuplist");
 
-            try
+
+            if (File.Exists(BlobIndexFile))
             {
-                using (FileStream fs = new FileStream(HashIndexFile, FileMode.Open, FileAccess.Read))
+                try
                 {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        Blobs = BlobStore.deserialize(reader.ReadBytes((int)fs.Length), HashIndexFile, BackuppathDst); // TODO: make deserialize static like in other classes and move call to deserialize out to Core
-                    }
+                    Blobs = BlobStore.LoadFromFile(BlobIndexFile, BackuppathDst);
                 }
-                
+                catch (Exception)
+                {
+                    continueorkill?.Invoke("Failed to read block index. Continuing may result in block index being overwritten and old blocks being lost.");
+                    BUStore = new BackupStore(BackupListFile, Blobs);
+                }
             }
-            catch (FileNotFoundException) // Safe to write a new file since one not already there
+            else // Safe to write a new file since one not already there
             {
-                Blobs = new BlobStore(HashIndexFile, BackuppathDst);
-            }
-            catch (Exception) // May not be safe to write new file
-            {
-                continueorkill?.Invoke("Failed to read block index. Continuing may result in block index being overwritten and old blocks being lost.");
-                BUStore = new BackupStore(BackupListFile, Blobs);
+                Blobs = new BlobStore(BlobIndexFile, BackuppathDst);
             }
 
-            try
+
+            if (File.Exists(BackupListFile))
             {
-                using (FileStream fs = new FileStream(BackupListFile, FileMode.Open, FileAccess.Read))
+                try
                 {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        BUStore = BackupStore.deserialize(reader.ReadBytes((int)fs.Length), BackupListFile, Blobs);
-                    }
+                    BUStore = BackupStore.LoadFromFile(BackupListFile, Blobs);
+                }
+                catch (Exception)
+                {
+                    continueorkill?.Invoke("Failed to read backup index. Continuing may result in backup index being overwritten and old backups being lost.");
+                    BUStore = new BackupStore(BackupListFile, Blobs);
                 }
             }
-            catch (FileNotFoundException) // Safe to write a new file since one not already there
+            else // Safe to write a new file since one not already there
             {
-                BUStore = new BackupStore(BackupListFile, Blobs);
-            }
-            catch (Exception) // May not be safe to write new file
-            {
-                continueorkill?.Invoke("Failed to read backup index. Continuing may result in backup index being overwritten and old backups being lost.");
                 BUStore = new BackupStore(BackupListFile, Blobs);
             }
         }
@@ -156,9 +151,23 @@ namespace BackupCore
 
             // Save "index"
             // Writeout all "dirty" cached index nodes
-            Blobs.SynchronizeCacheToDisk(); // TODO: Pass this its path like with MetadataStore
+            try
+            {
+                Blobs.SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(BackupListFile);
+            try
+            {
+                BUStore.SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         public void RunBackupSync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaterns=null)
@@ -220,9 +229,23 @@ namespace BackupCore
 
             // Save "index"
             // Writeout entire cached index
-            Blobs.SynchronizeCacheToDisk();
+            try
+            {
+                Blobs.SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
             // Save metadata
-            BUStore.SynchronizeCacheToDisk(BackupListFile);
+            try
+            {
+                BUStore.SynchronizeCacheToDisk();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -281,7 +304,12 @@ namespace BackupCore
                     Console.WriteLine(e.Message);
                     continue;
                 }
-                
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+
                 foreach (var sd in subDirs)
                 {
                     bool trackdir = true;
@@ -304,14 +332,15 @@ namespace BackupCore
                 }
                 catch (UnauthorizedAccessException e)
                 {
-
                     Console.WriteLine(e.Message);
-                    continue;
                 }
                 catch (DirectoryNotFoundException e)
                 {
                     Console.WriteLine(e.Message);
-                    continue;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
                 }
 
                 foreach (var file in files)
@@ -323,50 +352,57 @@ namespace BackupCore
                     }
                     // Convert file path to a relative path
                     string relpath = file.Substring(BackuppathSrc.Length + 1);
-                    switch (trackclass)
+                    try // We (may) read the file's metadata here so wrap errors
                     {
-                        case 0: // ignore file completely
-                            break;
-                        case 1: // Dont scan if we have a previous version
-                            bool dontscan = false;
-                            if (previousmtree != null)
-                            {
-                                FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                FileMetadata curfm = new FileMetadata(relpath);
-                                if (previousfm != null)
+                        switch (trackclass)
+                        {
+                            case 0: // ignore file completely
+                                break;
+                            case 1: // Dont scan if we have a previous version
+                                bool dontscan = false;
+                                if (previousmtree != null)
                                 {
-                                    noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                                    dontscan = true;
+                                    FileMetadata previousfm = previousmtree.GetFile(relpath);
+                                    FileMetadata curfm = new FileMetadata(relpath);
+                                    if (previousfm != null)
+                                    {
+                                        noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                                        dontscan = true;
+                                    }
                                 }
-                            }
-                            if (!dontscan)
-                            {
-                                scanfilequeue.Add(relpath);
-                            }
-                            break;
-                        case 2: // Dont scan if we have a previous version and its metadata indicates no change
-                            dontscan = false;
-                            if (previousmtree != null)
-                            {
-                                FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                FileMetadata curfm = new FileMetadata(relpath);
-                                if (previousfm != null && previousfm.FileSize == curfm.FileSize
-                                    && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                                if (!dontscan)
                                 {
-                                    noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                                    dontscan = true;
+                                    scanfilequeue.Add(relpath);
                                 }
-                            }
-                            if (!dontscan)
-                            {
+                                break;
+                            case 2: // Dont scan if we have a previous version and its metadata indicates no change
+                                dontscan = false;
+                                if (previousmtree != null)
+                                {
+                                    FileMetadata previousfm = previousmtree.GetFile(relpath);
+                                    FileMetadata curfm = new FileMetadata(relpath);
+                                    if (previousfm != null && previousfm.FileSize == curfm.FileSize
+                                        && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
+                                    {
+                                        noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
+                                        dontscan = true;
+                                    }
+                                }
+                                if (!dontscan)
+                                {
+                                    scanfilequeue.Add(relpath);
+                                }
+                                break;
+                            case 3: // Scan file
                                 scanfilequeue.Add(relpath);
-                            }
-                            break;
-                        case 3: // Scan file
-                            scanfilequeue.Add(relpath);
-                            break;
-                        default:
-                            break;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
                     }
                 }
             }
@@ -513,19 +549,47 @@ namespace BackupCore
 
         protected void BackupFileAsync(string relpath, MetadataTree mtree)
         {
-            FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
-            byte[] filehash = Blobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
-            BackupFileMetadata(relpath, filehash, mtree);
+            // NOTE: If more detailed error handling is added, replace this try/catch and the 
+            // equivelent one in BackupFileSync with a single method for getting a stream
+            try
+            {
+                FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
+                byte[] filehash = Blobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
+                BackupFileMetadata(relpath, filehash, mtree);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         // TODO: This should be a relative filepath
         protected void BackupFileSync(string relpath, MetadataTree mtree)
         {
-            FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
-            byte[] filehash = Blobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
-            BackupFileMetadata(relpath, filehash, mtree);
+            try
+            {
+                FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
+                byte[] filehash = Blobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
+                BackupFileMetadata(relpath, filehash, mtree);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
+        /// <summary>
+        /// Loads metadata from a file and adds it to the metdata tree.
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <param name="filehash"></param>
+        /// <param name="mtree"></param>
+        /// <exception cref="ArgumentNullException"/>
+        /// <exception cref="System.Security.SecurityException"/>
+        /// <exception cref="ArgumentException"/>
+        /// <exception cref="UnauthorizedAccessException"/>
+        /// <exception cref="PathTooLongException"/>
+        /// <exception cref="NotSupportedException"/>
         protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
         {
             FileMetadata fm = new FileMetadata(Path.Combine(BackuppathSrc, relpath))

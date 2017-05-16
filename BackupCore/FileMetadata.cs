@@ -70,6 +70,12 @@ namespace BackupCore
         /// New FileMetadata by examining a file on disk.
         /// </summary>
         /// <param name="filepath"></param>
+        /// <exception cref="ArgumentNullException"/>
+        /// <exception cref="System.Security.SecurityException"/>
+        /// <exception cref="ArgumentException"/>
+        /// <exception cref="UnauthorizedAccessException"/>
+        /// <exception cref="PathTooLongException"/>
+        /// <exception cref="NotSupportedException"/>
         public FileMetadata(string filepath)
         {
             FileName = Path.GetFileName(filepath);

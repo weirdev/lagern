@@ -29,6 +29,24 @@ namespace BackupCore
         }
 
         /// <summary>
+        /// Attempts to load a previously saved BlobStore object from a file.
+        /// If loading fails, an error is thrown.
+        /// </summary>
+        /// <param name="blobindexfile"></param>
+        /// <param name="backupdstpath"></param>
+        /// <returns></returns>
+        public static BlobStore LoadFromFile(string blobindexfile, string backupdstpath)
+        {
+            using (FileStream fs = new FileStream(blobindexfile, FileMode.Open, FileAccess.Read))
+            {
+                using (BinaryReader reader = new BinaryReader(fs))
+                {
+                    return BlobStore.deserialize(reader.ReadBytes((int)fs.Length), blobindexfile, backupdstpath);
+                }
+            }
+        }
+
+        /// <summary>
         /// Adds a hash and corresponding BackupLocation to the Index.
         /// </summary>
         /// <param name="hash"></param>
@@ -107,11 +125,20 @@ namespace BackupCore
         public void WriteBlob(BlobLocation blocation, byte[] blob)
         {
             string path = Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath);
-            using (FileStream writer = File.OpenWrite(path))
+            try
             {
-                writer.Write(blob, 0, blob.Length);
-                writer.Flush();
-                writer.Close();
+                using (FileStream writer = File.OpenWrite(path))
+                {
+                    writer.Seek(blocation.BytePosition, SeekOrigin.Begin);
+                    writer.Write(blob, 0, blob.Length);
+                    writer.Flush();
+                    writer.Close();
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Failed to write blob");
+                throw;
             }
         }
 
@@ -136,11 +163,19 @@ namespace BackupCore
                 foreach (var hash in blockhashes)
                 {
                     BlobLocation blockloc = GetBlobLocation(hash);
-                    FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
-                    byte[] buffer = new byte[blockstream.Length];
-                    blockstream.Read(buffer, 0, blockloc.ByteLength);
-                    file.Write(buffer, 0, blockloc.ByteLength);
-                    blockstream.Close();
+                    try
+                    {
+                        FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
+                        byte[] buffer = new byte[blockstream.Length];
+                        blockstream.Read(buffer, 0, blockloc.ByteLength);
+                        file.Write(buffer, 0, blockloc.ByteLength);
+                        blockstream.Close();
+                    }
+                    catch (Exception)
+                    {
+                        Console.WriteLine("Failed to read blob");
+                        throw;
+                    }
                 }
                 byte[] filedata = file.ToArray();
                 file.Close();
@@ -148,11 +183,19 @@ namespace BackupCore
             }
             else // file is single block
             {
-                FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blobbl.RelativeFilePath));
-                byte[] buffer = new byte[blockstream.Length];
-                blockstream.Read(buffer, 0, blobbl.ByteLength);
-                blockstream.Close();
-                return buffer;
+                try
+                {
+                    FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blobbl.RelativeFilePath));
+                    byte[] buffer = new byte[blockstream.Length];
+                    blockstream.Read(buffer, 0, blobbl.ByteLength);
+                    blockstream.Close();
+                    return buffer;
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Failed to read blob");
+                    throw;
+                }
             }
         }
 
@@ -162,20 +205,28 @@ namespace BackupCore
             {
                 throw new ArgumentException("blobhash must be of a blob with IsMultiBlockReference=true");
             }
-            FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
-            List<byte[]> blockhashes = new List<byte[]>();
-            for (int i = 0; i < blockhashstream.Length / 20; i++)
+            try
             {
-                byte[] buffer = new byte[20];
-                blockhashstream.Read(buffer, i * 20, 20);
-                blockhashes.Add(buffer);
+                FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                List<byte[]> blockhashes = new List<byte[]>();
+                for (int i = 0; i < blockhashstream.Length / 20; i++)
+                {
+                    byte[] buffer = new byte[20];
+                    blockhashstream.Read(buffer, i * 20, 20);
+                    blockhashes.Add(buffer);
+                }
+                blockhashstream.Close();
+                return blockhashes;
             }
-            blockhashstream.Close();
-            return blockhashes;
+            catch (Exception)
+            {
+                Console.WriteLine("Failed to read hashlist blob");
+                throw;
+            }
         }
 
         /// <summary>
-        /// Wraps other storedata method using input stream. Creates MemoryStream from inputdata.
+        /// Wraps other storedata method for byte arrays. Creates MemoryStream from inputdata.
         /// </summary>
         /// <param name="inputdata"></param>
         /// <param name="type"></param>
@@ -187,7 +238,11 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Chunks and saves data to blobstore. Operates on stream input, so Filestreams can be used and entire files need not be loaded into memory.
+        /// Chunks and saves data to blobstore. 
+        /// Operates on stream input, so Filestreams can be used and 
+        /// entire files need not be loaded into memory.
+        /// If an error occurs (typically when reading from a stream
+        /// representing a file), it is thrown to the caller.
         /// </summary>
         /// <param name="inputstream"></param>
         /// <param name="type"></param>
@@ -335,6 +390,10 @@ namespace BackupCore
                     this.AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
                 }
+                if (getfileblockstask.IsFaulted)
+                {
+                    throw getfileblockstask.Exception;
+                }
             }
             if (blockshashes.Count > 1)
             {
@@ -430,7 +489,14 @@ namespace BackupCore
             }
             if (blocation.ReferenceCount <= 0)
             {
-                File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                try
+                {
+                    File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Error deleting unreferenced file.");
+                }
                 TreeIndexStore.RemoveKey(blobhash);
             }
         }
@@ -478,9 +544,22 @@ namespace BackupCore
             return bs;
         }
 
-        public void SynchronizeCacheToDisk()
+        /// <summary>
+        /// Attempts to save the BlobStore to disk.
+        /// If saving fails an error is thrown.
+        /// </summary>
+        /// <param name="path"></param>
+        public void SynchronizeCacheToDisk(string path=null)
         {
-            using (FileStream fs = new FileStream(StorePath, FileMode.Create, FileAccess.Write))
+            // NOTE: This overwrites the previous file every time.
+            // The list of hash keys stored in the serialized BlobStore
+            // is always sorted, so appending to that list would cause its
+            // own problems. Overwriting the cache may be the correct tradeoff.
+            if (path == null)
+            {
+                path = StorePath;
+            }
+            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
             {
                 using (BinaryWriter writer = new BinaryWriter(fs))
                 {
