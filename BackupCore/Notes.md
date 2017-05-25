@@ -1,12 +1,36 @@
 ﻿*********************
 IN PROGRESS
 Test support for large backup sets
+	Time simple copy vs backup run
+		1000 files
+		1,000,000 bytes each
+		Simple copy
+			38.625 seconds
+		Synchronous backup run (Debug)
+			memory usage always <35 MB
+			250.368 seconds
+			~0.5 MB index overhead
+			Update (metadata should yeild no scanning needed)
+				...
+		Synchronous backup run (Release)
+			memory usage always <24MB
+			148.547 seconds
+			low cpu usage
+				majority of cpu time spent splitting files
+			Update (metadata should yeild no scanning needed)
+				Near instantaneous
+		Asynchronous backup run
+			Not currently working
+
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
 		bulk loading of tree
 		store some nodes out of memory?
 		optimize node size
 		Progress report/bar
+	Reduce number of blob files per directory
+		Currently one file per blob and all files in destination root
+		(Some) operating systems have poor performance with many files in a single directory
 When errors occur while reading/scanning files/directories
 	Give warning
 	When rest of backup has finished

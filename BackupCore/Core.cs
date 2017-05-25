@@ -91,6 +91,9 @@ namespace BackupCore
         
         public void RunBackupAsync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null)
         {
+            // TODO: This has major problems on non-trivial input sizes
+            // Esentially creates thousands of threads containing infinite loops checking for completed work
+            // and no work is ever completed
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
@@ -375,7 +378,7 @@ namespace BackupCore
 
                 foreach (var file in files)
                 {
-                    int trackclass = 3;
+                    int trackclass = 2;
                     if (trackpaterns != null)
                     {
                         trackclass = FileTrackClass(file.Substring(BackuppathSrc.Length + 1), trackpaterns);
@@ -393,7 +396,7 @@ namespace BackupCore
                                 if (previousmtree != null)
                                 {
                                     FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(relpath);
+                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
                                     if (previousfm != null)
                                     {
                                         noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
@@ -410,7 +413,7 @@ namespace BackupCore
                                 if (previousmtree != null)
                                 {
                                     FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(relpath);
+                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
                                     if (previousfm != null && previousfm.FileSize == curfm.FileSize
                                         && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
                                     {

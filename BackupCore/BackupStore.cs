@@ -18,6 +18,7 @@ namespace BackupCore
         {
             DiskStorePath = metadatapath;
             Blobs = blobs;
+            BackupHashes = new List<byte[]>();
         }
 
         private BackupStore(string metadatapath, BlobStore blobs, List<byte[]> backuphashes)

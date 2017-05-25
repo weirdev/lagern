@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BackupCore
@@ -286,8 +287,7 @@ namespace BackupCore
                         HashTools.BytesDifference(betachksum, shifted);
                     }
                     HashTools.BytesSum(betachksum, alphachksum);
-
-
+                    
                     if (alphachksum[0] == 0xFF && betachksum[0] == 0xFF && betachksum[1] < 0x02) // (256*256*128)^-1 => expected value (/2) = ~4MB
                     {
                         byte[] block = newblock.ToArray();
@@ -389,6 +389,10 @@ namespace BackupCore
                 {
                     this.AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
+                }
+                else
+                {
+                    Thread.Sleep(10);
                 }
                 if (getfileblockstask.IsFaulted)
                 {
