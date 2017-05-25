@@ -94,6 +94,7 @@ namespace BackupCore
             // TODO: This has major problems on non-trivial input sizes
             // Esentially creates thousands of threads containing infinite loops checking for completed work
             // and no work is ever completed
+            // ** Trying without parallelism in fetching files/directories only on operating on those results
             MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
@@ -106,7 +107,8 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
-                    Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
+                    //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
+                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters);
                 }
                 else
                 {
@@ -115,7 +117,8 @@ namespace BackupCore
             }
             if (!differentialbackup)
             {
-                Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters));
+                //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters));
+                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters);
             }
 
             List<Task> backupops = new List<Task>();
@@ -134,7 +137,8 @@ namespace BackupCore
             {
                 if (scanfilequeue.TryTake(out string file))
                 {
-                    backupops.Add(Task.Run(() => BackupFileAsync(file, newmetatree)));
+                    //backupops.Add(Task.Run(() => BackupFileAsync(file, newmetatree)));
+                    backupops.Add(Task.Run(() => BackupFileSync(file, newmetatree)));
                 }
             }
             while (!noscanfilequeue.IsCompleted)
@@ -299,7 +303,7 @@ namespace BackupCore
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 Console.WriteLine("Error restoring file or directory");
                 throw;
@@ -580,8 +584,10 @@ namespace BackupCore
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackuppathSrc, relpath)));
         }
 
+        // TODO: This has problems (see todo on BlobStore.StoreDataAsync()
         protected void BackupFileAsync(string relpath, MetadataTree mtree)
         {
+            throw new NotImplementedException(); // Dont use until BlobStore.StoreDataAsync() fixed
             // NOTE: If more detailed error handling is added, replace this try/catch and the 
             // equivelent one in BackupFileSync with a single method for getting a stream
             try

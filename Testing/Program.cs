@@ -43,8 +43,8 @@ namespace Testing
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
-            //backupper.RunBackupAsync(null);
-            backupper.RunBackupSync(null);
+            backupper.RunBackupAsync(null);
+            //backupper.RunBackupSync(null);
             
             //Console.Out.WriteLine("Done.");
             //Console.In.ReadLine();

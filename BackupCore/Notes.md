@@ -4,12 +4,12 @@ Test support for large backup sets
 	Time simple copy vs backup run
 		1000 files
 		1,000,000 bytes each
+		~0.5 MB index overhead
 		Simple copy
 			38.625 seconds
 		Synchronous backup run (Debug)
 			memory usage always <35 MB
 			250.368 seconds
-			~0.5 MB index overhead
 			Update (metadata should yeild no scanning needed)
 				...
 		Synchronous backup run (Release)
@@ -20,7 +20,10 @@ Test support for large backup sets
 			Update (metadata should yeild no scanning needed)
 				Near instantaneous
 		Asynchronous backup run
-			Not currently working
+			Memory usage ~50 MB
+			83.828 seconds
+			cpu usage choppy averages about 1/3 utilization
+
 
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore

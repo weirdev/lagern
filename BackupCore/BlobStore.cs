@@ -371,13 +371,17 @@ namespace BackupCore
             
         }
 
+
+        // TODO: These async methods have parallelization problems as written and dont provide
+        // any execution time benefit
         public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
         {
             return StoreDataAsync(new MemoryStream(inputdata), type);
         }
-
+        
         public byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
         {
+            throw new NotImplementedException(); // Not currently working
             BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
             Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblockqueue));
@@ -389,10 +393,6 @@ namespace BackupCore
                 {
                     this.AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
-                }
-                else
-                {
-                    Thread.Sleep(10);
                 }
                 if (getfileblockstask.IsFaulted)
                 {
