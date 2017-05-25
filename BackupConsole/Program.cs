@@ -376,7 +376,7 @@ namespace BackupConsole
                 }
                 dir = Path.GetDirectoryName(dir);
             } while (dir != null);
-            return null;
+            return cwd;
         }
 
         private static string GetBUDestinationDir()
