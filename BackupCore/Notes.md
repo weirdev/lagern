@@ -22,9 +22,7 @@ Test support for large backup sets
 		Asynchronous backup run
 			Memory usage ~50 MB
 			83.828 seconds
-			cpu usage choppy averages about 1/3 utilization
-
-
+			cpu usage choppy averages about 1/2 utilization
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
 		bulk loading of tree

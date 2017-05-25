@@ -171,7 +171,7 @@ namespace BackupConsole
             {
                 var bcore = GetCore();
                 var trackclasses = GetTrackClasses();
-                bcore.RunBackupSync(message, diffbackup, trackclasses);
+                bcore.RunBackupAsync(message, diffbackup, trackclasses);
             }
             catch (Exception e)
             {
