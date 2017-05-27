@@ -1,5 +1,12 @@
 ﻿*********************
 IN PROGRESS
+Add more unit tests
+Reimplement browsing backup made n backups ago
+	Not static if backups deleted, but okay for quick uses
+More flexible "list" command
+	Ranges of n-m backups ago
+		Also by date?
+	Better handling of browsing list of many backups
 Test support for large backup sets
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
@@ -10,19 +17,10 @@ Test support for large backup sets
 	Reduce number of blob files per directory
 		Currently one file per blob and all files in destination root
 		(Some) operating systems have poor performance with many files in a single directory
-When errors occur while reading/scanning files/directories
-	Give warning
-	When rest of backup has finished
-Add more unit tests
 Refactor metadata node to not include '..' in its public list of directories
 	Maybe dont include '..' in list at all, handle like '.'
 	Then fix every other place already handling '..' explicitly
-Add run command option to force scanning all file contents
-	Also support this in backend
-Specify a previous backup to use as previous backup when performing a differential backup
-	Currently we just use the last backup made
-Reimplement browsing backup made n backups ago
-	Not static if backups deleted, but okay for quick uses
+	Reasons for this??
 Handle common things that could go wrong
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes
@@ -32,10 +30,6 @@ Handle common things that could go wrong
 			"stamp" them with uuid so can detect out of sync?
 	Save "progress" so can pick up after large backup halted
 	more...
-More flexible "list" command
-	Ranges of n-m backups ago
-		Also by date?
-	Better handling of browsing list of many backups
 ArgParser
 	"-l <>" => "-l <longname>"
 		wont need Item3 of returned tuple

@@ -89,7 +89,8 @@ namespace BackupCore
             }
         }
         
-        public void RunBackupAsync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null)
+        public void RunBackupAsync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null,
+            string prev_backup_hash_prefix=null)
         {
             // TODO: This has major problems on non-trivial input sizes
             // Esentially creates thousands of threads containing infinite loops checking for completed work
@@ -103,7 +104,15 @@ namespace BackupCore
 
             if (differentialbackup)
             {
-                BackupRecord previousbackup = BUStore.GetBackupRecord();
+                BackupRecord previousbackup;
+                try
+                {
+                    previousbackup = BUStore.GetBackupRecord(prev_backup_hash_prefix);
+                }
+                catch
+                {
+                    previousbackup = BUStore.GetBackupRecord();
+                }
                 if (previousbackup != null)
                 {
                     MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));

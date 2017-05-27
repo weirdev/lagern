@@ -53,14 +53,19 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "run")
                 {
-                    // "run [<message>] [-s]"
+                    // "run [-b <>] [-s] [<message>]"
                     string message = null;
+                    string backuphash = null;
+                    if (parsed.Item3.ContainsKey("b"))
+                    {
+                        backuphash = parsed.Item3["b"];
+                    }
                     if (parsed.Item2.ContainsKey("message"))
                     {
                         message = parsed.Item2["message"];
                     }
                     bool diffbackup = !parsed.Item3.ContainsKey("s"); // force scan
-                    RunBackup(message, diffbackup);
+                    RunBackup(message, diffbackup, backuphash);
                 }
                 else if (parsed.Item1 == "delete")
                 {
@@ -116,9 +121,9 @@ namespace BackupConsole
                 {
                     // "browse [<backuphash>]"
                     string backuphash = null;
-                    if (parsed.Item2.ContainsKey("backuphash"))
+                    if (parsed.Item3.ContainsKey("b"))
                     {
-                        backuphash = parsed.Item2["backuphash"];
+                        backuphash = parsed.Item3["b"];
                     }
                     try
                     {
@@ -148,11 +153,11 @@ namespace BackupConsole
             scanner.AddCommand("show [<setting>]");
             scanner.AddCommand("set <setting> <value>");
             scanner.AddCommand("clear <setting>");
-            scanner.AddCommand("run [-s] [<message>]");
+            scanner.AddCommand("run [-b <>] [-s] [<message>]");
             scanner.AddCommand("delete <backuphash>");
             scanner.AddCommand("restore <filerelpath> [-b <>] [-r <>]");
             scanner.AddCommand("list [<listcount>] [-s]");
-            scanner.AddCommand("browse [<backuphash>]");
+            scanner.AddCommand("browse [-b <>]");
             scanner.AddCommand("help");
             return scanner;
         }
@@ -165,13 +170,13 @@ namespace BackupConsole
             }
         }
 
-        private static void RunBackup(string message=null, bool diffbackup=true)
+        private static void RunBackup(string message=null, bool diffbackup=true, string backuphashprefix=null)
         {
             try
             {
                 var bcore = GetCore();
                 var trackclasses = GetTrackClasses();
-                bcore.RunBackupAsync(message, diffbackup, trackclasses);
+                bcore.RunBackupAsync(message, diffbackup, trackclasses, backuphashprefix);
             }
             catch (Exception e)
             {
