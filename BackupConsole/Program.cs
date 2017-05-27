@@ -119,7 +119,7 @@ namespace BackupConsole
                 }
                 else if (parsed.Item1 == "browse")
                 {
-                    // "browse [<backuphash>]"
+                    // "browse [-b <>]"
                     string backuphash = null;
                     if (parsed.Item3.ContainsKey("b"))
                     {

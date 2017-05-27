@@ -36,7 +36,7 @@ namespace BackupConsole
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.BUStore.GetFirstBackupHashAndRecord();
+                targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord();
             }
             else
             {

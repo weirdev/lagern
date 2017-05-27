@@ -1,12 +1,14 @@
 ﻿*********************
 IN PROGRESS
+Multiple base folders
+	Multiple bacups with different settings to same destination
+		"dumb" binary backup of entire partition
+		"smart" backup of files folders
+		Data deduplicated itra- and inter- backup source
+			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
+Transfer a single backup to existing/new different backup destination
+	Would show up as new base folder
 Add more unit tests
-Reimplement browsing backup made n backups ago
-	Not static if backups deleted, but okay for quick uses
-More flexible "list" command
-	Ranges of n-m backups ago
-		Also by date?
-	Better handling of browsing list of many backups
 Test support for large backup sets
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
@@ -38,6 +40,10 @@ ArgParser
 	can require only one or at least one of a set of options
 		'|' or '^' between options
 		options inside [] ?
+More flexible "list" command
+	Ranges of n-m backups ago
+		Also by date?
+	Better handling of browsing list of many backups
 .Net Core port
 	Begin with .Net standard port of library code
 		.Net standard library will work with Framework and Code versions of project
@@ -53,14 +59,6 @@ ArgParser
 			Detect restore to machine without user/group corresponding to permissions being applied
 		Save/restore w/ & w/o extended attributes
 	Special link support
-Multiple base folders
-	Multiple bacups with different settings to same destination
-		"dumb" binary backup of entire partition
-		"smart" backup of files folders
-		Data deduplicated itra- and inter- backup source
-			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
-Transfer a single backup to existing/new different backup destination
-	Would show up as new base folder
 Generic permissions support ie. Linux (POSIX)
 	Handle restoring to different OS/permissions scheme than saved to
 Replicate source file tree (as last backed up) in destination
