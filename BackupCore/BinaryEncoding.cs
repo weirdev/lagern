@@ -113,7 +113,7 @@ namespace BackupCore
             foreach (var kv in dataobjects)
             {
                 // Write header
-                byte[] binkey = Encoding.ASCII.GetBytes(kv.Key);
+                byte[] binkey = Encoding.UTF8.GetBytes(kv.Key);
                 byte[] bindatalen = BitConverter.GetBytes(kv.Value.Length);
                 List<byte> header = new List<byte>();
                 encode(binkey, header);
@@ -144,7 +144,7 @@ namespace BackupCore
             while (next != null)
             {
                 List<byte[]> savedheaderbodynext = decode(next, 2);
-                string key = Encoding.ASCII.GetString(savedheaderbodynext[0]);
+                string key = Encoding.UTF8.GetString(savedheaderbodynext[0]);
                 int datalen = BitConverter.ToInt32(savedheaderbodynext[1], 0);
                 if (datalen != 0)
                 {

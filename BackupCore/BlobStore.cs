@@ -258,57 +258,65 @@ namespace BackupCore
             SHA1 sha1filehasher = SHA1.Create();
             SHA1 sha1blockhasher = SHA1.Create();
 
-
-            int readsize = 8388608;
-            int rollwindowsize = 32;
-            for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
+            if (inputstream.Length != 0)
             {
-                byte[] readin;
-                if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
+                int readsize = 8388608;
+                int rollwindowsize = 32;
+                for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
                 {
-                    readin = new byte[readsize];
-                    inputstream.Read(readin, 0, readsize);
-                }
-                else // < readsize bytes left to read
-                {
-                    readin = new byte[inputstream.Length % readsize];
-                    inputstream.Read(readin, 0, (int)(inputstream.Length % readsize));
-                }
-                for (int j = 0; j < readin.Length; j++) // Byte by byte
-                {
-                    newblock.Add(readin[j]);
-                    HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
-                    if (newblock.Count > rollwindowsize)
+                    byte[] readin;
+                    if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
                     {
-                        HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
-                        byte[] shifted = new byte[2];
-                        shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
-                        shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
-                        HashTools.BytesDifference(betachksum, shifted);
+                        readin = new byte[readsize];
+                        inputstream.Read(readin, 0, readsize);
                     }
-                    HashTools.BytesSum(betachksum, alphachksum);
-                    
-                    if (alphachksum[0] == 0xFF && betachksum[0] == 0xFF && betachksum[1] < 0x02) // (256*256*128)^-1 => expected value (/2) = ~4MB
+                    else // < readsize bytes left to read
                     {
-                        byte[] block = newblock.ToArray();
-                        if (i >= inputstream.Length && j >= readin.Length) // Need to use TransformFinalBlock if at end of input
-                        {
-                            sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                        }
-                        else
-                        {
-                            sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
-                        }
-                        hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                        newblock = new List<byte>();
-                        alphachksum = new byte[2];
-                        betachksum = new byte[2];
+                        readin = new byte[inputstream.Length % readsize];
+                        inputstream.Read(readin, 0, (int)(inputstream.Length % readsize));
                     }
+                    for (int j = 0; j < readin.Length; j++) // Byte by byte
+                    {
+                        newblock.Add(readin[j]);
+                        HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
+                        if (newblock.Count > rollwindowsize)
+                        {
+                            HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
+                            byte[] shifted = new byte[2];
+                            shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
+                            shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
+                            HashTools.BytesDifference(betachksum, shifted);
+                        }
+                        HashTools.BytesSum(betachksum, alphachksum);
+
+                        if (alphachksum[0] == 0xFF && betachksum[0] == 0xFF && betachksum[1] < 0x02) // (256*256*128)^-1 => expected value (/2) = ~4MB
+                        {
+                            byte[] block = newblock.ToArray();
+                            if (i + readsize >= inputstream.Length && j + 1 >= readin.Length) // Need to use TransformFinalBlock if at end of input
+                            {
+                                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
+                            }
+                            else
+                            {
+                                sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
+                            }
+                            hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
+                            newblock = new List<byte>();
+                            alphachksum = new byte[2];
+                            betachksum = new byte[2];
+                        }
+                    }
+                }
+                if (newblock.Count != 0) // Create block from remaining bytes
+                {
+                    byte[] block = newblock.ToArray();
+                    sha1filehasher.TransformFinalBlock(block, 0, block.Length);
+                    hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
                 }
             }
-            if (newblock.Count != 0) // Create block from remaining bytes
+            else
             {
-                byte[] block = newblock.ToArray();
+                byte[] block = new byte[0];
                 sha1filehasher.TransformFinalBlock(block, 0, block.Length);
                 hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
             }

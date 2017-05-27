@@ -55,7 +55,7 @@ namespace BackupCore
         {
             Dictionary<string, byte[]> bldata = new Dictionary<string, byte[]>();
             // -"-v1"
-            // RelativeFilePath = ASCII encoded
+            // RelativeFilePath = UTF8 encoded
             // BytePosition = BitConverter.GetBytes(int)
             // ByteLength = BitConverter.GetBytes(int)
             // -"-v2"
@@ -67,7 +67,7 @@ namespace BackupCore
             // Required
             // IsMultiBlockReference = BitConverter.GetBytes(bool)
 
-            bldata.Add("RelativeFilePath-v1", Encoding.ASCII.GetBytes(RelativeFilePath));
+            bldata.Add("RelativeFilePath-v1", Encoding.UTF8.GetBytes(RelativeFilePath));
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
 
@@ -83,7 +83,7 @@ namespace BackupCore
         public static BlobLocation deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            string relfilepath = Encoding.ASCII.GetString(savedobjects["RelativeFilePath-v1"]);
+            string relfilepath = Encoding.UTF8.GetString(savedobjects["RelativeFilePath-v1"]);
             int byteposition = BitConverter.ToInt32(savedobjects["BytePosition-v1"], 0);
             int bytelength = BitConverter.ToInt32(savedobjects["ByteLength-v1"], 0);
 

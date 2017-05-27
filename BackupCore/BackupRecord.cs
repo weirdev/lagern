@@ -44,7 +44,7 @@ namespace BackupCore
             Dictionary<string, byte[]> brdata = new Dictionary<string, byte[]>();
             // -"-v1"
             // BackupTime = DateTime.Ticks
-            // BackupMessage = Encoding.ASCII.GetBytes(string)
+            // BackupMessage = Encoding.UTF8.GetBytes(string)
             // MetadataTreeHashes = enum_encode(List<byte[]>)
 
             // -v2
@@ -57,7 +57,7 @@ namespace BackupCore
             // UUID = byte[]
             
             brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
-            brdata.Add("BackupMessage-v1", Encoding.ASCII.GetBytes(BackupMessage));
+            brdata.Add("BackupMessage-v1", Encoding.UTF8.GetBytes(BackupMessage));
 
             brdata.Add("MetadataTreeHash-v2", MetadataTreeHash);
 
@@ -73,7 +73,7 @@ namespace BackupCore
             string backupmessage;
             if (savedobjects["BackupMessage-v1"] != null)
             {
-                backupmessage = Encoding.ASCII.GetString(savedobjects["BackupMessage-v1"]);
+                backupmessage = Encoding.UTF8.GetString(savedobjects["BackupMessage-v1"]);
             }
             else
             {

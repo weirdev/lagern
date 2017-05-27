@@ -152,7 +152,8 @@ namespace BackupCore
 
             // Add new metadatatree to metastore
             byte[] newmtreebytes = newmetatree.serialize();
-            byte[] newmtreehash = Blobs.StoreDataAsync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            //byte[] newmtreehash = Blobs.StoreDataAsync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
 
             BUStore.AddBackup(message, newmtreehash);
 

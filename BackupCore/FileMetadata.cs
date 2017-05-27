@@ -116,7 +116,7 @@ namespace BackupCore
             Dictionary<string, byte[]> fmdata = new Dictionary<string, byte[]>();
             // v1
             // -"-v1" (suffix for below)
-            // FileName = ASCII encoded
+            // FileName = UTF8 encoded
             // DateAccessedUTC = BitConverter.GetBytes(long NumDateAccessedUTC)
             // DateModifiedUTC = BitConverter.GetBytes(long NumDateModifiedUTC)
             // DateCreatedUTC = BitConverter.GetBytes(long NumDateCreatedUTC)
@@ -132,11 +132,12 @@ namespace BackupCore
             // all v2 data +
             // FileHash = FileHash or byte[0] if FileHash==null
 
-            fmdata.Add("FileName-v1", Encoding.ASCII.GetBytes(FileName));
+            fmdata.Add("FileName-v1", Encoding.UTF8.GetBytes(FileName));
             fmdata.Add("DateAccessedUTC-v1", BitConverter.GetBytes(NumDateAccessedUTC));
             fmdata.Add("DateModifiedUTC-v1", BitConverter.GetBytes(NumDateModifiedUTC));
             fmdata.Add("DateCreatedUTC-v1", BitConverter.GetBytes(NumDateCreatedUTC));
             fmdata.Add("FileSize-v1", BitConverter.GetBytes(FileSize));
+            
             fmdata.Add("Attributes-v2", BitConverter.GetBytes((int)Attributes));
             if (FileHash != null)
             {
@@ -153,7 +154,7 @@ namespace BackupCore
         public static FileMetadata deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            string filename = Encoding.ASCII.GetString(savedobjects["FileName-v1"]);
+            string filename = Encoding.UTF8.GetString(savedobjects["FileName-v1"]);
             long numdateaccessed = BitConverter.ToInt64(savedobjects["DateAccessedUTC-v1"], 0);
             long numdatemodified = BitConverter.ToInt64(savedobjects["DateModifiedUTC-v1"], 0);
             long numdatecreated = BitConverter.ToInt64(savedobjects["DateCreatedUTC-v1"], 0);

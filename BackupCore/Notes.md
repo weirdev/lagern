@@ -52,6 +52,7 @@ Handle common things that could go wrong
 	when only one of backup or blob index is updated
 		more generally any time they become out of sync
 			"stamp" them with uuid so can detect out of sync?
+	Save "progress" so can pick up after large backup halted
 	more...
 More flexible "list" command
 	Ranges of n-m backups ago
