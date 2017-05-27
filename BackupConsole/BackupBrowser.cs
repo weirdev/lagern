@@ -55,7 +55,7 @@ namespace BackupConsole
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
                 Console.Write(String.Format("backup {0}:{1}> ", BackupHash.Substring(0, hashdisplen), CurrentNode.Path));
                 string command = Console.ReadLine();
-                string[] args = command.Split();
+                string[] args = SplitArguments(command);
                 try
                 {
                     var parsed = browse_scanner.ParseInput(args);
@@ -135,6 +135,31 @@ namespace BackupConsole
                     ShowCommands();
                 }
             }
+        }
+
+        /// <summary>
+        /// Splits a command string, respecting args enclosed in double quotes
+        /// </summary>
+        /// <param name="commandLine"></param>
+        /// <returns></returns>
+        static string[] SplitArguments(string commandLine)
+        {
+            char[] parmChars = commandLine.ToCharArray();
+            bool inQuote = false;
+            for (int index = 0; index < parmChars.Length; index++)
+            {
+                if (parmChars[index] == '"')
+                    inQuote = !inQuote;
+                if (!inQuote && parmChars[index] == ' ')
+                    parmChars[index] = '\n';
+            }
+            string split = new string(parmChars);
+            while (split.Contains("\n\n"))
+            {
+                split = split.Replace("\n\n", "\n");
+            }
+            split = split.Replace("\"", "");
+            return split.Split('\n');
         }
 
         private static ArgumentScanner BrowseArgScannerFactory()

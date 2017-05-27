@@ -1,28 +1,6 @@
 ﻿*********************
 IN PROGRESS
 Test support for large backup sets
-	Time simple copy vs backup run
-		1000 files
-		1,000,000 bytes each
-		~0.5 MB index overhead
-		Simple copy
-			38.625 seconds
-		Synchronous backup run (Debug)
-			memory usage always <35 MB
-			250.368 seconds
-			Update (metadata should yeild no scanning needed)
-				...
-		Synchronous backup run (Release)
-			memory usage always <24MB
-			148.547 seconds
-			low cpu usage
-				majority of cpu time spent splitting files
-			Update (metadata should yeild no scanning needed)
-				Near instantaneous
-		Asynchronous backup run
-			Memory usage ~50 MB
-			83.828 seconds
-			cpu usage choppy averages about 1/2 utilization
 	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
 		bulk loading of tree
@@ -136,3 +114,22 @@ Uses ranked list of add/ignore rules
 				Date modified changed so scan
 			3 = Scanned every time regardless of metadata
 				Behavior of 1,2, and 3 when force scan switch is used
+
+Current performance results
+Time simple copy vs backup run
+		1000 files
+		1,000,000 bytes each
+		~0.5 MB index overhead
+		Simple copy
+			38.625 seconds
+		Synchronous backup run (Release)
+			memory usage always <24MB
+			148.547 seconds
+			low cpu usage
+				majority of cpu time spent splitting files
+			Update (metadata should yeild no scanning needed)
+				Near instantaneous
+		Asynchronous backup run
+			Memory usage ~50 MB
+			83.828 seconds
+			cpu usage choppy, averages about 3/4 utilization
