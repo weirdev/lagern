@@ -32,14 +32,14 @@ namespace Testing
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));
 
-            Console.WriteLine(BackupRun(@"D:\src", @"D:\dst"));
+            Console.WriteLine(BackupRun("test", @"D:\src", @"D:\dst"));
 
             Console.ReadLine();
         }
 
-        static double BackupRun(string src, string dst)
+        static double BackupRun(string name, string src, string dst)
         {
-            var backupper = new BackupCore.Core(src, dst); // Dont count initial setup in time
+            var backupper = new BackupCore.Core(name, src, dst); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             

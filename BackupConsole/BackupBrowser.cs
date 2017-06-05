@@ -16,10 +16,11 @@ namespace BackupConsole
 
         BackupCore.Core BCore { get; set; }
         string BackupHash { get; set; }
+        string BackupStoreName { get; set; }
         BackupCore.MetadataTree BackupTree { get; set; }
         BackupCore.MetadataNode CurrentNode { get; set; }
 
-        public BackupBrowser(string backuphash)
+        public BackupBrowser(string backupstorename, string backuphash)
         {
             string destination = Program.ReadSetting("dest");
             if (destination == null)
@@ -32,7 +33,7 @@ namespace BackupConsole
                     return;
                 }
             }
-            BCore = new BackupCore.Core(cwd, destination);
+            BCore = new BackupCore.Core(backupstorename, cwd, destination);
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
@@ -43,6 +44,7 @@ namespace BackupConsole
                 targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.Item1;
+            BackupStoreName = backupstorename;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
             CurrentNode = BackupTree.Root;
@@ -92,7 +94,7 @@ namespace BackupConsole
                                 restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
                             }
                         }
-                        Program.RestoreFile(filerelpath, restorepath, BackupHash);
+                        Program.RestoreFile(BackupStoreName, filerelpath, restorepath, BackupHash);
                     }
                     else if (parsed.Item1 == "cb")
                     {

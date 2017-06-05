@@ -1,11 +1,28 @@
 ﻿*********************
 IN PROGRESS
-Multiple base folders
-	Multiple bacups with different settings to same destination
+Multiple backup stores to single destination
+	Multiple base folders
+	New nomenclature
+		backupStore -> backup ~= 1 metadatatree
+	Backup store now specified with a backupstorename in addition to a src and dst directory
+		Backup name associated with a seperate backupstore for each backup
+	Multiple base folders initially considered seperate backups
+		May change later
+			Support multiple base folders within a backup?
+		Or this may be the best way to handle it
+			Use ignore rules in a single backup for files user want to treat similarly
+			For files that need to be treated differently, use an entirely seperate backup
+	Uses
 		"dumb" binary backup of entire partition
 		"smart" backup of files folders
 		Data deduplicated itra- and inter- backup source
 			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
+Rename solution/program
+	new name == sicher
+		~~Z-sher
+	short for Sicherheitskopie
+		German for "(computer) backup"
+	sicher translates to safe/reliable/secure
 Transfer a single backup to existing/new different backup destination
 	Would show up as new base folder
 Add more unit tests

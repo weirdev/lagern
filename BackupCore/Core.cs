@@ -13,11 +13,15 @@ namespace BackupCore
 {
     public class Core
     {
-        public string BackuppathSrc { get; set; }
+        public string BackupStoreName { get; set; }
 
-        public string BackuppathDst { get; set; }
+        public string BackupPathSrc { get; set; }
+
+        public string BackupPathDst { get; set; }
 
         public string BackupIndexDir { get; set; }
+
+        public string BackupStoresDir { get; set; }
 
         public string BlobIndexFile { get; set; }
 
@@ -30,34 +34,43 @@ namespace BackupCore
         /// <summary>
         /// 
         /// </summary>
-        /// <param name="src"></param>
-        /// <param name="dst"></param>
+        /// <param name="backupstorename"></param>
+        /// <param name="src">Backup source directory</param>
+        /// <param name="dst">Backup destination directory</param>
         /// <param name="continueorkill">
         /// Function that takes an error message as input.
         /// Meant to be used to optionally halt execution in case of errors.
         /// </param>
-        public Core(string src, string dst, Action<string> continueorkill=null)
+        public Core(string backupstorename, string src, string dst, Action<string> continueorkill=null)
         {
-            BackuppathSrc = src;
-            BackuppathDst = dst;
-
-            BackupIndexDir = Path.Combine(BackuppathDst, "backup");
+            BackupStoreName = backupstorename;
+            BackupPathSrc = src;
+            BackupPathDst = dst;
+            
+            BackupIndexDir = Path.Combine(BackupPathDst, "backup");
 
             // Make sure we have an index folder to write to later
-            if (!Directory.Exists(Path.Combine(BackuppathDst, "backup")))
+            if (!Directory.Exists(BackupIndexDir))
             {
                 Directory.CreateDirectory(BackupIndexDir);
             }
 
-            BlobIndexFile = Path.Combine(BackuppathDst, "backup", "hashindex");
-            BackupListFile = Path.Combine(BackuppathDst, "backup", "backuplist");
+            BackupStoresDir = Path.Combine(BackupIndexDir, "backupstores");
 
+            // Make sure we have a backup list folder to write to later
+            if (!Directory.Exists(BackupStoresDir))
+            {
+                Directory.CreateDirectory(BackupStoresDir);
+            }
+
+            BlobIndexFile = Path.Combine(BackupIndexDir, "hashindex");
+            BackupListFile = Path.Combine(BackupStoresDir, backupstorename);
 
             if (File.Exists(BlobIndexFile))
             {
                 try
                 {
-                    Blobs = BlobStore.LoadFromFile(BlobIndexFile, BackuppathDst);
+                    Blobs = BlobStore.LoadFromFile(BlobIndexFile, BackupPathDst);
                 }
                 catch (Exception)
                 {
@@ -67,7 +80,7 @@ namespace BackupCore
             }
             else // Safe to write a new file since one not already there
             {
-                Blobs = new BlobStore(BlobIndexFile, BackuppathDst);
+                Blobs = new BlobStore(BlobIndexFile, BackupPathDst);
             }
 
 
@@ -96,7 +109,7 @@ namespace BackupCore
             // Esentially creates thousands of threads containing infinite loops checking for completed work
             // and no work is ever completed
             // ** Trying without parallelism in fetching files/directories only on operating on those results
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackupPathSrc));
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
@@ -189,7 +202,7 @@ namespace BackupCore
 
         public void RunBackupSync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaterns=null)
         {
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackuppathSrc));
+            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackupPathSrc));
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
@@ -325,7 +338,7 @@ namespace BackupCore
         {
             if (path == null)
             {
-                path = BackuppathSrc;
+                path = BackupPathSrc;
             }
 
             // TODO: Bigger inital stack size?
@@ -362,12 +375,12 @@ namespace BackupCore
                     bool trackdir = true;
                     if (trackpaterns != null)
                     {
-                        trackdir = CheckTrackAnyDirectoryChild(sd.Substring(BackuppathSrc.Length + 1), trackpaterns);
+                        trackdir = CheckTrackAnyDirectoryChild(sd.Substring(BackupPathSrc.Length + 1), trackpaterns);
                     }
                     if (trackdir)
                     {
                         dirs.Push(sd);
-                        string relpath = sd.Substring(BackuppathSrc.Length + 1);
+                        string relpath = sd.Substring(BackupPathSrc.Length + 1);
                         directoryqueue.Add(relpath);
                     }
                 }
@@ -395,10 +408,10 @@ namespace BackupCore
                     int trackclass = 2;
                     if (trackpaterns != null)
                     {
-                        trackclass = FileTrackClass(file.Substring(BackuppathSrc.Length + 1), trackpaterns);
+                        trackclass = FileTrackClass(file.Substring(BackupPathSrc.Length + 1), trackpaterns);
                     }
                     // Convert file path to a relative path
-                    string relpath = file.Substring(BackuppathSrc.Length + 1);
+                    string relpath = file.Substring(BackupPathSrc.Length + 1);
                     try // We (may) read the file's metadata here so wrap errors
                     {
                         switch (trackclass)
@@ -410,7 +423,7 @@ namespace BackupCore
                                 if (previousmtree != null)
                                 {
                                     FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
+                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackupPathSrc, relpath));
                                     if (previousfm != null)
                                     {
                                         noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
@@ -427,7 +440,7 @@ namespace BackupCore
                                 if (previousmtree != null)
                                 {
                                     FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackuppathSrc, relpath));
+                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackupPathSrc, relpath));
                                     if (previousfm != null && previousfm.FileSize == curfm.FileSize
                                         && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
                                     {
@@ -591,7 +604,7 @@ namespace BackupCore
 
         private void BackupDirectory(string relpath, MetadataTree mtree)
         {
-            mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackuppathSrc, relpath)));
+            mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackupPathSrc, relpath)));
         }
 
         // TODO: This has problems (see todo on BlobStore.StoreDataAsync()
@@ -602,7 +615,7 @@ namespace BackupCore
             // equivelent one in BackupFileSync with a single method for getting a stream
             try
             {
-                FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
+                FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
                 byte[] filehash = Blobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
                 BackupFileMetadata(relpath, filehash, mtree);
             }
@@ -617,7 +630,7 @@ namespace BackupCore
         {
             try
             {
-                FileStream readerbuffer = File.OpenRead(Path.Combine(BackuppathSrc, relpath));
+                FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
                 byte[] filehash = Blobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
                 BackupFileMetadata(relpath, filehash, mtree);
             }
@@ -641,7 +654,7 @@ namespace BackupCore
         /// <exception cref="NotSupportedException"/>
         protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
         {
-            FileMetadata fm = new FileMetadata(Path.Combine(BackuppathSrc, relpath))
+            FileMetadata fm = new FileMetadata(Path.Combine(BackupPathSrc, relpath))
             {
                 FileHash = filehash
             };
