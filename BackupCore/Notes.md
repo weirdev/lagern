@@ -18,11 +18,11 @@ Multiple backup stores to single destination
 		Data deduplicated itra- and inter- backup source
 			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
 Rename solution/program
-	new name == sicher
+	new name == Lagern
 		~~Z-sher
-	short for Sicherheitskopie
+	short for Lagernheitskopie
 		German for "(computer) backup"
-	sicher translates to safe/reliable/secure
+	Lagern translates to safe/reliable/secure
 Transfer a single backup to existing/new different backup destination
 	Would show up as new base folder
 Add more unit tests
