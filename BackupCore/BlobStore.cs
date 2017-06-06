@@ -213,7 +213,7 @@ namespace BackupCore
                 for (int i = 0; i < blockhashstream.Length / 20; i++)
                 {
                     byte[] buffer = new byte[20];
-                    blockhashstream.Read(buffer, i * 20, 20);
+                    blockhashstream.Read(buffer, 0, 20);
                     blockhashes.Add(buffer);
                 }
                 blockhashstream.Close();
