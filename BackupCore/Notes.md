@@ -120,7 +120,7 @@ Uses ranked list of add/ignore rules
 			1 = File data only scanned on first backup
 				Changes ignored
 			2 = Scanned only based on metadata heuristics (default behavior when no lists present)
-				Date modified changed so scan
+				Date modified or length changed so scan
 			3 = Scanned every time regardless of metadata
 				Behavior of 1,2, and 3 when force scan switch is used
 

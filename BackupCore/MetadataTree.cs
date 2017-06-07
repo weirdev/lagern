@@ -41,7 +41,11 @@ namespace BackupCore
                 slash = 0;
             }
             MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
-            return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
+            if (parent != null)
+            {
+                return parent.GetFile(relpath.Substring(slash + 1, relpath.Length - slash - 1));
+            }
+            return null;
         }
         
         public MetadataNode GetDirectory(string relpath)

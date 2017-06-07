@@ -519,7 +519,7 @@ namespace BackupCore
         /// <returns></returns>
         public static int FileTrackClass(string file, List<Tuple<int, string>> trackpatterns)
         {
-            int trackclass = 0;
+            int trackclass = 2;
             foreach (var pattern in trackpatterns)
             {
                 if (PathMatchesPattern(file, pattern.Item2))
@@ -538,7 +538,7 @@ namespace BackupCore
         /// <returns></returns>
         public static bool CheckTrackAnyDirectoryChild(string directory, List<Tuple<int, string>> trackpatterns)
         {
-            bool track = false;
+            bool track = true;
             foreach (var pattern in trackpatterns)
             {
                 if (track)
@@ -553,9 +553,12 @@ namespace BackupCore
                             {
                                 track = false;
                             }
-                            else if (PathMatchesPattern(directory, pattern.Item2))
+                            else if (pattern.Item2.Substring(pattern.Item2.Length - 2) == "/*") // trailing wildcard must come immediately after a slash /*
                             {
-                                track = false;
+                                if (PathMatchesPattern(directory, pattern.Item2.Substring(0, pattern.Item2.Length - 2))) 
+                                {
+                                    track = false;
+                                }
                             }
                         }
                     }
