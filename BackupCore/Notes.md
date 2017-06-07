@@ -1,5 +1,9 @@
 ﻿*********************
 IN PROGRESS
+Refactor metadata node to not include '..' in its public list of directories
+	Maybe dont include '..' in list at all, handle like '.'
+	Then fix every other place already handling '..' explicitly
+	Reasons for this??
 Multiple backup stores to single destination
 	Multiple base folders
 	New nomenclature
@@ -36,10 +40,6 @@ Test support for large backup sets
 	Reduce number of blob files per directory
 		Currently one file per blob and all files in destination root
 		(Some) operating systems have poor performance with many files in a single directory
-Refactor metadata node to not include '..' in its public list of directories
-	Maybe dont include '..' in list at all, handle like '.'
-	Then fix every other place already handling '..' explicitly
-	Reasons for this??
 Handle common things that could go wrong
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes

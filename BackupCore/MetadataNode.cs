@@ -17,6 +17,8 @@ namespace BackupCore
         // Name of root node should be "."
         // A Directory is a special type of file and has its own metadata
 
+        public MetadataNode Parent { get; set; }
+
         /// <summary>
         /// Metadata about this directory itself.
         /// </summary>
@@ -29,9 +31,9 @@ namespace BackupCore
         {
             get
             {
-                if (Directories[".."] != null)
+                if (Parent != null)
                 {
-                    return System.IO.Path.Combine(Directories[".."].Path, DirMetadata.FileName);
+                    return System.IO.Path.Combine(Parent.Path, DirMetadata.FileName);
                 }
                 else
                 {
@@ -42,12 +44,13 @@ namespace BackupCore
 
         public MetadataNode(FileMetadata metadata, MetadataNode parent)
         {
+            Parent = parent;
             DirMetadata = metadata;
             Directories = new Dictionary<string, MetadataNode>();
-            Directories.Add("..", parent);
             Files = new Dictionary<string, FileMetadata>();
         }
 
+        // For serialization/deserialization
         private MetadataNode()
         {
             //DirMetadata = metadata;
@@ -74,6 +77,10 @@ namespace BackupCore
             if (name == ".")
             {
                 return this;
+            }
+            if (name == "..")
+            {
+                return Parent;
             }
             if (Directories != null && Directories.ContainsKey(name))
             {
@@ -125,10 +132,6 @@ namespace BackupCore
             }
             foreach (var d in Directories)
             {
-                if (d.Key == "." || d.Key == "..")
-                {
-                    continue;
-                }
                 foreach (var f in d.Value.GetAllFileHashes())
                 {
                     yield return f;
@@ -152,7 +155,7 @@ namespace BackupCore
             // Files = enum_encode([Files.Values FileMetadata.serialize(),... ])
 
             mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
-            mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from smnkvp in Directories where smnkvp.Key!=".." select smnkvp.Value.serialize()));
+            mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from smnkvp in Directories select smnkvp.Value.serialize()));
             mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
 
             return BinaryEncoding.dict_encode(mtdata);
@@ -179,7 +182,7 @@ namespace BackupCore
                 MetadataNode newmn = MetadataNode.deserialize(binmn, curmn);
                 directories.Add(newmn.DirMetadata.FileName, newmn);
             }
-            directories[".."] = parent;
+            curmn.Parent = parent;
             curmn.Directories = directories;
             Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
             foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))

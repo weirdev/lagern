@@ -203,7 +203,7 @@ namespace BackupConsole
         {
             BackupCore.MetadataNode dir = CurrentNode;
 
-            List<BackupCore.MetadataNode> childdirectories = new List<BackupCore.MetadataNode>(from cdir in dir.Directories where cdir.Key!=".." select cdir.Value);
+            List<BackupCore.MetadataNode> childdirectories = new List<BackupCore.MetadataNode>(from cdir in dir.Directories select cdir.Value);
             childdirectories.Sort(delegate (BackupCore.MetadataNode x, BackupCore.MetadataNode y)
             {
                return x.DirMetadata.FileName.CompareTo(y.DirMetadata.FileName);

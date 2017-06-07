@@ -317,10 +317,7 @@ namespace BackupCore
                         }
                         foreach (var childdir in dir.Directories.Keys)
                         {
-                            if (childdir != "..")
-                            {
-                                RestoreFileOrDirectory(Path.Combine(relfilepath, childdir), Path.Combine(restorepath, childdir), backuphashprefix);
-                            }
+                            RestoreFileOrDirectory(Path.Combine(relfilepath, childdir), Path.Combine(restorepath, childdir), backuphashprefix);
                         }
                         dir.DirMetadata.WriteOutMetadata(restorepath); // Set metadata after finished changing contents (postorder)
                     }
