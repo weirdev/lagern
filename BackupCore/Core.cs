@@ -254,10 +254,8 @@ namespace BackupCore
                     newmetatree.AddFile(dir_fmeta.Item1, dir_fmeta.Item2);
                 }
             }
-
-            // Add new metadatatree to metastore
-            byte[] newmtreebytes = newmetatree.serialize();
-            byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            
+            byte[] newmtreehash = newmetatree.Store(Blobs);
 
             BUStore.AddBackup(message, newmtreehash);
 

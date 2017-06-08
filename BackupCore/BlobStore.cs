@@ -362,13 +362,13 @@ namespace BackupCore
             }
             switch (blocation.BlobType)
             {
-                case BlobLocation.BlobTypes.MetadataTree:
+                /*case BlobLocation.BlobTypes.MetadataTree:
                     MetadataTree mtree = MetadataTree.Load(blobhash, this);
                     foreach (var filehash in mtree.GetAllFileHashes())
                     {
                         GetReferenceFrequencies(filehash, hashfreqsize);
                     }
-                    break;
+                    break;*/
                 case BlobLocation.BlobTypes.BackupRecord:
                     BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
                     GetReferenceFrequencies(br.MetadataTreeHash, hashfreqsize);
@@ -493,13 +493,13 @@ namespace BackupCore
                     break;
                 case BlobLocation.BlobTypes.FileBlob:
                     break;
-                case BlobLocation.BlobTypes.MetadataTree:
+                /*case BlobLocation.BlobTypes.MetadataTree:
                     MetadataTree mtree = MetadataTree.Load(blobhash, this);
                     foreach (var filehash in mtree.GetAllFileHashes())
                     {
                         DereferenceOneDegree(filehash);
                     }
-                    break;
+                    break;*/
                 case BlobLocation.BlobTypes.BackupRecord:
                     BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
                     DereferenceOneDegree(br.MetadataTreeHash);
