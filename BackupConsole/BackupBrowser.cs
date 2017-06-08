@@ -79,7 +79,7 @@ namespace BackupConsole
                     else if (parsed.Item1 == "restore")
                     {
                         // "restore <filerelpath> [-r <>]"
-                        string filerelpath = Path.Combine(CurrentNode.Path, parsed.Item2["filerelpath"]);
+                        string filerelpath = Path.Combine(CurrentNode.Path, parsed.Item2["filerelpath"]).Substring(1); // strip leading slash
                         // If no restoreto path given, restore
                         // to cwd / its relative path
                         string restorepath = Path.Combine(cwd, filerelpath);
