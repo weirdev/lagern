@@ -12,7 +12,7 @@ namespace BackupCore
     /// Represents a directory.
     /// Includes the directory's metadata and name based access to its children.
     /// </summary>
-    public class MetadataNode : ICustomSerializable<MetadataNode>
+    public class MetadataNode
     {
         // Name of root node should be "."
         // A Directory is a special type of file and has its own metadata
@@ -140,12 +140,65 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Serializes a node.
-        /// Will recursively serialize all child nodes.
-        /// Obviously breaks with circular references, but these should only occur
+        /// Store this node and its descendents in a blobstore
+        /// Breaks with circular references, but these should only occur
         /// with hard- (and soft-?) -links TODO: handle links
         /// </summary>
+        /// <param name="blobs"></param>
         /// <returns></returns>
+        public byte[] Store(BlobStore blobs)
+        {
+            List<byte[]> dirhashes = new List<byte[]>();
+            foreach (MetadataNode dir in Directories.Values)
+            {
+                dirhashes.Add(dir.Store(blobs));
+            }
+            Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
+            // -"-v1"
+            // DirMetadata = FileMetadata DirMetadata.serialize()
+            // Directories = enum_encode([Directories.Values MetadataNode.serialize(),... ])
+            // Files = enum_encode([Files.Values FileMetadata.serialize(),... ])
+            // -"-v2"
+            // Directories = enum_encode([dirrefs,...])
+            mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
+            mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
+
+            mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
+            
+            return blobs.StoreDataSync(BinaryEncoding.dict_encode(mtdata), BlobLocation.BlobTypes.MetadataNode);
+        }
+
+        public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)
+        {
+            var curmn = new MetadataNode();
+
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.GetBlob(hash));
+            FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
+            curmn.DirMetadata = dirmetadata;
+            Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
+            foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
+            {
+                FileMetadata newfm = FileMetadata.deserialize(binfm);
+                files.Add(newfm.FileName, newfm);
+            }
+            curmn.Files = files;
+            Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
+            foreach (var binmnhash in BinaryEncoding.enum_decode(savedobjects["Directories-v2"]))
+            {
+                MetadataNode newmn = Load(blobs, binmnhash, curmn);
+                directories.Add(newmn.DirMetadata.FileName, newmn);
+            }
+            curmn.Parent = parent;
+            curmn.Directories = directories;
+            return curmn;
+        }
+
+        public static List<byte[]> GetChildDirHashes(byte[] data)
+        {
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            return BinaryEncoding.enum_decode(savedobjects["Directories-v2"]);
+        }
+
         public byte[] serialize()
         {
             Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();

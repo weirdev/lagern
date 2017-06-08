@@ -8,8 +8,9 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class MetadataTree : ICustomSerializable<MetadataTree>
+    public class MetadataTree
     {
+
         public MetadataNode Root { get; set; }
 
         public MetadataTree(FileMetadata rootmetadata)
@@ -114,6 +115,16 @@ namespace BackupCore
         public IEnumerable<byte[]> GetAllFileHashes()
         {
             return Root.GetAllFileHashes();
+        }
+
+        public byte[] Store(BlobStore blobs)
+        {
+            return Root.Store(blobs);
+        }
+
+        public static MetadataTree Load(byte[] roothash, BlobStore blobs)
+        {
+            return new MetadataTree(MetadataNode.Load(blobs, roothash));
         }
 
         /// <summary>

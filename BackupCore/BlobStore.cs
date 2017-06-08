@@ -13,7 +13,7 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    public class BlobStore : ICustomSerializable<BlobStore>
+    public class BlobStore
     {
         // TODO: Consider some inheritance relationship between this class and BPlusTree
         public BPlusTree<BlobLocation> TreeIndexStore { get; private set; }
@@ -341,7 +341,7 @@ namespace BackupCore
             return new Tuple<int, int>(allreferences, uniquereferences);
         }
 
-        private void GetReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize)
+        private void GetReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize) // TODO: replace the object[] with a tuple
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
             BlobLocation blocation = GetBlobLocation(blobhash);
@@ -363,7 +363,7 @@ namespace BackupCore
             switch (blocation.BlobType)
             {
                 case BlobLocation.BlobTypes.MetadataTree:
-                    MetadataTree mtree = MetadataTree.deserialize(GetBlob(blobhash));
+                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
                     foreach (var filehash in mtree.GetAllFileHashes())
                     {
                         GetReferenceFrequencies(filehash, hashfreqsize);
@@ -372,6 +372,13 @@ namespace BackupCore
                 case BlobLocation.BlobTypes.BackupRecord:
                     BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
                     GetReferenceFrequencies(br.MetadataTreeHash, hashfreqsize);
+                    break;
+                case BlobLocation.BlobTypes.MetadataNode:
+                    var childdirhashes = MetadataNode.GetChildDirHashes(GetBlob(blobhash));
+                    foreach (var dirhash in childdirhashes)
+                    {
+                        GetReferenceFrequencies(dirhash, hashfreqsize);
+                    }
                     break;
                 default: // BlobLocation.BlobTypes.Simple || BlobLocation.BlobTypes.FileBlob
                     break;
@@ -384,6 +391,7 @@ namespace BackupCore
         // any execution time benefit
         public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
         {
+            throw new NotImplementedException();
             return StoreDataAsync(new MemoryStream(inputdata), type);
         }
         
@@ -486,7 +494,7 @@ namespace BackupCore
                 case BlobLocation.BlobTypes.FileBlob:
                     break;
                 case BlobLocation.BlobTypes.MetadataTree:
-                    MetadataTree mtree = MetadataTree.deserialize(GetBlob(blobhash));
+                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
                     foreach (var filehash in mtree.GetAllFileHashes())
                     {
                         DereferenceOneDegree(filehash);
@@ -496,8 +504,15 @@ namespace BackupCore
                     BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
                     DereferenceOneDegree(br.MetadataTreeHash);
                     break;
-                default:
+                case BlobLocation.BlobTypes.MetadataNode:
+                    var childdirhashes = MetadataNode.GetChildDirHashes(GetBlob(blobhash));
+                    foreach (var dirhash in childdirhashes)
+                    {
+                        DereferenceOneDegree(dirhash);
+                    }
                     break;
+                default:
+                    throw new Exception("Unhandled blobtype on dereference");
             }
             if (blocation.ReferenceCount <= 0)
             {

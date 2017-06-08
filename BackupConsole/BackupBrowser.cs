@@ -46,7 +46,7 @@ namespace BackupConsole
             BackupHash = targetbackuphashandrecord.Item1;
             BackupStoreName = backupstorename;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
+            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.Blobs);
             CurrentNode = BackupTree.Root;
         }
 
@@ -256,7 +256,7 @@ namespace BackupConsole
             var targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.deserialize(BCore.Blobs.GetBlob(backuprecord.MetadataTreeHash));
+            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.Blobs);
             CurrentNode = BackupTree.GetDirectory(curpath);
             if (CurrentNode == null)
             {

@@ -128,7 +128,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
+                    MetadataTree previousmtree = MetadataTree.Load(previousbackup.MetadataTreeHash, Blobs);
                     //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
                     GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters);
                 }
@@ -172,10 +172,14 @@ namespace BackupCore
             }
             Task.WaitAll(backupops.ToArray());
 
+            /*
             // Add new metadatatree to metastore
             byte[] newmtreebytes = newmetatree.serialize();
             //byte[] newmtreehash = Blobs.StoreDataAsync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
+            */
+
+            byte[] newmtreehash = newmetatree.Store(Blobs);
 
             BUStore.AddBackup(message, newmtreehash);
 
@@ -213,7 +217,7 @@ namespace BackupCore
                 BackupRecord previousbackup = BUStore.GetBackupRecord();
                 if (previousbackup != null)
                 {
-                    MetadataTree previousmtree = MetadataTree.deserialize(Blobs.GetBlob(previousbackup.MetadataTreeHash));
+                    MetadataTree previousmtree = MetadataTree.Load(previousbackup.MetadataTreeHash, Blobs);
                     GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaterns);
                 }
                 else
@@ -289,7 +293,7 @@ namespace BackupCore
         {
             try
             {
-                MetadataTree mtree = MetadataTree.deserialize(Blobs.GetBlob(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash));
+                MetadataTree mtree = MetadataTree.Load(BUStore.GetBackupRecord(backuphashprefix).MetadataTreeHash, Blobs);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
