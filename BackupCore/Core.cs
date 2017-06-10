@@ -295,7 +295,7 @@ namespace BackupCore
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
-                    byte[] filedata = Blobs.GetBlob(filemeta.FileHash);
+                    byte[] filedata = Blobs.RetrieveData(filemeta.FileHash);
                     // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
                     using (FileStream writer = new FileStream(restorepath, FileMode.OpenOrCreate))
                     {

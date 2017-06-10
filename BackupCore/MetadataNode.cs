@@ -172,7 +172,7 @@ namespace BackupCore
         {
             var curmn = new MetadataNode();
 
-            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.GetBlob(hash));
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash));
             FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
             curmn.DirMetadata = dirmetadata;
             Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();

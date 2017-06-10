@@ -29,131 +29,96 @@ namespace BackupCore
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
         }
 
-        /// <summary>
-        /// Attempts to load a previously saved BlobStore object from a file.
-        /// If loading fails, an error is thrown.
-        /// </summary>
-        /// <param name="blobindexfile"></param>
-        /// <param name="backupdstpath"></param>
-        /// <returns></returns>
-        public static BlobStore LoadFromFile(string blobindexfile, string backupdstpath)
+        // TODO: These async methods have parallelization problems as written and dont provide
+        // any execution time benefit
+        public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
         {
-            using (FileStream fs = new FileStream(blobindexfile, FileMode.Open, FileAccess.Read))
+            throw new NotImplementedException();
+            return StoreDataAsync(new MemoryStream(inputdata), type);
+        }
+
+        public byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
+        {
+            throw new NotImplementedException(); // Not currently working
+            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            byte[] filehash = new byte[20]; // Overall hash of file
+            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblockqueue));
+
+            List<byte[]> blockshashes = new List<byte[]>();
+            while (!fileblockqueue.IsCompleted)
             {
-                using (BinaryReader reader = new BinaryReader(fs))
+                if (fileblockqueue.TryTake(out HashBlockPair block))
                 {
-                    return BlobStore.deserialize(reader.ReadBytes((int)fs.Length), blobindexfile, backupdstpath);
+                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
+                    blockshashes.Add(block.Hash);
+                }
+                if (getfileblockstask.IsFaulted)
+                {
+                    throw getfileblockstask.Exception;
                 }
             }
-        }
-
-        /// <summary>
-        /// Adds a hash and corresponding BackupLocation to the Index.
-        /// </summary>
-        /// <param name="hash"></param>
-        /// <returns>
-        /// True if we already have the hash stored. False if we need to
-        /// save the corresponding block.
-        /// </returns>
-        private bool AddHash(byte[] hash, BlobLocation blocation)
-        {
-            // Adds a hash and Blob Location to the BlockHashStore
-            BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
-            if (existingblocation != null)
+            if (blockshashes.Count > 1)
             {
-                existingblocation.ReferenceCount += 1;
-            }
-            return existingblocation != null;
-        }
-
-        /// <summary>
-        /// Add list of blocks to blobstore. Automatically creates a reference blob (hashlist) if blocks.count > 1
-        /// </summary>
-        /// <param name="hash"></param>
-        /// <param name="blocks"></param>
-        /// <param name="type"></param>
-        public void AddBlob(byte[] hash, List<HashBlockPair> blocks, BlobLocation.BlobTypes type)
-        {
-            if (blocks.Count == 1)
-            {
-                AddBlob(blocks[0], type);
+                // Multiple blocks so create hashlist blob to reference them all together
+                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
+                for (int i = 0; i < blockshashes.Count; i++)
+                {
+                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
+                }
+                AddMultiBlockReferenceBlob(filehash, hashlist, type);
             }
             else
             {
-                byte[] hashlist = new byte[blocks[0].Hash.Length * blocks.Count];
-                for (int i = 0; i < blocks.Count; i++)
-                {
-                    AddBlob(blocks[i], BlobLocation.BlobTypes.Simple, false);
-                    Array.Copy(blocks[i].Hash, 0, hashlist, blocks[0].Hash.Length * i, blocks[0].Hash.Length);
-                }
-                AddMultiBlockReferenceBlob(hash, hashlist, type);
+                // Just the one block, so change its type to `type`
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
             }
+            return filehash;
+        }
+
+        public byte[] StoreDataSync(byte[] inputdata, BlobLocation.BlobTypes type)
+        {
+            return StoreDataSync(new MemoryStream(inputdata), type);
         }
 
         /// <summary>
-        /// Add a single blob to blobstore.
+        /// Backup data sychronously.
         /// </summary>
-        /// <param name="block"></param>
-        /// <param name="type"></param>
-        /// <param name="isMultiBlockReference"></param>
-        public void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type)
+        /// <param name="relpath"></param>
+        /// <returns>A list of hashes representing the file contents.</returns>
+        public byte[] StoreDataSync(Stream readerbuffer, BlobLocation.BlobTypes type)
         {
-            AddBlob(block, type, false);
-        }
+            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            byte[] filehash = new byte[20]; // Overall hash of file
+            SplitData(readerbuffer, filehash, fileblockqueue);
 
-        private void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type, bool isMultiBlockReference)
-        {
-            string relpath = HashTools.ByteArrayToHexViaLookup32(block.Hash);
-            BlobLocation posblocation = new BlobLocation(type, isMultiBlockReference, relpath, 0, block.Block.Length);
-            bool alreadystored = false;
-            lock (this)
+            List<byte[]> blockshashes = new List<byte[]>();
+            while (!fileblockqueue.IsCompleted)
             {
-                // Have we already stored this 
-                alreadystored = AddHash(block.Hash, posblocation);
-            }
-            if (!alreadystored)
-            {
-                WriteBlob(posblocation, block.Block);
-            }
-        }
-
-        public void AddMultiBlockReferenceBlob(byte[] hash, byte[] hashlist, BlobLocation.BlobTypes type)
-        {
-            HashBlockPair referenceblock = new HashBlockPair(hash, hashlist);
-            AddBlob(referenceblock, type, true);
-        }
-
-        public void WriteBlob(BlobLocation blocation, byte[] blob)
-        {
-            string path = Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath);
-            try
-            {
-                using (FileStream writer = File.OpenWrite(path))
+                if (fileblockqueue.TryTake(out HashBlockPair block))
                 {
-                    writer.Seek(blocation.BytePosition, SeekOrigin.Begin);
-                    writer.Write(blob, 0, blob.Length);
-                    writer.Flush();
-                    writer.Close();
+                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
+                    blockshashes.Add(block.Hash);
                 }
             }
-            catch (Exception)
+            if (blockshashes.Count > 1)
             {
-                Console.WriteLine("Failed to write blob");
-                throw;
+                // Multiple blocks so create hashlist blob to reference them all together
+                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
+                for (int i = 0; i < blockshashes.Count; i++)
+                {
+                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
+                }
+                AddMultiBlockReferenceBlob(filehash, hashlist, type);
             }
+            else
+            {
+                // Just the one block, so change its type to FileBlob
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
+            }
+            return filehash;
         }
 
-        public bool ContainsHash(byte[] hash)
-        {
-            return TreeIndexStore.GetRecord(hash) != null;
-        }
-
-        public BlobLocation GetBlobLocation(byte[] hash)
-        {
-            return TreeIndexStore.GetRecord(hash);
-        }
-
-        public byte[] GetBlob(byte[] filehash)
+        public byte[] RetrieveData(byte[] filehash)
         {
             BlobLocation blobbl = GetBlobLocation(filehash);
             if (blobbl.IsMultiBlockReference) // File is comprised of multiple blocks
@@ -200,6 +165,164 @@ namespace BackupCore
             }
         }
 
+        public void DereferenceOneDegree(byte[] blobhash)
+        {
+            BlobLocation blocation = GetBlobLocation(blobhash);
+            blocation.ReferenceCount -= 1;
+            if (blocation.IsMultiBlockReference)
+            {
+                foreach (var hash in GetHashListFromBlob(blocation))
+                {
+                    DereferenceOneDegree(hash);
+                }
+            }
+            switch (blocation.BlobType)
+            {
+                case BlobLocation.BlobTypes.Simple:
+                    break;
+                case BlobLocation.BlobTypes.FileBlob:
+                    break;
+                /*case BlobLocation.BlobTypes.MetadataTree:
+                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
+                    foreach (var filehash in mtree.GetAllFileHashes())
+                    {
+                        DereferenceOneDegree(filehash);
+                    }
+                    break;*/
+                case BlobLocation.BlobTypes.BackupRecord:
+                    BackupRecord br = BackupRecord.deserialize(RetrieveData(blobhash));
+                    DereferenceOneDegree(br.MetadataTreeHash);
+                    break;
+                case BlobLocation.BlobTypes.MetadataNode:
+                    var childdirhashes = MetadataNode.GetChildDirHashes(RetrieveData(blobhash));
+                    foreach (var dirhash in childdirhashes)
+                    {
+                        DereferenceOneDegree(dirhash);
+                    }
+                    break;
+                default:
+                    throw new Exception("Unhandled blobtype on dereference");
+            }
+            if (blocation.ReferenceCount <= 0)
+            {
+                try
+                {
+                    File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Error deleting unreferenced file.");
+                }
+                TreeIndexStore.RemoveKey(blobhash);
+            }
+        }
+
+        /// <summary>
+        /// Adds a hash and corresponding BackupLocation to the Index.
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <returns>
+        /// True if we already have the hash stored. False if we need to
+        /// save the corresponding block.
+        /// </returns>
+        private bool AddHash(byte[] hash, BlobLocation blocation)
+        {
+            // Adds a hash and Blob Location to the BlockHashStore
+            BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
+            if (existingblocation != null)
+            {
+                existingblocation.ReferenceCount += 1;
+            }
+            return existingblocation != null;
+        }
+
+        /// <summary>
+        /// Add list of blocks to blobstore. Automatically creates a reference blob (hashlist) if blocks.count > 1
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <param name="blocks"></param>
+        /// <param name="type"></param>
+        private void AddBlob(byte[] hash, List<HashBlockPair> blocks, BlobLocation.BlobTypes type)
+        {
+            if (blocks.Count == 1)
+            {
+                AddBlob(blocks[0], type);
+            }
+            else
+            {
+                byte[] hashlist = new byte[blocks[0].Hash.Length * blocks.Count];
+                for (int i = 0; i < blocks.Count; i++)
+                {
+                    AddBlob(blocks[i], BlobLocation.BlobTypes.Simple, false);
+                    Array.Copy(blocks[i].Hash, 0, hashlist, blocks[0].Hash.Length * i, blocks[0].Hash.Length);
+                }
+                AddMultiBlockReferenceBlob(hash, hashlist, type);
+            }
+        }
+
+        /// <summary>
+        /// Add a single blob to blobstore.
+        /// </summary>
+        /// <param name="block"></param>
+        /// <param name="type"></param>
+        /// <param name="isMultiBlockReference"></param>
+        private void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type)
+        {
+            AddBlob(block, type, false);
+        }
+
+        private void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type, bool isMultiBlockReference)
+        {
+            string relpath = HashTools.ByteArrayToHexViaLookup32(block.Hash);
+            BlobLocation posblocation = new BlobLocation(type, isMultiBlockReference, relpath, 0, block.Block.Length);
+            bool alreadystored = false;
+            lock (this)
+            {
+                // Have we already stored this 
+                alreadystored = AddHash(block.Hash, posblocation);
+            }
+            if (!alreadystored)
+            {
+                WriteBlob(posblocation, block.Block);
+            }
+        }
+
+        private void AddMultiBlockReferenceBlob(byte[] hash, byte[] hashlist, BlobLocation.BlobTypes type)
+        {
+            HashBlockPair referenceblock = new HashBlockPair(hash, hashlist);
+            AddBlob(referenceblock, type, true);
+        }
+
+        private void WriteBlob(BlobLocation blocation, byte[] blob)
+        {
+            string path = Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath);
+            try
+            {
+                using (FileStream writer = File.OpenWrite(path))
+                {
+                    writer.Seek(blocation.BytePosition, SeekOrigin.Begin);
+                    writer.Write(blob, 0, blob.Length);
+                    writer.Flush();
+                    writer.Close();
+                }
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Failed to write blob");
+                throw;
+            }
+        }
+
+        public bool ContainsHash(byte[] hash)
+        {
+            return TreeIndexStore.GetRecord(hash) != null;
+        }
+
+        public BlobLocation GetBlobLocation(byte[] hash)
+        {
+            return TreeIndexStore.GetRecord(hash);
+        }
+
         private List<byte[]> GetHashListFromBlob(BlobLocation blocation)
         {
             if (!blocation.IsMultiBlockReference)
@@ -233,7 +356,7 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblockqueue"></param>
-        protected void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
+        public void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
         {
             SplitData(new MemoryStream(inputdata), filehash, hashblockqueue);
         }
@@ -370,11 +493,11 @@ namespace BackupCore
                     }
                     break;*/
                 case BlobLocation.BlobTypes.BackupRecord:
-                    BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
+                    BackupRecord br = BackupRecord.deserialize(RetrieveData(blobhash));
                     GetReferenceFrequencies(br.MetadataTreeHash, hashfreqsize);
                     break;
                 case BlobLocation.BlobTypes.MetadataNode:
-                    var childdirhashes = MetadataNode.GetChildDirHashes(GetBlob(blobhash));
+                    var childdirhashes = MetadataNode.GetChildDirHashes(RetrieveData(blobhash));
                     foreach (var dirhash in childdirhashes)
                     {
                         GetReferenceFrequencies(dirhash, hashfreqsize);
@@ -386,145 +509,45 @@ namespace BackupCore
             
         }
 
-
-        // TODO: These async methods have parallelization problems as written and dont provide
-        // any execution time benefit
-        public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
+        /// <summary>
+        /// Attempts to save the BlobStore to disk.
+        /// If saving fails an error is thrown.
+        /// </summary>
+        /// <param name="path"></param>
+        public void SynchronizeCacheToDisk(string path = null)
         {
-            throw new NotImplementedException();
-            return StoreDataAsync(new MemoryStream(inputdata), type);
-        }
-        
-        public byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
-        {
-            throw new NotImplementedException(); // Not currently working
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            byte[] filehash = new byte[20]; // Overall hash of file
-            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblockqueue));
-
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
+            // NOTE: This overwrites the previous file every time.
+            // The list of hash keys stored in the serialized BlobStore
+            // is always sorted, so appending to that list would cause its
+            // own problems. Overwriting the cache may be the correct tradeoff.
+            if (path == null)
             {
-                if (fileblockqueue.TryTake(out HashBlockPair block))
+                path = StorePath;
+            }
+            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                using (BinaryWriter writer = new BinaryWriter(fs))
                 {
-                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
-                }
-                if (getfileblockstask.IsFaulted)
-                {
-                    throw getfileblockstask.Exception;
+                    writer.Write(this.serialize());
                 }
             }
-            if (blockshashes.Count > 1)
-            {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
-                {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
-                }
-                AddMultiBlockReferenceBlob(filehash, hashlist, type);
-            }
-            else
-            {
-                // Just the one block, so change its type to `type`
-                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
-            }
-            return filehash;
-        }
-
-        public byte[] StoreDataSync(byte[] inputdata, BlobLocation.BlobTypes type)
-        {
-            return StoreDataSync(new MemoryStream(inputdata), type);
         }
 
         /// <summary>
-        /// Backup data sychronously.
+        /// Attempts to load a previously saved BlobStore object from a file.
+        /// If loading fails, an error is thrown.
         /// </summary>
-        /// <param name="relpath"></param>
-        /// <returns>A list of hashes representing the file contents.</returns>
-        public byte[] StoreDataSync(Stream readerbuffer, BlobLocation.BlobTypes type)
+        /// <param name="blobindexfile"></param>
+        /// <param name="backupdstpath"></param>
+        /// <returns></returns>
+        public static BlobStore LoadFromFile(string blobindexfile, string backupdstpath)
         {
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
-            byte[] filehash = new byte[20]; // Overall hash of file
-            SplitData(readerbuffer, filehash, fileblockqueue);
-
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
+            using (FileStream fs = new FileStream(blobindexfile, FileMode.Open, FileAccess.Read))
             {
-                if (fileblockqueue.TryTake(out HashBlockPair block))
+                using (BinaryReader reader = new BinaryReader(fs))
                 {
-                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
+                    return BlobStore.deserialize(reader.ReadBytes((int)fs.Length), blobindexfile, backupdstpath);
                 }
-            }
-            if (blockshashes.Count > 1)
-            {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
-                {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
-                }
-                AddMultiBlockReferenceBlob(filehash, hashlist, type);
-            }
-            else
-            {
-                // Just the one block, so change its type to FileBlob
-                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
-            }
-            return filehash;
-        }
-
-        public void DereferenceOneDegree(byte[] blobhash)
-        {
-            BlobLocation blocation = GetBlobLocation(blobhash);
-            blocation.ReferenceCount -= 1;
-            if (blocation.IsMultiBlockReference)
-            {
-                foreach (var hash in GetHashListFromBlob(blocation))
-                {
-                    DereferenceOneDegree(hash);
-                }
-            }
-            switch (blocation.BlobType)
-            {
-                case BlobLocation.BlobTypes.Simple:
-                    break;
-                case BlobLocation.BlobTypes.FileBlob:
-                    break;
-                /*case BlobLocation.BlobTypes.MetadataTree:
-                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
-                    foreach (var filehash in mtree.GetAllFileHashes())
-                    {
-                        DereferenceOneDegree(filehash);
-                    }
-                    break;*/
-                case BlobLocation.BlobTypes.BackupRecord:
-                    BackupRecord br = BackupRecord.deserialize(GetBlob(blobhash));
-                    DereferenceOneDegree(br.MetadataTreeHash);
-                    break;
-                case BlobLocation.BlobTypes.MetadataNode:
-                    var childdirhashes = MetadataNode.GetChildDirHashes(GetBlob(blobhash));
-                    foreach (var dirhash in childdirhashes)
-                    {
-                        DereferenceOneDegree(dirhash);
-                    }
-                    break;
-                default:
-                    throw new Exception("Unhandled blobtype on dereference");
-            }
-            if (blocation.ReferenceCount <= 0)
-            {
-                try
-                {
-                    File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Error deleting unreferenced file.");
-                }
-                TreeIndexStore.RemoveKey(blobhash);
             }
         }
 
@@ -569,30 +592,6 @@ namespace BackupCore
                 bs.AddHash(keybytes, BlobLocation.deserialize(backuplocationbytes));
             }
             return bs;
-        }
-
-        /// <summary>
-        /// Attempts to save the BlobStore to disk.
-        /// If saving fails an error is thrown.
-        /// </summary>
-        /// <param name="path"></param>
-        public void SynchronizeCacheToDisk(string path=null)
-        {
-            // NOTE: This overwrites the previous file every time.
-            // The list of hash keys stored in the serialized BlobStore
-            // is always sorted, so appending to that list would cause its
-            // own problems. Overwriting the cache may be the correct tradeoff.
-            if (path == null)
-            {
-                path = StorePath;
-            }
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(this.serialize());
-                }
-            }
         }
     }
 }

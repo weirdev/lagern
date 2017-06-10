@@ -120,7 +120,7 @@ namespace BackupCore
             {
                 return GetBackupRecord();
             }
-            return BackupRecord.deserialize(Blobs.GetBlob(hash));
+            return BackupRecord.deserialize(Blobs.RetrieveData(hash));
         }
 
         public Tuple<string, BackupRecord> GetBackupHashAndRecord(int offset = 0)

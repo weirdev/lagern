@@ -1,37 +1,15 @@
 ﻿*********************
 IN PROGRESS
-Refactor metadata node to not include '..' in its public list of directories
-	Maybe dont include '..' in list at all, handle like '.'
-	Then fix every other place already handling '..' explicitly
-	Reasons for this??
-Multiple backup stores to single destination
-	Multiple base folders
-	New nomenclature
-		backupStore -> backup ~= 1 metadatatree
-	Backup store now specified with a backupstorename in addition to a src and dst directory
-		Backup name associated with a seperate backupstore for each backup
-	Multiple base folders initially considered seperate backups
-		May change later
-			Support multiple base folders within a backup?
-		Or this may be the best way to handle it
-			Use ignore rules in a single backup for files user want to treat similarly
-			For files that need to be treated differently, use an entirely seperate backup
-	Uses
-		"dumb" binary backup of entire partition
-		"smart" backup of files folders
-		Data deduplicated itra- and inter- backup source
-			Restore/browse functionality handles multiple backups folders somewhat like seperate drives in NTFS
-Rename solution/program
-	new name == Lagern
-		~~Z-sher
-	short for Lagernheitskopie
-		German for "(computer) backup"
-	Lagern translates to safe/reliable/secure
 Transfer a single backup to existing/new different backup destination
 	Would show up as new base folder
 Add more unit tests
+	deteting backups and dereferencing
+Support a cache
+	On same disk
+		or same folder
+	After first run could backup to cache when backup disk not connected
+		offload cache to disk when connected
 Test support for large backup sets
-	Store each MetadataNode seperately?
 	Optimize B+ tree BlobStore
 		bulk loading of tree
 		store some nodes out of memory?
@@ -81,6 +59,11 @@ Generic permissions support ie. Linux (POSIX)
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder
+	Easy step to a versioning system
+		Data would have to be preduplicated to detect changes
+			Unless used through a virtual filesystem
+			Or could be used in tandem with a backup disk
+				without backup disk would have access to all changes except the state of the latest backup
 Reverse references in BlobStore?
 	Every blob knows hash of every structure that points at it?
 	Could list every backup containing file
