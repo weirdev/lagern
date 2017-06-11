@@ -1,9 +1,13 @@
 ﻿*********************
 IN PROGRESS
-Transfer a single backup to existing/new different backup destination
+Transfer a single backupstore to existing/new different backup destination
 	Would show up as new base folder
+	Transfer only one (latest) backup
+		Also update a backupstore in one location with a backupstore in another
+			aka update previously transferred backup store without running another backup over the original files
 Add more unit tests
 	deteting backups and dereferencing
+Support deleting entire backup stores (at dest)
 Support a cache
 	On same disk
 		or same folder

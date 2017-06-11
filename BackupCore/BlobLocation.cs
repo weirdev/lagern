@@ -102,7 +102,7 @@ namespace BackupCore
             FileBlob=1,
             BackupRecord=3,
             MetadataNode=4
-            // NOTE: MUST update BlobStore.GetReferenceFrequencies() and DereferenceOneDegree() for new blob types that reference other blobs
+            // NOTE: MUST update BlobStore.GetAllBlobReferences() for new blob types that reference other blobs
         }
     }
 }

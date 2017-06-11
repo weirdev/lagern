@@ -20,7 +20,10 @@ namespace BackupCore
 
         public string StorePath { get; set; }
 
-        public string BlockSaveDirectory { get; set; }
+        // NOTE: TransferBlobAndReferences will need to be updated if blob 
+        // addressing is changed to be no longer 1 blob per file and 
+        // all blobs in single directory
+        public string BlockSaveDirectory { get; set; } 
 
         public BlobStore(string indexpath, string blocksavedir)
         {
@@ -96,7 +99,7 @@ namespace BackupCore
             {
                 if (fileblockqueue.TryTake(out HashBlockPair block))
                 {
-                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
+                    AddBlob(block, BlobLocation.BlobTypes.Simple);
                     blockshashes.Add(block.Hash);
                 }
             }
@@ -129,19 +132,7 @@ namespace BackupCore
                 foreach (var hash in blockhashes)
                 {
                     BlobLocation blockloc = GetBlobLocation(hash);
-                    try
-                    {
-                        FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blockloc.RelativeFilePath));
-                        byte[] buffer = new byte[blockstream.Length];
-                        blockstream.Read(buffer, 0, blockloc.ByteLength);
-                        file.Write(buffer, 0, blockloc.ByteLength);
-                        blockstream.Close();
-                    }
-                    catch (Exception)
-                    {
-                        Console.WriteLine("Failed to read blob");
-                        throw;
-                    }
+                    file.Write(LoadBlob(blockloc), 0, blockloc.ByteLength);
                 }
                 byte[] filedata = file.ToArray();
                 file.Close();
@@ -149,60 +140,45 @@ namespace BackupCore
             }
             else // file is single block
             {
-                try
-                {
-                    FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blobbl.RelativeFilePath));
-                    byte[] buffer = new byte[blockstream.Length];
-                    blockstream.Read(buffer, 0, blobbl.ByteLength);
-                    blockstream.Close();
-                    return buffer;
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Failed to read blob");
-                    throw;
-                }
+                return LoadBlob(blobbl);
+            }
+        }
+
+        /// <summary>
+        /// Loads the data from a blob, no special handling of multiblock references etc.
+        /// </summary>
+        /// <param name="blocation"></param>
+        /// <returns></returns>
+        private byte[] LoadBlob(BlobLocation blocation)
+        {
+            try
+            {
+                FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                byte[] buffer = new byte[blockstream.Length];
+                blockstream.Read(buffer, 0, blocation.ByteLength);
+                blockstream.Close();
+                return buffer;
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Failed to read blob");
+                throw;
             }
         }
 
         public void DereferenceOneDegree(byte[] blobhash)
         {
+            foreach (var reference in GetAllBlobReferences(blobhash))
+            {
+                DereferenceOneDegreeNoRecurse(reference);
+            }
+            DereferenceOneDegreeNoRecurse(blobhash); // must delete parent last so parent can be loaded/used in GetAllBlobReferences()
+        }
+
+        private void DereferenceOneDegreeNoRecurse(byte[] blobhash)
+        {
             BlobLocation blocation = GetBlobLocation(blobhash);
             blocation.ReferenceCount -= 1;
-            if (blocation.IsMultiBlockReference)
-            {
-                foreach (var hash in GetHashListFromBlob(blocation))
-                {
-                    DereferenceOneDegree(hash);
-                }
-            }
-            switch (blocation.BlobType)
-            {
-                case BlobLocation.BlobTypes.Simple:
-                    break;
-                case BlobLocation.BlobTypes.FileBlob:
-                    break;
-                /*case BlobLocation.BlobTypes.MetadataTree:
-                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
-                    foreach (var filehash in mtree.GetAllFileHashes())
-                    {
-                        DereferenceOneDegree(filehash);
-                    }
-                    break;*/
-                case BlobLocation.BlobTypes.BackupRecord:
-                    BackupRecord br = BackupRecord.deserialize(RetrieveData(blobhash));
-                    DereferenceOneDegree(br.MetadataTreeHash);
-                    break;
-                case BlobLocation.BlobTypes.MetadataNode:
-                    var childdirhashes = MetadataNode.GetChildDirHashes(RetrieveData(blobhash));
-                    foreach (var dirhash in childdirhashes)
-                    {
-                        DereferenceOneDegree(dirhash);
-                    }
-                    break;
-                default:
-                    throw new Exception("Unhandled blobtype on dereference");
-            }
             if (blocation.ReferenceCount <= 0)
             {
                 try
@@ -217,6 +193,22 @@ namespace BackupCore
             }
         }
 
+        public void TransferBlobAndReferences(BlobStore dst, byte[] blobhash)
+        {
+            Dictionary<string, object[]> hashfreqsize = new Dictionary<string, object[]>();
+            GetReferenceFrequencies(blobhash, hashfreqsize);
+            foreach (var item in hashfreqsize)
+            {
+                BlobLocation dstbloc = dst.GetBlobLocation(HashTools.HexStringToByteArray(item.Key));
+                if (dstbloc == null)
+                {
+                    BlobLocation bloc = GetBlobLocation(HashTools.HexStringToByteArray(item.Key));
+                    dstbloc = dst.AddBlob(new HashBlockPair(HashTools.HexStringToByteArray(item.Key), LoadBlob(bloc)), bloc.BlobType);
+                }
+                dstbloc.ReferenceCount += (int)item.Value[0] - 1;
+            }
+        }
+
         /// <summary>
         /// Adds a hash and corresponding BackupLocation to the Index.
         /// </summary>
@@ -225,7 +217,7 @@ namespace BackupCore
         /// True if we already have the hash stored. False if we need to
         /// save the corresponding block.
         /// </returns>
-        private bool AddHash(byte[] hash, BlobLocation blocation)
+        private BlobLocation AddHash(byte[] hash, BlobLocation blocation)
         {
             // Adds a hash and Blob Location to the BlockHashStore
             BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
@@ -233,7 +225,7 @@ namespace BackupCore
             {
                 existingblocation.ReferenceCount += 1;
             }
-            return existingblocation != null;
+            return existingblocation;
         }
 
         /// <summary>
@@ -265,25 +257,30 @@ namespace BackupCore
         /// </summary>
         /// <param name="block"></param>
         /// <param name="type"></param>
-        /// <param name="isMultiBlockReference"></param>
-        private void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type)
+        /// <returns>The BlobLocation the block is saved to.</returns>
+        private BlobLocation AddBlob(HashBlockPair block, BlobLocation.BlobTypes type)
         {
-            AddBlob(block, type, false);
+            return AddBlob(block, type, false);
         }
 
-        private void AddBlob(HashBlockPair block, BlobLocation.BlobTypes type, bool isMultiBlockReference)
+        private BlobLocation AddBlob(HashBlockPair block, BlobLocation.BlobTypes type, bool isMultiBlockReference)
         {
             string relpath = HashTools.ByteArrayToHexViaLookup32(block.Hash);
             BlobLocation posblocation = new BlobLocation(type, isMultiBlockReference, relpath, 0, block.Block.Length);
-            bool alreadystored = false;
+            BlobLocation existingbloc;
             lock (this)
             {
                 // Have we already stored this 
-                alreadystored = AddHash(block.Hash, posblocation);
+                existingbloc = AddHash(block.Hash, posblocation);
             }
-            if (!alreadystored)
+            if (existingbloc == null)
             {
                 WriteBlob(posblocation, block.Block);
+                return posblocation;
+            }
+            else
+            {
+                return existingbloc;
             }
         }
 
@@ -291,6 +288,59 @@ namespace BackupCore
         {
             HashBlockPair referenceblock = new HashBlockPair(hash, hashlist);
             AddBlob(referenceblock, type, true);
+        }
+
+        private IEnumerable<byte[]> GetAllBlobReferences(byte[] blobhash)
+        {
+            // NOTE: This recursive iteration creates many iterators as it runs
+            // this may cause performance issues.
+
+            // NOTE: Since the blobs references returned may be being operated on (blobs deleted)
+            // and this method relies on being able to load the input (parent) blob
+            // we return the parent blobs last in all recursions
+            BlobLocation blocation = GetBlobLocation(blobhash);
+            switch (blocation.BlobType)
+            {
+                case BlobLocation.BlobTypes.Simple:
+                    break;
+                case BlobLocation.BlobTypes.FileBlob:
+                    break;
+                /*case BlobLocation.BlobTypes.MetadataTree:
+                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
+                    foreach (var filehash in mtree.GetAllFileHashes())
+                    {
+                        DereferenceOneDegree(filehash);
+                    }
+                    break;*/
+                case BlobLocation.BlobTypes.BackupRecord:
+                    BackupRecord br = BackupRecord.deserialize(RetrieveData(blobhash));
+                    foreach (var refref in GetAllBlobReferences(br.MetadataTreeHash)) // recurse on references of that reference
+                    {
+                        yield return refref;
+                    }
+                    yield return br.MetadataTreeHash; // return 1 immediate reference
+                    break;
+                case BlobLocation.BlobTypes.MetadataNode:
+                    var references = MetadataNode.GetAllReferencesWithoutLoad(RetrieveData(blobhash)); // many immediate references
+                    foreach (var reference in references) // for each immediate reference
+                    {
+                        foreach (var refref in GetAllBlobReferences(reference)) // recurse on references of that reference
+                        {
+                            yield return refref;
+                        }
+                        yield return reference; // return immediate reference
+                    }
+                    break;
+                default:
+                    throw new Exception("Unhandled blobtype on dereference");
+            }
+            if (blocation.IsMultiBlockReference)
+            {
+                foreach (var hash in GetHashListFromBlob(blocation))
+                {
+                    yield return hash;
+                }
+            }
         }
 
         private void WriteBlob(BlobLocation blocation, byte[] blob)
@@ -464,7 +514,16 @@ namespace BackupCore
             return new Tuple<int, int>(allreferences, uniquereferences);
         }
 
-        private void GetReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize) // TODO: replace the object[] with a tuple
+        private void GetReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize) // TODO: use something better than object[] (currently used because tuples are readonly)
+        {
+            GetReferenceFrequenciesNoRecurse(blobhash, hashfreqsize);
+            foreach (var reference in GetAllBlobReferences(blobhash))
+            {
+                GetReferenceFrequenciesNoRecurse(reference, hashfreqsize);
+            }
+        }
+
+        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, object[]> hashfreqsize)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
             BlobLocation blocation = GetBlobLocation(blobhash);
@@ -476,37 +535,6 @@ namespace BackupCore
             {
                 hashfreqsize.Add(hashstring, new object[] { 1, blocation });
             }
-            if (blocation.IsMultiBlockReference)
-            {
-                foreach (var hash in GetHashListFromBlob(blocation))
-                {
-                    GetReferenceFrequencies(hash, hashfreqsize);
-                }
-            }
-            switch (blocation.BlobType)
-            {
-                /*case BlobLocation.BlobTypes.MetadataTree:
-                    MetadataTree mtree = MetadataTree.Load(blobhash, this);
-                    foreach (var filehash in mtree.GetAllFileHashes())
-                    {
-                        GetReferenceFrequencies(filehash, hashfreqsize);
-                    }
-                    break;*/
-                case BlobLocation.BlobTypes.BackupRecord:
-                    BackupRecord br = BackupRecord.deserialize(RetrieveData(blobhash));
-                    GetReferenceFrequencies(br.MetadataTreeHash, hashfreqsize);
-                    break;
-                case BlobLocation.BlobTypes.MetadataNode:
-                    var childdirhashes = MetadataNode.GetChildDirHashes(RetrieveData(blobhash));
-                    foreach (var dirhash in childdirhashes)
-                    {
-                        GetReferenceFrequencies(dirhash, hashfreqsize);
-                    }
-                    break;
-                default: // BlobLocation.BlobTypes.Simple || BlobLocation.BlobTypes.FileBlob
-                    break;
-            }
-            
         }
 
         /// <summary>

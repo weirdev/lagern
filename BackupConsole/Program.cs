@@ -154,6 +154,16 @@ namespace BackupConsole
                         Console.WriteLine(e.Message);
                     }
                 }
+                else if (parsed.Item1 == "transfer")
+                {
+                    string backupstorename = null;
+                    if (parsed.Item3.ContainsKey("n"))
+                    {
+                        backupstorename = parsed.Item3["n"];
+                    }
+                    string destpath = parsed.Item2["destination"];
+                    TransferBackupStore(destpath, backupstorename);
+                }
                 else if (parsed.Item1 == "help")
                 {
                     // "help"
@@ -177,6 +187,7 @@ namespace BackupConsole
             scanner.AddCommand("restore <filerelpath> [-n <>] [-b <>] [-r <>]");
             scanner.AddCommand("list [-n <>] [<listcount>] [-s]");
             scanner.AddCommand("browse [-n <>] [-b <>]");
+            scanner.AddCommand("transfer <destination> [-n <>]");
             scanner.AddCommand("help");
             return scanner;
         }
@@ -352,6 +363,25 @@ namespace BackupConsole
             {
                 var browser = new BackupBrowser(backupstorename, backuphash);
                 browser.CommandLoop();
+            }
+            else
+            {
+                Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
+                Console.WriteLine("or the store name must be specified with the -n flag.");
+                throw new Exception(); // TODO: more specific exceptions
+            }
+        }
+
+        public static void TransferBackupStore(string destpath, string backupstorename)
+        {
+            if (backupstorename == null)
+            {
+                backupstorename = ReadSetting("name");
+            }
+            if (backupstorename != null)
+            {
+                var bcore = GetCore(backupstorename);
+                bcore.TransferBackupStore(destpath);
             }
             else
             {

@@ -38,7 +38,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="hash"></param>
         /// <param name="blocation"></param>
-        /// <returns>True if hash already exists in tree, False otherwise.</returns>
+        /// <returns>T if hash already exists in tree, null otherwise.</returns>
         public T AddHash(byte[] hash, T blocation)
         {
             // Traverse down the tree

@@ -193,11 +193,27 @@ namespace BackupCore
             return curmn;
         }
 
-        public static List<byte[]> GetChildDirHashes(byte[] data)
+        /// <summary>
+        /// Gets the reference (hash) for all immediate data of the metadatanode without loading
+        /// the node into memory. Useful to keep memory usage low.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static IEnumerable<byte[]> GetAllReferencesWithoutLoad(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            return BinaryEncoding.enum_decode(savedobjects["Directories-v2"]);
+            foreach (var reference in BinaryEncoding.enum_decode(savedobjects["Directories-v2"]))
+            {
+                yield return reference;
+            }
+            foreach (byte[] filedata in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
+            {
+                FileMetadata fm = FileMetadata.deserialize(filedata);
+                yield return fm.FileHash;
+            }
         }
+
+        
 
         public byte[] serialize()
         {

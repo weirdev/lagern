@@ -37,11 +37,11 @@ namespace BackupConsole
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord();
+                targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord();
             }
             else
             {
-                targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, 0);
+                targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord(backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.Item1;
             BackupStoreName = backupstorename;
@@ -253,7 +253,7 @@ namespace BackupConsole
         private void ChangeBackup(string backuphash, int offset=0)
         {
             string curpath = CurrentNode.Path;
-            var targetbackuphashandrecord = BCore.BUStore.GetBackupHashAndRecord(backuphash, offset);
+            var targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord(backuphash, offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.Blobs);
