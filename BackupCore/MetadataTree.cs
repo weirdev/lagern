@@ -10,7 +10,6 @@ namespace BackupCore
 {
     public class MetadataTree
     {
-
         public MetadataNode Root { get; set; }
 
         public MetadataTree(FileMetadata rootmetadata)
@@ -125,22 +124,6 @@ namespace BackupCore
         public static MetadataTree Load(byte[] roothash, BlobStore blobs)
         {
             return new MetadataTree(MetadataNode.Load(blobs, roothash));
-        }
-
-        /// <summary>
-        /// Serializes the metadata store.
-        /// As of now the "store" is just the root node and its descendents.
-        /// So we just return the serialized root which contains all of its children.
-        /// </summary>
-        /// <returns></returns>
-        public byte[] serialize()
-        {
-            return Root.serialize();
-        }
-
-        public static MetadataTree deserialize(byte[] data)
-        {
-            return new MetadataTree(MetadataNode.deserialize(data));
         }
     }
 }

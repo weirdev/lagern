@@ -1,18 +1,21 @@
 ﻿*********************
 IN PROGRESS
-Transfer a single backupstore to existing/new different backup destination
-	Would show up as new base folder
-	Transfer only one (latest) backup
-		Also update a backupstore in one location with a backupstore in another
-			aka update previously transferred backup store without running another backup over the original files
+Support a cache
+	Make use of IsCache flag in backupstore
+		use to indicate to user when they are browsing, backing up to the cache
+	Sync cache after all operations
+		Ability to explicitly sync cache (not just after another operation)
+	Warn when deleting backups from destination when the cache is not present
+		Cache depends on metadatatrees from previous backups for differential backups
+			especially last backup (default)
+	Eventually implement blob-level cache?
+Rename all occurences of block to blob
+Remove MetaDataTree class
+	just use root metadata node
+	standardize on (no?) (a?) prefix for root
 Add more unit tests
 	deteting backups and dereferencing
 Support deleting entire backup stores (at dest)
-Support a cache
-	On same disk
-		or same folder
-	After first run could backup to cache when backup disk not connected
-		offload cache to disk when connected
 Test support for large backup sets
 	Optimize B+ tree BlobStore
 		bulk loading of tree

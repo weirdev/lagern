@@ -213,54 +213,23 @@ namespace BackupCore
             }
         }
 
-        
-
-        public byte[] serialize()
+        public static IEnumerable<byte[]> GetImmediateChildNodeReferencesWithoutLoad(byte[] data)
         {
-            Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
-            // -"-v1"
-            // DirMetadata = FileMetadata DirMetadata.serialize()
-            // Directories = enum_encode([Directories.Values MetadataNode.serialize(),... ])
-            // Files = enum_encode([Files.Values FileMetadata.serialize(),... ])
-
-            mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
-            mtdata.Add("Directories-v1", BinaryEncoding.enum_encode(from smnkvp in Directories select smnkvp.Value.serialize()));
-            mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
-
-            return BinaryEncoding.dict_encode(mtdata);
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            foreach (var reference in BinaryEncoding.enum_decode(savedobjects["Directories-v2"]))
+            {
+                yield return reference;
+            }
         }
 
-        /// <summary>
-        /// Deserializes a node.
-        /// Will recursively deserialize all child nodes.
-        /// Obviously breaks with circular references, but these should only occur
-        /// with hard- (and soft-?) -links
-        /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
-        public static MetadataNode deserialize(byte[] data, MetadataNode parent=null)
+        public static IEnumerable<byte[]> GetImmediateFileReferencesWithoutLoad(byte[] data)
         {
-            var curmn = new MetadataNode();
-
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
-            curmn.DirMetadata = dirmetadata;
-            Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
-            foreach (var binmn in BinaryEncoding.enum_decode(savedobjects["Directories-v1"]))
+            foreach (var filemdata in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
             {
-                MetadataNode newmn = MetadataNode.deserialize(binmn, curmn);
-                directories.Add(newmn.DirMetadata.FileName, newmn);
+                FileMetadata fm = FileMetadata.deserialize(filemdata);
+                yield return fm.FileHash;
             }
-            curmn.Parent = parent;
-            curmn.Directories = directories;
-            Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
-            foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
-            {
-                FileMetadata newfm = FileMetadata.deserialize(binfm);
-                files.Add(newfm.FileName, newfm);
-            }
-            curmn.Files = files;
-            return curmn;
         }
     }
 }

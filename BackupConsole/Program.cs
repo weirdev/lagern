@@ -306,7 +306,7 @@ namespace BackupConsole
             }
         }
 
-        private static BackupCore.Core GetCore(string backupstorename)
+        public static BackupCore.Core GetCore(string backupstorename)
         {
             if (backupstorename == null)
             {
@@ -319,6 +319,7 @@ namespace BackupConsole
                 }
             }
             string destination = ReadSetting("dest");
+            string cache = ReadSetting("cache");
             if (destination == null)
             {
                 destination = GetBUDestinationDir();
@@ -326,7 +327,7 @@ namespace BackupConsole
                 {
                     try
                     {
-                        return new BackupCore.Core(backupstorename, null, destination, ContinueOrExitPrompt);
+                        return new BackupCore.Core(backupstorename, null, destination, null, ContinueOrExitPrompt);
                     }
                     catch
                     {
@@ -344,7 +345,7 @@ namespace BackupConsole
             {
                 try
                 {
-                    return new BackupCore.Core(backupstorename, cwd, destination, ContinueOrExitPrompt);
+                    return new BackupCore.Core(backupstorename, cwd, destination, cache, ContinueOrExitPrompt);
                 }
                 catch
                 {
@@ -381,7 +382,7 @@ namespace BackupConsole
             if (backupstorename != null)
             {
                 var bcore = GetCore(backupstorename);
-                bcore.TransferBackupStore(destpath);
+                bcore.TransferBackupStore(destpath, true);
             }
             else
             {
@@ -467,7 +468,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (Directory.Exists(Path.Combine(dir, "backup")))
+                if (Directory.Exists(Path.Combine(dir, BackupCore.Core.IndexDirName)))
                 {
                     return dir;
                 }

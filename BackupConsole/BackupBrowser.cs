@@ -22,31 +22,20 @@ namespace BackupConsole
 
         public BackupBrowser(string backupstorename, string backuphash)
         {
-            string destination = Program.ReadSetting("dest");
-            if (destination == null)
-            {
-                destination = GetBUDestinationDir();
-                if (destination == null) // We are not in a backup destination
-                {
-                    Console.WriteLine("A backup destination must be specified with \"set dest <path>\"");
-                    Console.WriteLine("or this command must be run from an existing backup destination.");
-                    return;
-                }
-            }
-            BCore = new BackupCore.Core(backupstorename, cwd, destination);
+            BCore = Program.GetCore(backupstorename);
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord();
+                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord();
             }
             else
             {
-                targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord(backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.Item1;
             BackupStoreName = backupstorename;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.Blobs);
+            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.DefaultBlobs);
             CurrentNode = BackupTree.Root;
         }
 
@@ -253,10 +242,10 @@ namespace BackupConsole
         private void ChangeBackup(string backuphash, int offset=0)
         {
             string curpath = CurrentNode.Path;
-            var targetbackuphashandrecord = BCore.Backups.GetBackupHashAndRecord(backuphash, offset);
+            var targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.Blobs);
+            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.DefaultBlobs);
             CurrentNode = BackupTree.GetDirectory(curpath);
             if (CurrentNode == null)
             {
