@@ -44,7 +44,12 @@ namespace BackupConsole
             while (true)
             {
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
-                Console.Write(String.Format("backup {0}:{1}> ", BackupHash.Substring(0, hashdisplen), CurrentNode.Path));
+                string cachewarning = "";
+                if (BCore.DefaultBlobs.IsCache)
+                {
+                    cachewarning = "(cache)";
+                }
+                Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
                 string command = Console.ReadLine();
                 string[] args = SplitArguments(command);
                 try

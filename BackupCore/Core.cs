@@ -72,7 +72,7 @@ namespace BackupCore
             try
             {
                 (BackupIndexDir, BackupBlobDataDir, BackupStoresDir, BackupBlobIndexFile, BackupStoreFile) = PrepBackupDstPath(dst, backupstorename);
-                (DefaultBlobs, DefaultBackups) = LoadIndex(BackupBlobDataDir, BackupBlobIndexFile, BackupStoreFile, continueorkill);
+                (DefaultBlobs, DefaultBackups) = LoadIndex(BackupBlobDataDir, BackupBlobIndexFile, BackupStoreFile, false, continueorkill);
                 DestinationAvailable = true;
             }
             catch (Exception e)
@@ -93,7 +93,7 @@ namespace BackupCore
                 // Cache must be available (if specified), so no try block like dst
                 CachePath = cache;
                 (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile, CacheBackupStoreFile) = PrepBackupDstPath(cache, BackupStoreName);
-                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoreFile, continueorkill);
+                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoreFile, true, continueorkill);
                 if (!DestinationAvailable)
                 {
                     DefaultBackups = CacheBackups;
@@ -107,7 +107,7 @@ namespace BackupCore
             }
         }
 
-        private static (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile, string backupstorefile, Action<string> continueorkill=null)
+        private static (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile, string backupstorefile, bool iscahce=false, Action<string> continueorkill=null)
         {
             BlobStore blobs;
             // Create blob index and backup store
@@ -120,12 +120,12 @@ namespace BackupCore
                 catch (Exception)
                 {
                     continueorkill?.Invoke("Failed to read blob index. Continuing may result in block index being overwritten and old blocks being lost.");
-                    blobs = new BlobStore(blobindexfile, blobdatadir);
+                    blobs = new BlobStore(blobindexfile, blobdatadir, iscahce);
                 }
             }
             else // Safe to write a new file since one not already there
             {
-                blobs = new BlobStore(blobindexfile, blobdatadir);
+                blobs = new BlobStore(blobindexfile, blobdatadir, iscahce);
             }
 
             BackupStore backups;
@@ -276,13 +276,13 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             try
             {
-                DefaultBlobs.SynchronizeCacheToDisk();
+                DefaultBlobs.SaveToDisk();
                 DefaultBackups.SynchronizeCacheToDisk();
                 if (CacheBackups != null && DestinationAvailable)
                 {
                     // Save just backups and metadata, no actual data to cache
                     DefaultBackups.SyncCache(CacheBackups);
-                    CacheBlobs.SynchronizeCacheToDisk();
+                    CacheBlobs.SaveToDisk();
                     CacheBackups.SynchronizeCacheToDisk();
                 }
             }
@@ -365,13 +365,13 @@ namespace BackupCore
             // Writeout entire cached index
             try
             {
-                DefaultBlobs.SynchronizeCacheToDisk();
+                DefaultBlobs.SaveToDisk();
                 DefaultBackups.SynchronizeCacheToDisk();
                 if (CacheBackups != null && DestinationAvailable)
                 {
                     // Save just backups and metadata, no actual data to cache
                     DefaultBackups.SyncCache(CacheBackups);
-                    CacheBlobs.SynchronizeCacheToDisk();
+                    CacheBlobs.SaveToDisk();
                     CacheBackups.SynchronizeCacheToDisk();
                 }
             }
@@ -819,7 +819,7 @@ namespace BackupCore
             {
                 DefaultBlobs.TransferBackup(dstblobs, backup.Item1, includefiles & !backup.Item2);
             }
-            dstblobs.SynchronizeCacheToDisk();
+            dstblobs.SaveToDisk();
         }
     }
 }

@@ -28,11 +28,12 @@ namespace BackupCore
 
         public bool IsCache { get; set; }
 
-        public BlobStore(string indexpath, string blocksavedir)
+        public BlobStore(string indexpath, string blocksavedir, bool iscache)
         {
             StoreFilePath = indexpath;
             BlockSaveDirectory = blocksavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
+            IsCache = iscache;
         }
 
         // TODO: These async methods have parallelization problems as written and dont provide
@@ -541,7 +542,7 @@ namespace BackupCore
         /// If saving fails an error is thrown.
         /// </summary>
         /// <param name="path"></param>
-        public void SynchronizeCacheToDisk(string path = null)
+        public void SaveToDisk(string path = null)
         {
             // NOTE: This overwrites the previous file every time.
             // The list of hash keys stored in the serialized BlobStore
@@ -584,8 +585,10 @@ namespace BackupCore
             // -"-v1"
             // keysize = BitConverter.GetBytes(int) (only used for decoding HashBLocationPairs)
             // HashBLocationPairs = enum_encode(List<byte[]> [hash,... & backuplocation.serialize(),...])
-
+            // -"-v2"
+            // IsCache = BitConverter.GetBytes(bool)
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
+            bptdata.Add("IsCache-v2", BitConverter.GetBytes(IsCache));
 
             List<byte[]> binkeyvals = new List<byte[]>();
             foreach (KeyValuePair<byte[], BlobLocation> kvp in TreeIndexStore)
@@ -598,17 +601,26 @@ namespace BackupCore
                 binkeyvals.Add(binkeyval);
             }
             bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
-
+            
             return BinaryEncoding.dict_encode(bptdata);
         }
 
         public static BlobStore deserialize(byte[] data, string indexpath, string blocksavedir)
         {
-            BlobStore bs = new BlobStore(indexpath, blocksavedir);
 
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
-            
+            bool iscache;
+            if (savedobjects.ContainsKey("IsCache-v2"))
+            {
+                iscache = BitConverter.ToBoolean(savedobjects["IsCache-v2"], 0);
+            }
+            else
+            {
+                iscache = false;
+            }
+
+            BlobStore bs = new BlobStore(indexpath, blocksavedir, iscache);
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];

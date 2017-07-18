@@ -186,7 +186,7 @@ namespace BackupCore
             Blobs.IncrementReferenceCount(backuphash, -1, !Backups[i].Item2);
             try
             {
-                Blobs.SynchronizeCacheToDisk();
+                Blobs.SaveToDisk();
             }
             catch (Exception e)
             {

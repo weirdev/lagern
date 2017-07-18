@@ -3,16 +3,29 @@ IN PROGRESS
 Support a cache
 	Make use of IsCache flag in backupstore
 		use to indicate to user when they are browsing, backing up to the cache
-	Sync cache after all operations
+			-shows when browsing (done)
+			show other places on console as well
+	Sync cache after all operations?
 		Ability to explicitly sync cache (not just after another operation)
+		Standardize API on auto or manual syncing
+			In other words does calling a public method in Core cause a sync or must syncs be called manually once operations complete?
 	Warn when deleting backups from destination when the cache is not present
 		Cache depends on metadatatrees from previous backups for differential backups
 			especially last backup (default)
 	Eventually implement blob-level cache?
-Rename all occurences of block to blob
-Remove MetaDataTree class
-	just use root metadata node
-	standardize on (no?) (a?) prefix for root
+Code cleanup
+	Rename all occurences of block to blob
+	Roll MetadataNodeReferenceIterator into BlobReferenceIterator
+	Just publicly use GetAllBlobReferences not GetBackupReferences
+	Comments
+	Remove MetaDataTree class
+		just use root metadata node
+		standardize on (no?) (a?) prefix for root
+	Cleanup heirarchy of Core -> BackupStore, BlobStore
+		Should the API and console app be seing BackupStore and BlobStore directly?
+			If yes always access like Core.B___Store or pull out and use like own variable?
+			If no make BackupStore and BlobStore protected and add needed public interfaces to Core **
+Switch to existing argparser (ie from nuget)
 Add more unit tests
 	deteting backups and dereferencing
 Support deleting entire backup stores (at dest)
