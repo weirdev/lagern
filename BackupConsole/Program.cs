@@ -278,6 +278,10 @@ namespace BackupConsole
                         backups[i].Item2.ToLocalTime().ToString(), message.Substring(0, mlength) });
                 }
             }
+            if (bcore.DefaultBlobs.IsCache)
+            {
+                Console.WriteLine("(cache)");
+            }
             Console.WriteLine(table);
         }
 

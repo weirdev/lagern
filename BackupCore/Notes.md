@@ -1,10 +1,6 @@
 ﻿*********************
 IN PROGRESS
 Support a cache
-	Make use of IsCache flag in backupstore
-		use to indicate to user when they are browsing, backing up to the cache
-			-shows when browsing (done)
-			show other places on console as well
 	Sync cache after all operations?
 		Ability to explicitly sync cache (not just after another operation)
 		Standardize API on auto or manual syncing
@@ -25,6 +21,10 @@ Code cleanup
 		Should the API and console app be seing BackupStore and BlobStore directly?
 			If yes always access like Core.B___Store or pull out and use like own variable?
 			If no make BackupStore and BlobStore protected and add needed public interfaces to Core **
+Add status command
+	much like git status
+	would show differences and estimate size of a run
+	also show path to src/dst
 Switch to existing argparser (ie from nuget)
 Add more unit tests
 	deteting backups and dereferencing
