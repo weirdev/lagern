@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 
 namespace BackupCore
 {
+    // Calling a public method that modifies blobs or backups automatically triggers an index save
     public class Core
     {
         public string BackupStoreName { get; set; }
@@ -191,14 +192,7 @@ namespace BackupCore
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
 
             // Save cache to destination
-            if (CacheBackups != null)
-            {
-                if (DestinationAvailable)
-                {
-                    DefaultBackups.SyncCache(CacheBackups);
-                    CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings()));
-                }
-            }
+            SyncCache(true);
 
             if (differentialbackup)
             {
@@ -272,18 +266,22 @@ namespace BackupCore
 
             DefaultBackups.AddBackup(message, newmtreehash, false);
 
+            SyncCache(false);
+            // Index save occurred during synccache
+        }
+
+        public void SaveIndices()
+        {
             // Save "index"
             // Writeout all "dirty" cached index nodes
             try
             {
                 DefaultBlobs.SaveToDisk();
-                DefaultBackups.SynchronizeCacheToDisk();
+                DefaultBackups.SaveToDisk();
                 if (CacheBackups != null && DestinationAvailable)
                 {
-                    // Save just backups and metadata, no actual data to cache
-                    DefaultBackups.SyncCache(CacheBackups);
                     CacheBlobs.SaveToDisk();
-                    CacheBackups.SynchronizeCacheToDisk();
+                    CacheBackups.SaveToDisk();
                 }
             }
             catch (Exception e)
@@ -301,14 +299,7 @@ namespace BackupCore
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
 
             // Save cache to destination
-            if (CacheBackups != null)
-            {
-                if (DestinationAvailable)
-                {
-                    DefaultBackups.SyncCache(CacheBackups);
-                    CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings()));
-                }
-            }
+            SyncCache(true);
 
             if (differentialbackup)
             {
@@ -361,24 +352,25 @@ namespace BackupCore
 
             DefaultBackups.AddBackup(message, newmtreehash, false);
 
-            // Save "index"
-            // Writeout entire cached index
-            try
+            // Save just backups and metadata, no actual data to cache
+            SyncCache(false);
+            // Index save occurred during synccache
+        }
+
+        public void SyncCache(bool cleardata)
+        {
+            if (CacheBackups != null)
             {
-                DefaultBlobs.SaveToDisk();
-                DefaultBackups.SynchronizeCacheToDisk();
-                if (CacheBackups != null && DestinationAvailable)
+                if (DestinationAvailable)
                 {
-                    // Save just backups and metadata, no actual data to cache
                     DefaultBackups.SyncCache(CacheBackups);
-                    CacheBlobs.SaveToDisk();
-                    CacheBackups.SynchronizeCacheToDisk();
+                    if (cleardata)
+                    {
+                        CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings()));
+                    }
                 }
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
+            SaveIndices();
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -794,6 +786,7 @@ namespace BackupCore
         public void RemoveBackup(string backuphashprefix)
         {
             DefaultBackups.RemoveBackup(backuphashprefix);
+            SaveIndices();
         }
 
         /// <summary>

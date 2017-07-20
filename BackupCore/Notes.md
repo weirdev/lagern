@@ -1,14 +1,5 @@
 ﻿*********************
 IN PROGRESS
-Support a cache
-	Sync cache after all operations?
-		Ability to explicitly sync cache (not just after another operation)
-		Standardize API on auto or manual syncing
-			In other words does calling a public method in Core cause a sync or must syncs be called manually once operations complete?
-	Warn when deleting backups from destination when the cache is not present
-		Cache depends on metadatatrees from previous backups for differential backups
-			especially last backup (default)
-	Eventually implement blob-level cache?
 Code cleanup
 	Rename all occurences of block to blob
 	Roll MetadataNodeReferenceIterator into BlobReferenceIterator
@@ -26,6 +17,12 @@ Add status command
 	would show differences and estimate size of a run
 	also show path to src/dst
 Switch to existing argparser (ie from nuget)
+Support a cache
+	Warn when deleting backups from destination when the cache is not present
+		Cache depends on metadatatrees from previous backups for differential backups
+			especially last backup (default)
+	Warn when trying to sync cache but cache and destination aren't both available
+	Eventually implement blob-level cache?
 Add more unit tests
 	deteting backups and dereferencing
 Support deleting entire backup stores (at dest)

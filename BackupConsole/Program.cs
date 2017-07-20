@@ -164,6 +164,15 @@ namespace BackupConsole
                     string destpath = parsed.Item2["destination"];
                     TransferBackupStore(destpath, backupstorename);
                 }
+                else if (parsed.Item1 == "synccache")
+                {
+                    string backupstorename = null;
+                    if (parsed.Item3.ContainsKey("n"))
+                    {
+                        backupstorename = parsed.Item3["n"];
+                    }
+                    SyncCache(backupstorename);
+                }
                 else if (parsed.Item1 == "help")
                 {
                     // "help"
@@ -188,6 +197,7 @@ namespace BackupConsole
             scanner.AddCommand("list [-n <>] [<listcount>] [-s]");
             scanner.AddCommand("browse [-n <>] [-b <>]");
             scanner.AddCommand("transfer <destination> [-n <>]");
+            scanner.AddCommand("synccache [-n <>]");
             scanner.AddCommand("help");
             return scanner;
         }
@@ -283,6 +293,19 @@ namespace BackupConsole
                 Console.WriteLine("(cache)");
             }
             Console.WriteLine(table);
+        }
+
+        private static void SyncCache(string backupstorename)
+        {
+            try
+            {
+                var bcore = GetCore(backupstorename);
+                bcore.SyncCache(true);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
         }
 
         private static List<Tuple<int, string>> GetTrackClasses()

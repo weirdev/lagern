@@ -175,23 +175,8 @@ namespace BackupCore
                     Backups.RemoveAt(i);
                 }
             }
-            try
-            {
-                SynchronizeCacheToDisk();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
+            
             Blobs.IncrementReferenceCount(backuphash, -1, !Backups[i].Item2);
-            try
-            {
-                Blobs.SaveToDisk();
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
         }
 
         public BackupRecord GetBackupRecord()
@@ -295,7 +280,7 @@ namespace BackupCore
         /// If saving fails an error is thrown.
         /// </summary>
         /// <param name="path"></param>
-        public void SynchronizeCacheToDisk(string path=null)
+        public void SaveToDisk(string path=null)
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
