@@ -103,28 +103,28 @@ namespace BackupCoreTest
             byte[] file1 = ConcenateFile(new byte[][] { small_a, large_b, small_c, large_d, small_e });
             byte[] file2 = ConcenateFile(new byte[][] { small_f, large_b, small_g, large_d, small_h });
 
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            BlockingCollection<HashBlobPair> fileblockqueue = new BlockingCollection<HashBlobPair>();
             byte[] file1hash = new byte[20]; // Overall hash of file
             BS.SplitData(new MemoryStream(file1), file1hash, fileblockqueue);
 
-            List<HashBlockPair> f1blockshashes = new List<HashBlockPair>();
+            List<HashBlobPair> f1blockshashes = new List<HashBlobPair>();
             while (!fileblockqueue.IsCompleted)
             {
-                HashBlockPair block;
+                HashBlobPair block;
                 if (fileblockqueue.TryTake(out block))
                 {
                     f1blockshashes.Add(block);
                 }
             }
 
-            fileblockqueue = new BlockingCollection<HashBlockPair>();
+            fileblockqueue = new BlockingCollection<HashBlobPair>();
             byte[] file2hash = new byte[20]; // Overall hash of file
             BS.SplitData(new MemoryStream(file2), file2hash, fileblockqueue);
 
-            List<HashBlockPair> f2blockshashes = new List<HashBlockPair>();
+            List<HashBlobPair> f2blockshashes = new List<HashBlobPair>();
             while (!fileblockqueue.IsCompleted)
             {
-                HashBlockPair block;
+                HashBlobPair block;
                 if (fileblockqueue.TryTake(out block))
                 {
                     f2blockshashes.Add(block);

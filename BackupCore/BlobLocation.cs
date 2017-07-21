@@ -18,7 +18,7 @@ namespace BackupCore
         /// <summary>
         /// Is this Blob comprised of several blocks? i.e. Is this block a list of hashes referencing blocks that make up this Blob?
         /// </summary>
-        public bool IsMultiBlockReference { get; set; }
+        public bool IsMultiBlobReference { get; set; }
         public int BytePosition { get; set; }
         public int ByteLength { get; set; }
         public int ReferenceCount { get; set; }
@@ -29,7 +29,7 @@ namespace BackupCore
         {
             BlobType = blobtype;
             RelativeFilePath = relpath;
-            IsMultiBlockReference = ismultiblockref;
+            IsMultiBlobReference = ismultiblockref;
             BytePosition = bytepos;
             ByteLength = bytelen;
             ReferenceCount = referencecount;
@@ -75,7 +75,7 @@ namespace BackupCore
 
             bldata.Add("ReferenceCount-v3", BitConverter.GetBytes(ReferenceCount));
 
-            bldata.Add("IsMultiBlockReference-v4", BitConverter.GetBytes(IsMultiBlockReference));
+            bldata.Add("IsMultiBlockReference-v4", BitConverter.GetBytes(IsMultiBlobReference));
 
             return BinaryEncoding.dict_encode(bldata);
         }

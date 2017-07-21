@@ -17,6 +17,18 @@ Add status command
 	would show differences and estimate size of a run
 	also show path to src/dst
 Switch to existing argparser (ie from nuget)
+"Enhanced data"
+	NTFS Permissions support
+		Ability to escalate this application's own permissions
+			Only when needed
+	NTFS extended attributes
+	Ability to save/restore enhanced or "dumb" data
+		Save/restore w/ & w/o permissions
+			Detect restore to machine without user/group corresponding to permissions being applied
+		Save/restore w/ & w/o extended attributes
+	Special link support
+	Generic permissions support ie. Linux (POSIX)
+		Handle restoring to different OS/permissions scheme than saved to
 Support a cache
 	Warn when deleting backups from destination when the cache is not present
 		Cache depends on metadatatrees from previous backups for differential backups
@@ -61,18 +73,6 @@ More flexible "list" command
 		.Net standard library will work with Framework and Code versions of project
 	Make primary instance of project?
 	Test under linux
-"Enhanced data"
-	NTFS Permissions support
-		Ability to escalate this application's own permissions
-			Only when needed
-	NTFS extended attributes
-	Ability to save/restore enhanced or "dumb" data
-		Save/restore w/ & w/o permissions
-			Detect restore to machine without user/group corresponding to permissions being applied
-		Save/restore w/ & w/o extended attributes
-	Special link support
-Generic permissions support ie. Linux (POSIX)
-	Handle restoring to different OS/permissions scheme than saved to
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder

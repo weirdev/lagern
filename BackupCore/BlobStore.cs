@@ -24,14 +24,14 @@ namespace BackupCore
         // NOTE: TransferBlobAndReferences will need to be updated if blob 
         // addressing is changed to be no longer 1 blob per file and 
         // all blobs in single directory
-        public string BlockSaveDirectory { get; set; }
+        public string BlobSaveDirectory { get; set; }
 
         public bool IsCache { get; set; }
 
-        public BlobStore(string indexpath, string blocksavedir, bool iscache)
+        public BlobStore(string indexpath, string blobsavedir, bool iscache)
         {
             StoreFilePath = indexpath;
-            BlockSaveDirectory = blocksavedir;
+            BlobSaveDirectory = blobsavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
             IsCache = iscache;
         }
@@ -47,37 +47,37 @@ namespace BackupCore
         public byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
         {
             throw new NotImplementedException(); // Not currently working
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
-            Task getfileblockstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblockqueue));
+            Task getfileblobstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblobqueue));
 
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
+            List<byte[]> blobshashes = new List<byte[]>();
+            while (!fileblobqueue.IsCompleted)
             {
-                if (fileblockqueue.TryTake(out HashBlockPair block))
+                if (fileblobqueue.TryTake(out HashBlobPair blob))
                 {
-                    this.AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
+                    this.AddBlob(blob, BlobLocation.BlobTypes.Simple);
+                    blobshashes.Add(blob.Hash);
                 }
-                if (getfileblockstask.IsFaulted)
+                if (getfileblobstask.IsFaulted)
                 {
-                    throw getfileblockstask.Exception;
+                    throw getfileblobstask.Exception;
                 }
             }
-            if (blockshashes.Count > 1)
+            if (blobshashes.Count > 1)
             {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
+                // Multiple blobs so create hashlist blob to reference them all together
+                byte[] hashlist = new byte[blobshashes.Count * blobshashes[0].Length];
+                for (int i = 0; i < blobshashes.Count; i++)
                 {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
+                    Array.Copy(blobshashes[i], 0, hashlist, i * blobshashes[i].Length, blobshashes[i].Length);
                 }
-                AddMultiBlockReferenceBlob(filehash, hashlist, type);
+                AddMultiBlobReferenceBlob(filehash, hashlist, type);
             }
             else
             {
-                // Just the one block, so change its type to `type`
-                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
+                // Just the one blob, so change its type to `type`
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual blob hash used earlier since total file == single blob
             }
             return filehash;
         }
@@ -94,33 +94,33 @@ namespace BackupCore
         /// <returns>A list of hashes representing the file contents.</returns>
         public byte[] StoreDataSync(Stream readerbuffer, BlobLocation.BlobTypes type)
         {
-            BlockingCollection<HashBlockPair> fileblockqueue = new BlockingCollection<HashBlockPair>();
+            BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
-            SplitData(readerbuffer, filehash, fileblockqueue);
+            SplitData(readerbuffer, filehash, fileblobqueue);
 
-            List<byte[]> blockshashes = new List<byte[]>();
-            while (!fileblockqueue.IsCompleted)
+            List<byte[]> blobshashes = new List<byte[]>();
+            while (!fileblobqueue.IsCompleted)
             {
-                if (fileblockqueue.TryTake(out HashBlockPair block))
+                if (fileblobqueue.TryTake(out HashBlobPair blob))
                 {
-                    AddBlob(block, BlobLocation.BlobTypes.Simple);
-                    blockshashes.Add(block.Hash);
+                    AddBlob(blob, BlobLocation.BlobTypes.Simple);
+                    blobshashes.Add(blob.Hash);
                 }
             }
-            if (blockshashes.Count > 1)
+            if (blobshashes.Count > 1)
             {
-                // Multiple blocks so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blockshashes.Count * blockshashes[0].Length];
-                for (int i = 0; i < blockshashes.Count; i++)
+                // Multiple blobs so create hashlist blob to reference them all together
+                byte[] hashlist = new byte[blobshashes.Count * blobshashes[0].Length];
+                for (int i = 0; i < blobshashes.Count; i++)
                 {
-                    Array.Copy(blockshashes[i], 0, hashlist, i * blockshashes[i].Length, blockshashes[i].Length);
+                    Array.Copy(blobshashes[i], 0, hashlist, i * blobshashes[i].Length, blobshashes[i].Length);
                 }
-                AddMultiBlockReferenceBlob(filehash, hashlist, type);
+                AddMultiBlobReferenceBlob(filehash, hashlist, type);
             }
             else
             {
-                // Just the one block, so change its type to FileBlob
-                GetBlobLocation(filehash).BlobType = type; // filehash should match individual block hash used earlier since total file == single block
+                // Just the one blob, so change its type to FileBlob
+                GetBlobLocation(filehash).BlobType = type; // filehash should match individual blob hash used earlier since total file == single blob
             }
             return filehash;
         }
@@ -128,28 +128,28 @@ namespace BackupCore
         public byte[] RetrieveData(byte[] filehash)
         {
             BlobLocation blobbl = GetBlobLocation(filehash);
-            if (blobbl.IsMultiBlockReference) // File is comprised of multiple blocks
+            if (blobbl.IsMultiBlobReference) // File is comprised of multiple blobs
             {
-                var blockhashes = GetHashListFromBlob(blobbl);
+                var blobhashes = GetHashListFromBlob(blobbl);
 
                 MemoryStream file = new MemoryStream();
-                foreach (var hash in blockhashes)
+                foreach (var hash in blobhashes)
                 {
-                    BlobLocation blockloc = GetBlobLocation(hash);
-                    file.Write(LoadBlob(blockloc), 0, blockloc.ByteLength);
+                    BlobLocation blobloc = GetBlobLocation(hash);
+                    file.Write(LoadBlob(blobloc), 0, blobloc.ByteLength);
                 }
                 byte[] filedata = file.ToArray();
                 file.Close();
                 return filedata;
             }
-            else // file is single block
+            else // file is single blob
             {
                 return LoadBlob(blobbl);
             }
         }
 
         /// <summary>
-        /// Loads the data from a blob, no special handling of multiblock references etc.
+        /// Loads the data from a blob, no special handling of multiblob references etc.
         /// </summary>
         /// <param name="blocation"></param>
         /// <returns></returns>
@@ -157,10 +157,10 @@ namespace BackupCore
         {
             try
             {
-                FileStream blockstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
-                byte[] buffer = new byte[blockstream.Length];
-                blockstream.Read(buffer, 0, blocation.ByteLength);
-                blockstream.Close();
+                FileStream blobstream = File.OpenRead(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
+                byte[] buffer = new byte[blobstream.Length];
+                blobstream.Read(buffer, 0, blocation.ByteLength);
+                blobstream.Close();
                 return buffer;
             }
             catch (Exception)
@@ -189,7 +189,7 @@ namespace BackupCore
                 {
                     try
                     {
-                        File.Delete(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
+                        File.Delete(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
                     }
                     catch (Exception)
                     {
@@ -215,7 +215,7 @@ namespace BackupCore
 
         public void ClearData(HashSet<string> exceptions)
         {
-            foreach (FileInfo file in new DirectoryInfo(BlockSaveDirectory).GetFiles())
+            foreach (FileInfo file in new DirectoryInfo(BlobSaveDirectory).GetFiles())
             {
                 if (!exceptions.Contains(file.Name))
                 {
@@ -252,7 +252,7 @@ namespace BackupCore
             else
             {
                 BlobLocation bloc = GetBlobLocation(blobhash);
-                dst.AddBlob(new HashBlockPair(blobhash, LoadBlob(bloc)), bloc.BlobType);
+                dst.AddBlob(new HashBlobPair(blobhash, LoadBlob(bloc)), bloc.BlobType);
             }
             return existsindst;
         }
@@ -261,9 +261,9 @@ namespace BackupCore
         /// Adds a hash and corresponding BackupLocation to the Index.
         /// </summary>
         /// <param name="hash"></param>
-        /// <returns><
+        /// <returns>
         /// True if we already have the hash stored. False if we need to
-        /// save the corresponding block.
+        /// save the corresponding blob.
         /// </returns>
         private BlobLocation AddHash(byte[] hash, BlobLocation blocation)
         {
@@ -277,53 +277,53 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Add list of blocks to blobstore. Automatically creates a reference blob (hashlist) if blocks.count > 1
+        /// Add list of blobs to blobstore. Automatically creates a reference blob (hashlist) if blobs.count > 1
         /// </summary>
         /// <param name="hash"></param>
-        /// <param name="blocks"></param>
+        /// <param name="blobs"></param>
         /// <param name="type"></param>
-        private void AddBlob(byte[] hash, List<HashBlockPair> blocks, BlobLocation.BlobTypes type)
+        private void AddBlob(byte[] hash, List<HashBlobPair> blobs, BlobLocation.BlobTypes type)
         {
-            if (blocks.Count == 1)
+            if (blobs.Count == 1)
             {
-                AddBlob(blocks[0], type);
+                AddBlob(blobs[0], type);
             }
             else
             {
-                byte[] hashlist = new byte[blocks[0].Hash.Length * blocks.Count];
-                for (int i = 0; i < blocks.Count; i++)
+                byte[] hashlist = new byte[blobs[0].Hash.Length * blobs.Count];
+                for (int i = 0; i < blobs.Count; i++)
                 {
-                    AddBlob(blocks[i], BlobLocation.BlobTypes.Simple, false);
-                    Array.Copy(blocks[i].Hash, 0, hashlist, blocks[0].Hash.Length * i, blocks[0].Hash.Length);
+                    AddBlob(blobs[i], BlobLocation.BlobTypes.Simple, false);
+                    Array.Copy(blobs[i].Hash, 0, hashlist, blobs[0].Hash.Length * i, blobs[0].Hash.Length);
                 }
-                AddMultiBlockReferenceBlob(hash, hashlist, type);
+                AddMultiBlobReferenceBlob(hash, hashlist, type);
             }
         }
 
         /// <summary>
         /// Add a single blob to blobstore.
         /// </summary>
-        /// <param name="block"></param>
+        /// <param name="blob"></param>
         /// <param name="type"></param>
-        /// <returns>The BlobLocation the block is saved to.</returns>
-        private BlobLocation AddBlob(HashBlockPair block, BlobLocation.BlobTypes type)
+        /// <returns>The BlobLocation the blob is saved to.</returns>
+        private BlobLocation AddBlob(HashBlobPair blob, BlobLocation.BlobTypes type)
         {
-            return AddBlob(block, type, false);
+            return AddBlob(blob, type, false);
         }
 
-        private BlobLocation AddBlob(HashBlockPair block, BlobLocation.BlobTypes type, bool isMultiBlockReference)
+        private BlobLocation AddBlob(HashBlobPair blob, BlobLocation.BlobTypes type, bool isMultiblobReference)
         {
-            string relpath = HashTools.ByteArrayToHexViaLookup32(block.Hash);
-            BlobLocation posblocation = new BlobLocation(type, isMultiBlockReference, relpath, 0, block.Block.Length);
+            string relpath = HashTools.ByteArrayToHexViaLookup32(blob.Hash);
+            BlobLocation posblocation = new BlobLocation(type, isMultiblobReference, relpath, 0, blob.Block.Length);
             BlobLocation existingbloc;
             lock (this)
             {
                 // Have we already stored this 
-                existingbloc = AddHash(block.Hash, posblocation);
+                existingbloc = AddHash(blob.Hash, posblocation);
             }
             if (existingbloc == null)
             {
-                WriteBlob(posblocation, block.Block);
+                WriteBlob(posblocation, blob.Block);
                 return posblocation;
             }
             else
@@ -332,10 +332,10 @@ namespace BackupCore
             }
         }
 
-        private void AddMultiBlockReferenceBlob(byte[] hash, byte[] hashlist, BlobLocation.BlobTypes type)
+        private void AddMultiBlobReferenceBlob(byte[] hash, byte[] hashlist, BlobLocation.BlobTypes type)
         {
-            HashBlockPair referenceblock = new HashBlockPair(hash, hashlist);
-            AddBlob(referenceblock, type, true);
+            HashBlobPair referenceblob = new HashBlobPair(hash, hashlist);
+            AddBlob(referenceblob, type, true);
         }
 
         public IBlobReferenceIterator GetAllBlobReferences(byte[] blobhash, bool includefiles, bool bottomup=true)
@@ -345,7 +345,7 @@ namespace BackupCore
 
         private void WriteBlob(BlobLocation blocation, byte[] blob)
         {
-            string path = Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath);
+            string path = Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath);
             try
             {
                 using (FileStream writer = File.OpenWrite(path))
@@ -375,22 +375,22 @@ namespace BackupCore
 
         private List<byte[]> GetHashListFromBlob(BlobLocation blocation)
         {
-            if (!blocation.IsMultiBlockReference)
+            if (!blocation.IsMultiBlobReference)
             {
                 throw new ArgumentException("blobhash must be of a blob with IsMultiBlockReference=true");
             }
             try
             {
-                FileStream blockhashstream = File.OpenRead(Path.Combine(BlockSaveDirectory, blocation.RelativeFilePath));
-                List<byte[]> blockhashes = new List<byte[]>();
-                for (int i = 0; i < blockhashstream.Length / 20; i++)
+                FileStream blobhashstream = File.OpenRead(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
+                List<byte[]> blobhashes = new List<byte[]>();
+                for (int i = 0; i < blobhashstream.Length / 20; i++)
                 {
                     byte[] buffer = new byte[20];
-                    blockhashstream.Read(buffer, 0, 20);
-                    blockhashes.Add(buffer);
+                    blobhashstream.Read(buffer, 0, 20);
+                    blobhashes.Add(buffer);
                 }
-                blockhashstream.Close();
-                return blockhashes;
+                blobhashstream.Close();
+                return blobhashes;
             }
             catch (Exception)
             {
@@ -405,10 +405,10 @@ namespace BackupCore
         /// <param name="inputdata"></param>
         /// <param name="type"></param>
         /// <param name="filehash"></param>
-        /// <param name="hashblockqueue"></param>
-        public void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
+        /// <param name="hashblobqueue"></param>
+        public void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
-            SplitData(new MemoryStream(inputdata), filehash, hashblockqueue);
+            SplitData(new MemoryStream(inputdata), filehash, hashblobqueue);
         }
 
         /// <summary>
@@ -421,15 +421,15 @@ namespace BackupCore
         /// <param name="inputstream"></param>
         /// <param name="type"></param>
         /// <param name="filehash"></param>
-        /// <param name="hashblockqueue"></param>
-        public void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlockPair> hashblockqueue)
+        /// <param name="hashblobqueue"></param>
+        public void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             // https://rsync.samba.org/tech_report/node3.html
-            List<byte> newblock = new List<byte>();
+            List<byte> newblob = new List<byte>();
             byte[] alphachksum = new byte[2];
             byte[] betachksum = new byte[2];
             SHA1 sha1filehasher = SHA1.Create();
-            SHA1 sha1blockhasher = SHA1.Create();
+            SHA1 sha1blobhasher = SHA1.Create();
 
             if (inputstream.Length != 0)
             {
@@ -450,51 +450,51 @@ namespace BackupCore
                     }
                     for (int j = 0; j < readin.Length; j++) // Byte by byte
                     {
-                        newblock.Add(readin[j]);
-                        HashTools.ByteSum(alphachksum, newblock[newblock.Count - 1]);
-                        if (newblock.Count > rollwindowsize)
+                        newblob.Add(readin[j]);
+                        HashTools.ByteSum(alphachksum, newblob[newblob.Count - 1]);
+                        if (newblob.Count > rollwindowsize)
                         {
-                            HashTools.ByteDifference(alphachksum, newblock[newblock.Count - rollwindowsize - 1]);
+                            HashTools.ByteDifference(alphachksum, newblob[newblob.Count - rollwindowsize - 1]);
                             byte[] shifted = new byte[2];
-                            shifted[0] = (byte)((newblock[newblock.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
-                            shifted[1] = (byte)((newblock[newblock.Count - 1] >> 3) & 0xFF); // 8-5 = 3
+                            shifted[0] = (byte)((newblob[newblob.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
+                            shifted[1] = (byte)((newblob[newblob.Count - 1] >> 3) & 0xFF); // 8-5 = 3
                             HashTools.BytesDifference(betachksum, shifted);
                         }
                         HashTools.BytesSum(betachksum, alphachksum);
 
                         if (alphachksum[0] == 0xFF && betachksum[0] == 0xFF && betachksum[1] < 0x02) // (256*256*128)^-1 => expected value (/2) = ~4MB
                         {
-                            byte[] block = newblock.ToArray();
+                            byte[] blob = newblob.ToArray();
                             if (i + readsize >= inputstream.Length && j + 1 >= readin.Length) // Need to use TransformFinalBlock if at end of input
                             {
-                                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
+                                sha1filehasher.TransformFinalBlock(blob, 0, blob.Length);
                             }
                             else
                             {
-                                sha1filehasher.TransformBlock(block, 0, block.Length, block, 0);
+                                sha1filehasher.TransformBlock(blob, 0, blob.Length, blob, 0);
                             }
-                            hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
-                            newblock = new List<byte>();
+                            hashblobqueue.Add(new HashBlobPair(sha1blobhasher.ComputeHash(blob), blob));
+                            newblob = new List<byte>();
                             alphachksum = new byte[2];
                             betachksum = new byte[2];
                         }
                     }
                 }
-                if (newblock.Count != 0) // Create block from remaining bytes
+                if (newblob.Count != 0) // Create blob from remaining bytes
                 {
-                    byte[] block = newblock.ToArray();
-                    sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                    hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
+                    byte[] blob = newblob.ToArray();
+                    sha1filehasher.TransformFinalBlock(blob, 0, blob.Length);
+                    hashblobqueue.Add(new HashBlobPair(sha1blobhasher.ComputeHash(blob), blob));
                 }
             }
             else
             {
-                byte[] block = new byte[0];
-                sha1filehasher.TransformFinalBlock(block, 0, block.Length);
-                hashblockqueue.Add(new HashBlockPair(sha1blockhasher.ComputeHash(block), block));
+                byte[] blob = new byte[0];
+                sha1filehasher.TransformFinalBlock(blob, 0, blob.Length);
+                hashblobqueue.Add(new HashBlobPair(sha1blobhasher.ComputeHash(blob), blob));
             }
             Array.Copy(sha1filehasher.Hash, filehash, sha1filehasher.Hash.Length);
-            hashblockqueue.CompleteAdding();
+            hashblobqueue.CompleteAdding();
         }
 
         public Tuple<int, int> GetSizes(byte[] blobhash)
@@ -605,7 +605,7 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(bptdata);
         }
 
-        public static BlobStore deserialize(byte[] data, string indexpath, string blocksavedir)
+        public static BlobStore deserialize(byte[] data, string indexpath, string blobsavedir)
         {
 
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
@@ -620,7 +620,7 @@ namespace BackupCore
                 iscache = false;
             }
 
-            BlobStore bs = new BlobStore(indexpath, blocksavedir, iscache);
+            BlobStore bs = new BlobStore(indexpath, blobsavedir, iscache);
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];
@@ -717,7 +717,7 @@ namespace BackupCore
                     default:
                         throw new Exception("Unhandled blobtype on dereference");
                 }
-                if (blocation.IsMultiBlockReference)
+                if (blocation.IsMultiBlobReference)
                 {
                     foreach (var hash in Blobs.GetHashListFromBlob(blocation))
                     {
