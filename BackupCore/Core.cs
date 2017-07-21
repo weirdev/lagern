@@ -185,7 +185,7 @@ namespace BackupCore
             // Esentially creates thousands of threads containing infinite loops checking for completed work
             // and no work is ever completed
             // ** Trying without parallelism in fetching files/directories only on operating on those results
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackupPathSrc));
+            MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
@@ -207,7 +207,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataTree previousmtree = MetadataTree.Load(previousbackup.MetadataTreeHash, DefaultBlobs);
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
                     //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
                     GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters);
                 }
@@ -292,7 +292,7 @@ namespace BackupCore
 
         public void RunBackupSync(string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaterns=null)
         {
-            MetadataTree newmetatree = new MetadataTree(new FileMetadata(BackupPathSrc));
+            MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
             
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
@@ -306,7 +306,7 @@ namespace BackupCore
                 BackupRecord previousbackup = DefaultBackups.GetBackupRecord();
                 if (previousbackup != null)
                 {
-                    MetadataTree previousmtree = MetadataTree.Load(previousbackup.MetadataTreeHash, DefaultBlobs);
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
                     GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaterns);
                 }
                 else
@@ -384,7 +384,7 @@ namespace BackupCore
         {
             try
             {
-                MetadataTree mtree = MetadataTree.Load(DefaultBackups.GetBackupRecord(backuphashprefix).MetadataTreeHash, DefaultBlobs);
+                MetadataNode mtree = MetadataNode.Load(DefaultBlobs, DefaultBackups.GetBackupRecord(backuphashprefix).MetadataTreeHash);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
@@ -434,7 +434,7 @@ namespace BackupCore
         }
 
         protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
-            BlockingCollection<string> directoryqueue, string path=null, MetadataTree previousmtree=null, List<Tuple<int, string>> trackpaterns=null)
+            BlockingCollection<string> directoryqueue, string path=null, MetadataNode previousmtree=null, List<Tuple<int, string>> trackpaterns=null)
         {
             if (path == null)
             {
@@ -705,13 +705,13 @@ namespace BackupCore
             return DefaultBlobs.GetSizes(HashTools.HexStringToByteArray(backuphashstring));
         }
 
-        private void BackupDirectory(string relpath, MetadataTree mtree)
+        private void BackupDirectory(string relpath, MetadataNode mtree)
         {
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackupPathSrc, relpath)));
         }
 
         // TODO: This has problems (see todo on BlobStore.StoreDataAsync()
-        protected void BackupFileAsync(string relpath, MetadataTree mtree)
+        protected void BackupFileAsync(string relpath, MetadataNode mtree)
         {
             throw new NotImplementedException(); // Dont use until BlobStore.StoreDataAsync() fixed
             // NOTE: If more detailed error handling is added, replace this try/catch and the 
@@ -729,7 +729,7 @@ namespace BackupCore
         }
 
         // TODO: This should be a relative filepath
-        protected void BackupFileSync(string relpath, MetadataTree mtree)
+        protected void BackupFileSync(string relpath, MetadataNode mtree)
         {
             try
             {
@@ -755,7 +755,7 @@ namespace BackupCore
         /// <exception cref="UnauthorizedAccessException"/>
         /// <exception cref="PathTooLongException"/>
         /// <exception cref="NotSupportedException"/>
-        protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataTree mtree)
+        protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataNode mtree)
         {
             FileMetadata fm = new FileMetadata(Path.Combine(BackupPathSrc, relpath))
             {

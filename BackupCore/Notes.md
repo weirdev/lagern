@@ -1,13 +1,10 @@
 ﻿*********************
 IN PROGRESS
 Code cleanup
-	Rename all occurences of block to blob
-	Roll MetadataNodeReferenceIterator into BlobReferenceIterator
-	Just publicly use GetAllBlobReferences not GetBackupReferences
-	Comments
 	Remove MetaDataTree class
 		just use root metadata node
 		standardize on (no?) (a?) prefix for root
+	Comments
 	Cleanup heirarchy of Core -> BackupStore, BlobStore
 		Should the API and console app be seing BackupStore and BlobStore directly?
 			If yes always access like Core.B___Store or pull out and use like own variable?

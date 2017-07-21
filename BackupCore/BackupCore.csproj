@@ -71,7 +71,6 @@
     <Compile Include="ICustomSerializable.cs" />
     <Compile Include="MetadataNode.cs" />
     <Compile Include="BackupStore.cs" />
-    <Compile Include="MetadataTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

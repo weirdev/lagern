@@ -17,7 +17,7 @@ namespace BackupConsole
         BackupCore.Core BCore { get; set; }
         string BackupHash { get; set; }
         string BackupStoreName { get; set; }
-        BackupCore.MetadataTree BackupTree { get; set; }
+        BackupCore.MetadataNode BackupTree { get; set; }
         BackupCore.MetadataNode CurrentNode { get; set; }
 
         public BackupBrowser(string backupstorename, string backuphash)
@@ -35,8 +35,8 @@ namespace BackupConsole
             BackupHash = targetbackuphashandrecord.Item1;
             BackupStoreName = backupstorename;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.DefaultBlobs);
-            CurrentNode = BackupTree.Root;
+            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultBlobs, backuprecord.MetadataTreeHash);
+            CurrentNode = BackupTree;
         }
 
         public void CommandLoop()
@@ -250,11 +250,11 @@ namespace BackupConsole
             var targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataTree.Load(backuprecord.MetadataTreeHash, BCore.DefaultBlobs);
+            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultBlobs, backuprecord.MetadataTreeHash);
             CurrentNode = BackupTree.GetDirectory(curpath);
             if (CurrentNode == null)
             {
-                CurrentNode = BackupTree.Root;
+                CurrentNode = BackupTree;
             }
             Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
         }

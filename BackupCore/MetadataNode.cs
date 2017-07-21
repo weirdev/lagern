@@ -72,30 +72,83 @@ namespace BackupCore
             //}
         }
 
-        public MetadataNode GetDirectory(string name)
+        public bool HasDirectory(string relpath)
         {
-            if (name == ".")
+            return GetDirectory(relpath) != null;
+        }
+
+        public FileMetadata GetDirectoryMetadata(string relpath)
+        {
+            return GetDirectory(relpath).DirMetadata;
+        }
+
+        public MetadataNode GetDirectory(string relpath)
+        {
+            if (relpath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()))
+            {
+                relpath = relpath.Substring(0, relpath.Length - 1);
+            }
+            if (relpath.StartsWith(System.IO.Path.DirectorySeparatorChar.ToString()))
+            {
+                relpath = relpath.Substring(1);
+            }
+            if (relpath == ".")
             {
                 return this;
             }
-            if (name == "..")
+            if (relpath == "..")
             {
                 return Parent;
             }
-            if (Directories != null && Directories.ContainsKey(name))
+            int slash = relpath.IndexOf(System.IO.Path.DirectorySeparatorChar);
+            if (slash != -1)
             {
-                return Directories[name];
+                string nextdirname = relpath.Substring(0, slash);
+                string nextpath = relpath.Substring(slash + 1, relpath.Length - slash - 1);
+                MetadataNode nextdir = GetDirectory(nextdirname);
+                if (nextpath == "")
+                {
+                    return nextdir;
+                }
+                if (nextdir == null)
+                {
+                    return null;
+                }
+                return nextdir.GetDirectory(nextpath);
+            }
+            else
+            {
+                if (Directories != null && Directories.ContainsKey(relpath))
+                {
+                    return Directories[relpath];
+                }
             }
             return null;
         }
 
-        public FileMetadata GetFile(string name)
+        public FileMetadata GetFile(string relpath)
         {
-            if (Files != null && Files.ContainsKey(name))
+            int slash = relpath.LastIndexOf(System.IO.Path.DirectorySeparatorChar);
+            if (slash == -1) // file must exist in "root" assume '\\' before path
             {
-                return Files[name];
+                relpath = System.IO.Path.DirectorySeparatorChar + relpath;
+                slash = 0;
+            }
+            MetadataNode parent = GetDirectory(relpath.Substring(0, slash));
+            if (parent != null)
+            {
+                string name = relpath.Substring(slash + 1, relpath.Length - slash - 1);
+                if (parent.Files != null && parent.Files.ContainsKey(name))
+                {
+                    return Files[name];
+                }
             }
             return null;
+        }
+
+        public void AddDirectory(string dirpath, FileMetadata metadata)
+        {
+            GetDirectory(dirpath).AddDirectory(metadata);
         }
 
         /// <summary>
@@ -113,6 +166,16 @@ namespace BackupCore
                 MetadataNode ndir = new MetadataNode(metadata, this);
                 Directories[metadata.FileName] = ndir;
             }
+        }
+
+        /// <summary>
+        /// Adds a file to its parent folder.
+        /// </summary>
+        /// <param name="dirpath">Relative path NOT containing filename.</param>
+        /// <param name="metadata"></param>
+        public void AddFile(string dirpath, FileMetadata metadata)
+        {
+            GetDirectory(dirpath).AddFile(metadata);
         }
 
         /// <summary>

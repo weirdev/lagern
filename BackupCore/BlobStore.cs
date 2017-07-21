@@ -706,13 +706,59 @@ namespace BackupCore
                         }
                         break;
                     case BlobLocation.BlobTypes.MetadataNode:
-                        childiterator = new MetadataNodeReferenceIterator(Blobs, ParentHash, IncludeFiles, BottomUp);
-                        foreach (var refref in childiterator)
+                        IEnumerable<byte[]> dirreferences;
+                        IEnumerable<byte[]> filereferences = null;
+                        dirreferences = MetadataNode.GetImmediateChildNodeReferencesWithoutLoad(Blobs.RetrieveData(ParentHash)); // many immediate references
+                        if (IncludeFiles)
                         {
-                            skipchild = false;
-                            yield return refref;
+                            filereferences = MetadataNode.GetImmediateFileReferencesWithoutLoad(Blobs.RetrieveData(ParentHash));
+                            foreach (var fref in filereferences)
+                            {
+                                if (!BottomUp)
+                                {
+                                    skipchild = false;
+                                    yield return fref;
+                                }
+                                if (!skipchild)
+                                {
+                                    childiterator = new BlobReferenceIterator(Blobs, fref, IncludeFiles, BottomUp);
+                                    foreach (var frefref in childiterator)
+                                    {
+                                        skipchild = false;
+                                        yield return frefref;
+                                    }
+                                    childiterator = null;
+                                }
+                                if (BottomUp)
+                                {
+                                    skipchild = false;
+                                    yield return fref;
+                                }
+                            }
                         }
-                        childiterator = null;
+                        foreach (var reference in dirreferences) // for each immediate reference
+                        {
+                            if (!BottomUp)
+                            {
+                                skipchild = false;
+                                yield return reference; // return immediate reference
+                            }
+                            if (!skipchild)
+                            {
+                                childiterator = new BlobReferenceIterator(Blobs, reference, IncludeFiles, BottomUp);
+                                foreach (var refref in childiterator) // recurse on references of that reference
+                                {
+                                    skipchild = false;
+                                    yield return refref;
+                                }
+                            }
+                            childiterator = null;
+                            if (BottomUp)
+                            {
+                                skipchild = false;
+                                yield return reference; // return immediate reference
+                            }
+                        }
                         break;
                     default:
                         throw new Exception("Unhandled blobtype on dereference");
@@ -723,104 +769,6 @@ namespace BackupCore
                     {
                         skipchild = false;
                         yield return hash;
-                    }
-                }
-            }
-
-            IEnumerator IEnumerable.GetEnumerator()
-            {
-                return GetEnumerator();
-            }
-        }
-
-        // TODO: roll this into BlobReferenceIterator
-        private class MetadataNodeReferenceIterator : IBlobReferenceIterator
-        {
-            private byte[] ParentNodeHash { get; set; }
-
-            private BlobStore Blobs { get; set; }
-
-            private bool IncludeFiles { get; set; }
-
-            private bool BottomUp { get; set; } // Determines whether or not to return child references first
-            
-            private bool skipchild = false;
-            private IBlobReferenceIterator childiterator = null;
-
-            public MetadataNodeReferenceIterator(BlobStore blobs, byte[] mnblobhash, bool includefiles, bool bottomup)
-            {
-                Blobs = blobs;
-                ParentNodeHash = mnblobhash;
-                IncludeFiles = includefiles;
-                BottomUp = bottomup;
-            }
-
-            public void SkipChild()
-            {
-                skipchild = true;
-                if (childiterator != null)
-                {
-                    childiterator.SkipChild();
-                }
-                if (BottomUp)
-                {
-                    throw new Exception("Skip child is not valid when iterating through references top down.");
-                }
-            }
-
-            public IEnumerator<byte[]> GetEnumerator()
-            {
-                IEnumerable<byte[]> dirreferences;
-                IEnumerable<byte[]> filereferences = null;
-                dirreferences = MetadataNode.GetImmediateChildNodeReferencesWithoutLoad(Blobs.RetrieveData(ParentNodeHash)); // many immediate references
-                if (IncludeFiles)
-                {
-                    filereferences = MetadataNode.GetImmediateFileReferencesWithoutLoad(Blobs.RetrieveData(ParentNodeHash));
-                    foreach (var fref in filereferences)
-                    {
-                        if (!BottomUp)
-                        {
-                            skipchild = false;
-                            yield return fref;
-                        }
-                        if (!skipchild)
-                        {
-                            childiterator = new BlobReferenceIterator(Blobs, fref, IncludeFiles, BottomUp);
-                            foreach (var frefref in childiterator)
-                            {
-                                skipchild = false;
-                                yield return frefref;
-                            }
-                            childiterator = null;
-                        }
-                        if (BottomUp)
-                        {
-                            skipchild = false;
-                            yield return fref;
-                        }
-                    }
-                }
-                foreach (var reference in dirreferences) // for each immediate reference
-                {
-                    if (!BottomUp)
-                    {
-                        skipchild = false;
-                        yield return reference; // return immediate reference
-                    }
-                    if (!skipchild)
-                    {
-                        childiterator = new MetadataNodeReferenceIterator(Blobs, reference, IncludeFiles, BottomUp);
-                        foreach (var refref in childiterator) // recurse on references of that reference
-                        {
-                            skipchild = false;
-                            yield return refref;
-                        }
-                    }
-                    childiterator = null;
-                    if (BottomUp)
-                    {
-                        skipchild = false;
-                        yield return reference; // return immediate reference
                     }
                 }
             }
