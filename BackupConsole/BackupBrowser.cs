@@ -4,16 +4,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using CommandLine;
 
 namespace BackupConsole
 {
     class BackupBrowser
     {
+        private bool continueloop;
+
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
-
-        private static readonly ArgumentScanner browse_scanner = BrowseArgScannerFactory();
-
+        
         BackupCore.Core BCore { get; set; }
         string BackupHash { get; set; }
         string BackupStoreName { get; set; }
@@ -39,9 +40,33 @@ namespace BackupConsole
             CurrentNode = BackupTree;
         }
 
+        [Verb("cd", HelpText = "Change the current directory")]
+        class CDOptions
+        {
+            [Value(0, Required = true, HelpText = "The path of the directory to change to")]
+            public string Directory { get; set; }
+        }
+
+        [Verb("ls", HelpText = "List the contents of a directory")]
+        class LSOptions { }
+
+        [Verb("exit", HelpText = "Exit the command loop")]
+        class ExitOptions { }
+
+        [Verb("cb", HelpText = "Change the backup being browsed")]
+        class CBOptions
+        {
+            [Option('o', "offset", Required = false, Default = 0, HelpText = "The number of backups foward or backward to change")]
+            public int Offset { get; set; }
+
+            [Option('b', "backup", Required = false, Default = null, HelpText = "The hash of the backup to switch to.")]
+            public string Backup { get; set; }
+        }
+
         public void CommandLoop()
         {
-            while (true)
+            continueloop = true;
+            while (continueloop)
             {
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
                 string cachewarning = "";
@@ -52,84 +77,13 @@ namespace BackupConsole
                 Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
                 string command = Console.ReadLine();
                 string[] args = SplitArguments(command);
-                try
-                {
-                    var parsed = browse_scanner.ParseInput(args);
-                    if (parsed.Item1 == "cd")
-                    {
-                        // "cd <directory>"
-                        ChangeDirectory(parsed.Item2["directory"]);
-                    }
-                    else if (parsed.Item1 == "ls")
-                    {
-                        // "ls"
-                        ListDirectory();
-                    }
-                    else if (parsed.Item1 == "exit")
-                    {
-                        // "exit"
-                        return;
-                    }
-                    else if (parsed.Item1 == "restore")
-                    {
-                        // "restore <filerelpath> [-r <>]"
-                        string filerelpath = Path.Combine(CurrentNode.Path, parsed.Item2["filerelpath"]).Substring(1); // strip leading slash
-                        // If no restoreto path given, restore
-                        // to cwd / its relative path
-                        string restorepath = Path.Combine(cwd, filerelpath);
-                        if (parsed.Item3.ContainsKey("r"))
-                        {
-                            if (parsed.Item3["r"] == ".")
-                            {
-                                restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
-                            }
-                            else
-                            {
-                                restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
-                            }
-                        }
-                        Program.RestoreFile(BackupStoreName, filerelpath, restorepath, BackupHash);
-                    }
-                    else if (parsed.Item1 == "cb")
-                    {
-                        // "cb [<backuphash>] [-o <>]"
-                        string backuphash = BackupHash;
-                        int offset = 0;
-                        if (!parsed.Item2.ContainsKey("backuphash") && !parsed.Item3.ContainsKey("o"))
-                        {
-                            ShowCommands();
-                            return;
-                        }
-                        if (parsed.Item2.ContainsKey("backuphash"))
-                        {
-                            backuphash = parsed.Item2["backuphash"];
-                        }
-                        if (parsed.Item3.ContainsKey("o"))
-                        {
-                            offset = Convert.ToInt32(parsed.Item3["o"]);
-                        }
-                        ChangeBackup(backuphash, offset);
-                    }
-                    else if (parsed.Item1 == "list")
-                    {
-                        // "list [<listcount>] [-s]"
-                        int listcount = -1;
-                        if (parsed.Item2.ContainsKey("listcount"))
-                        {
-                            listcount = Convert.ToInt32(parsed.Item2["listcount"]);
-                        }
-                        bool calculatesizes = parsed.Item3.ContainsKey("s");
-                        Program.ListBackups(BCore, parsed.Item3.ContainsKey("s"), listcount);
-                    }
-                    else if (parsed.Item1 == "help")
-                    {
-                        ShowCommands();
-                    }
-                }
-                catch (Exception)
-                {
-                    ShowCommands();
-                }
+                Parser.Default.ParseArguments<CDOptions, Program.RestoreOptions>(args)
+                    .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
+                    .WithParsed<LSOptions>(opts => ListDirectory())
+                    .WithParsed<ExitOptions>(opts => Exit())
+                    .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
+                    .WithParsed<CBOptions>(opts => ChangeBackup(opts))
+                    .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupStoreName, BCore));
             }
         }
 
@@ -158,19 +112,6 @@ namespace BackupConsole
             return split.Split('\n');
         }
 
-        private static ArgumentScanner BrowseArgScannerFactory()
-        {
-            ArgumentScanner scanner = new ArgumentScanner();
-            scanner.AddCommand("cd <directory>");
-            scanner.AddCommand("ls");
-            scanner.AddCommand("restore <filerelpath> [-r <>]");
-            scanner.AddCommand("exit");
-            scanner.AddCommand("list [<listcount>] [-s]");
-            scanner.AddCommand("help");
-            scanner.AddCommand("cb [<backuphash>] [-o <>]");
-            return scanner;
-        }
-
         private  string GetBUDestinationDir()
         {
             string dir = cwd;
@@ -183,14 +124,6 @@ namespace BackupConsole
                 dir = Path.GetDirectoryName(dir);
             } while (dir != null);
             return null;
-        }
-
-        private static void ShowCommands()
-        {
-            foreach (var command in browse_scanner.CommandStrings)
-            {
-                Console.WriteLine(command);
-            }
         }
 
         private void ListDirectory()
@@ -218,18 +151,18 @@ namespace BackupConsole
             }
         }
 
-        private void ChangeDirectory(string directory)
+        private void ChangeDirectory(CDOptions opts)
         {
             BackupCore.MetadataNode dir;
             try
             {
-                if (directory.StartsWith(Path.DirectorySeparatorChar.ToString()))
+                if (opts.Directory.StartsWith(Path.DirectorySeparatorChar.ToString()))
                 {
-                    dir = BackupTree.GetDirectory(directory);
+                    dir = BackupTree.GetDirectory(opts.Directory);
                 }
                 else
                 {
-                    dir = BackupTree.GetDirectory(Path.Combine(CurrentNode.Path, directory));
+                    dir = BackupTree.GetDirectory(Path.Combine(CurrentNode.Path, opts.Directory));
                 }
             }
             catch (Exception)
@@ -244,10 +177,15 @@ namespace BackupConsole
             CurrentNode = dir;
         }
 
-        private void ChangeBackup(string backuphash, int offset=0)
+        private void ChangeBackup(CBOptions opts)
         {
             string curpath = CurrentNode.Path;
-            var targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, offset);
+            string backuphash = opts.Backup;
+            if (opts.Backup == null)
+            {
+                backuphash = BackupHash;
+            }
+            var targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultBlobs, backuprecord.MetadataTreeHash);
@@ -258,5 +196,7 @@ namespace BackupConsole
             }
             Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
         }
+
+        private void Exit() { }
     }
 }

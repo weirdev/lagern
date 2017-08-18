@@ -1,19 +1,17 @@
 ﻿*********************
 IN PROGRESS
+Switch to existing argparser
+	https://github.com/gsscoder/commandline
 Code cleanup
-	Remove MetaDataTree class
-		just use root metadata node
-		standardize on (no?) (a?) prefix for root
-	Comments
 	Cleanup heirarchy of Core -> BackupStore, BlobStore
 		Should the API and console app be seing BackupStore and BlobStore directly?
 			If yes always access like Core.B___Store or pull out and use like own variable?
 			If no make BackupStore and BlobStore protected and add needed public interfaces to Core **
+	Comments
 Add status command
 	much like git status
 	would show differences and estimate size of a run
 	also show path to src/dst
-Switch to existing argparser (ie from nuget)
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions

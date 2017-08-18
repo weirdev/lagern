@@ -2,221 +2,192 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using CommandLine;
 
 namespace BackupConsole
 {
+    // TODO: Replace custom parsing with CommandLine nuget library
+    // https://github.com/gsscoder/commandline
     public class Program
     {
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
-        private static readonly ArgumentScanner main_scanner = MainArgScannerFactory();
-
+        
         public static void Main(string[] args)
         {
-            // TODO: Get rid of this large try,catch block and catch errors closer to where they occur
-            // ... in Core, during parsing, etc.
+            Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
+                RunOptions, DeleteOptions, RestoreOptions, ListOptions, BrowseOptions,
+                TransferOptions, SyncCacheOptions>(args)
+              .WithParsed<ShowOptions>(opts => ShowSettings(opts))
+              .WithParsed<SetOptions>(opts => SetSetting(opts))
+              .WithParsed<ClearOptions>(opts => ClearSetting(opts))
+              .WithParsed<RunOptions>(opts => RunBackup(opts))
+              .WithParsed<DeleteOptions>(opts => DeleteBackup(opts))
+              .WithParsed<RestoreOptions>(opts => RestoreFile(opts))
+              .WithParsed<ListOptions>(opts => ListBackups(opts))
+              .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
+              .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
+              .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
+              //.WithNotParsed();
+        }
+
+        [Verb("show", HelpText = "Show lagern settings")]
+        class ShowOptions
+        {
+            [Value(0, Required = false, HelpText = "The setting to show")]
+            public string Setting { get; set; }
+        }
+
+        [Verb("set", HelpText = "Set a lagern setting")]
+        class SetOptions
+        {
+            [Value(0, Required = true, HelpText = "The setting to set")]
+            public string Setting { get; set; }
+
+            [Value(0, Required = true, HelpText = "The value to give setting")]
+            public string Value { get; set; }
+        }
+
+        [Verb("clear", HelpText = "Clear a lagern setting")]
+        class ClearOptions
+        {
+            [Value(0, Required = true, HelpText = "The setting to clear")]
+            public string Setting { get; set; }
+        }
+
+        [Verb("run", HelpText = "Run a backup.")]
+        class RunOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Option('b', "backup", Required = false, SetName = "differential", HelpText = "The hash of the backup to use for a differential backup")]
+            public string BackupHash { get; set; }
+
+            [Option('s', "scan", SetName = "differential", HelpText = "Forces scan of all files (makes backup non-differential)")]
+            public bool Scan { get; set; }
+
+            [Option('m', "message", Default = "", HelpText = "A message describing the backup")]
+            public string Message { get; set; }
+        }
+
+        [Verb("delete", HelpText = "Delete a backup")]
+        class DeleteOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Value(0, Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
+            public string BackupHash { get; set; }
+        }
+
+        [Verb("restore", HelpText = "Restore a file or directory")]
+        public class RestoreOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
+            public string BackupHash { get; set; }
+
+            [Option('r', "restorepath", Required = false, HelpText = "The path which to restore the file or directory, defaults to current directory")]
+            public string RestorePath { get; set; }
+
+            [Value(0, Required = true, HelpText = "The path, relative to the backup root of the file or directory to restore")]
+            public string Path { get; set; }
+        }
+
+        [Verb("list", HelpText = "List saved backups")]
+        public class ListNoNameOptions
+        {
+            [Option('s', "showsizes", Required = false, HelpText = "Display the backup sizes")]
+            public bool ShowSizes { get; set; }
+
+            [Option('m', "maxbackups", Required = false, Default = 10, Min = 1, HelpText = "The maximum number of backups to show, default 10")]
+            public int MaxBackups { get; set; }
+        }
+
+        [Verb("list", HelpText = "List saved backups")]
+        public class ListOptions : ListNoNameOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+        }
+
+        [Verb("browse", HelpText = "Browse a previous backup")]
+        public class BrowseOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
+            public string BackupHash { get; set; }
+        }
+
+        [Verb("transfer", HelpText = "Transfer a backup store to another location")]
+        public class TransferOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Value(0, Required = true, HelpText = "The destination which to transfer the backup store")]
+            public string Destination { get; set; }
+        }
+
+        [Verb("synccache", HelpText = "Sync the cache to the destination")]
+        class SyncCacheOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+        }
+
+        /*
+        int Main(string[] args)
+        {
+            return CommandLine.Parser.Default.ParseArguments<AddOptions, CommitOptions, CloneOptions>(args)
+              .MapResult(
+                (AddOptions opts) => RunAddAndReturnExitCode(opts),
+                (CommitOptions opts) => RunCommitAndReturnExitCode(opts),
+                (CloneOptions opts) => RunCloneAndReturnExitCode(opts),
+                errs => 1);
+        }*/
+
+        private static void ShowSettings(ShowOptions opts)
+        {
+            if (opts.Setting != null)
+            {
+                var settingval = ReadSetting(opts.Setting);
+                if (settingval != null)
+                {
+                    Console.WriteLine(settingval);
+                }
+            }
+            else
+            {
+                var settings = ReadSettings();
+                if (settings != null)
+                {
+                    foreach (var setval in settings)
+                    {
+                        Console.WriteLine(setval.Key + ": " + setval.Value);
+                    }
+                }
+            }
+        }
+
+        private static void SetSetting(SetOptions opts)
+        {
+            WriteSetting(opts.Setting, opts.Value);
+        }
+
+        private static void RunBackup(RunOptions opts)
+        {
+            //string backupstorename, string message=null, bool diffbackup=true, string backuphashprefix=null
             try
             {
-                var parsed = main_scanner.ParseInput(args);
-                if (parsed.Item1 == "show")
-                {
-                    if (parsed.Item2.ContainsKey("setting"))
-                    {
-                        var setting = ReadSetting(parsed.Item2["setting"]);
-                        if (setting != null)
-                        {
-                            Console.WriteLine(setting);
-                        }
-                    }
-                    else
-                    {
-                        var settings = ReadSettings();
-                        if (settings != null)
-                        {
-                            foreach (var setval in settings)
-                            {
-                                Console.WriteLine(setval.Key + ": " + setval.Value);
-                            }
-                        }
-                    }
-                }
-                else if (parsed.Item1 == "set")
-                {
-                    WriteSetting(parsed.Item2["setting"], parsed.Item2["value"]);
-                }
-                else if (parsed.Item1 == "clear")
-                {
-                    ClearSetting(parsed.Item2["setting"]);
-                }
-                else if (parsed.Item1 == "run")
-                {
-                    string message = null;
-                    string backuphash = null;
-                    if (parsed.Item3.ContainsKey("b"))
-                    {
-                        backuphash = parsed.Item3["b"];
-                    }
-                    if (parsed.Item2.ContainsKey("message"))
-                    {
-                        message = parsed.Item2["message"];
-                    }
-                    bool diffbackup = !parsed.Item3.ContainsKey("s"); // force scan
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    RunBackup(backupstorename, message, diffbackup, backuphash);
-                }
-                else if (parsed.Item1 == "delete")
-                {
-                    string backuphash = parsed.Item2["backuphash"];
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    DeleteBackup(backupstorename, backuphash);
-                }
-                else if (parsed.Item1 == "restore")
-                {
-                    string filerelpath = parsed.Item2["filerelpath"];
-                    // If no restoreto path given, restore
-                    // to cwd / its relative path
-                    string restorepath = Path.Combine(cwd, filerelpath);
-                    string backuphash = null;
-                    if (parsed.Item3.ContainsKey("b"))
-                    {
-                        backuphash = parsed.Item3["b"];
-                    }
-                    if (parsed.Item3.ContainsKey("r"))
-                    {
-                        if (parsed.Item3["r"] == ".")
-                        {
-                            restorepath = Path.Combine(cwd, Path.GetFileName(filerelpath));
-                        }
-                        else
-                        {
-                            restorepath = Path.Combine(parsed.Item3["r"], Path.GetFileName(filerelpath));
-                        }
-                    }
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    RestoreFile(backupstorename, filerelpath, restorepath, backuphash);
-                }
-                else if (parsed.Item1 == "list")
-                {
-                    int listcount = -1;
-                    if (parsed.Item2.ContainsKey("listcount"))
-                    {
-                        listcount = Convert.ToInt32(parsed.Item2["listcount"]);
-                    }
-                    bool calculatesizes = parsed.Item3.ContainsKey("s");
-                    try
-                    {
-                        BackupCore.Core bcore;
-                        if (parsed.Item3.ContainsKey("n"))
-                        {
-                            bcore = GetCore(parsed.Item3["n"]);
-                        }
-                        else
-                        {
-                            bcore = GetCore(null);
-                        }
-                        ListBackups(bcore, parsed.Item3.ContainsKey("s"), listcount);
-                    }
-                    catch
-                    {
-                        Console.WriteLine("Failed to initialize Backup program");
-                    }
-                }
-                else if (parsed.Item1 == "browse")
-                {
-                    string backuphash = null;
-                    if (parsed.Item3.ContainsKey("b"))
-                    {
-                        backuphash = parsed.Item3["b"];
-                    }
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    try
-                    {
-                        BrowseBackup(backupstorename, backuphash);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e.Message);
-                    }
-                }
-                else if (parsed.Item1 == "transfer")
-                {
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    string destpath = parsed.Item2["destination"];
-                    TransferBackupStore(destpath, backupstorename);
-                }
-                else if (parsed.Item1 == "synccache")
-                {
-                    string backupstorename = null;
-                    if (parsed.Item3.ContainsKey("n"))
-                    {
-                        backupstorename = parsed.Item3["n"];
-                    }
-                    SyncCache(backupstorename);
-                }
-                else if (parsed.Item1 == "help")
-                {
-                    // "help"
-                    ShowCommands();
-                }
-            }
-            catch
-            {
-                ShowCommands();
-            }
-        }
-
-        private static ArgumentScanner MainArgScannerFactory()
-        {
-            ArgumentScanner scanner = new ArgumentScanner();
-            scanner.AddCommand("show [<setting>]");
-            scanner.AddCommand("set <setting> <value>");
-            scanner.AddCommand("clear <setting>");
-            scanner.AddCommand("run [-n <>] [-b <>] [-s] [<message>]");
-            scanner.AddCommand("delete <backuphash> [-n <>]");
-            scanner.AddCommand("restore <filerelpath> [-n <>] [-b <>] [-r <>]");
-            scanner.AddCommand("list [-n <>] [<listcount>] [-s]");
-            scanner.AddCommand("browse [-n <>] [-b <>]");
-            scanner.AddCommand("transfer <destination> [-n <>]");
-            scanner.AddCommand("synccache [-n <>]");
-            scanner.AddCommand("help");
-            return scanner;
-        }
-
-        private static void ShowCommands()
-        {
-            foreach (var command in main_scanner.CommandStrings)
-            {
-                Console.WriteLine(command);
-            }
-        }
-
-        private static void RunBackup(string backupstorename, string message=null, bool diffbackup=true, string backuphashprefix=null)
-        {
-            try
-            {
-                var bcore = GetCore(backupstorename);
+                var bcore = GetCore(opts.BSName);
                 var trackclasses = GetTrackClasses();
-                bcore.RunBackupAsync(message, diffbackup, trackclasses, backuphashprefix);
+                bcore.RunBackupAsync(opts.Message, !opts.Scan, trackclasses, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -224,12 +195,12 @@ namespace BackupConsole
             }
         }
 
-        private static void DeleteBackup(string backupstorename, string backuphash)
+        private static void DeleteBackup(DeleteOptions opts)
         {
             try
             { 
-                var bcore = GetCore(backupstorename);
-                bcore.RemoveBackup(backuphash);
+                var bcore = GetCore(opts.BSName);
+                bcore.RemoveBackup(opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -237,12 +208,12 @@ namespace BackupConsole
             }
         }
 
-        public static void RestoreFile(string backupstorename, string filerelpath, string restorepath, string backuphash)
+        public static void RestoreFile(RestoreOptions opts)
         {
             try
             {
-                var bcore = GetCore(backupstorename);
-                bcore.RestoreFileOrDirectory(filerelpath, restorepath, backuphash);
+                var bcore = GetCore(opts.BSName);
+                bcore.RestoreFileOrDirectory(opts.Path, opts.RestorePath, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -250,13 +221,28 @@ namespace BackupConsole
             }
         }
 
-        internal static void ListBackups(BackupCore.Core bcore, bool calculatesizes, int show = -1)
+        public static void ListBackups(ListNoNameOptions opts, string bsname, BackupCore.Core bcore = null)
         {
+            ListOptions opts2 = new ListOptions
+            {
+                BSName = bsname,
+                MaxBackups = opts.MaxBackups,
+                ShowSizes = opts.ShowSizes
+            };
+            ListBackups(opts2, bcore);
+        }
+
+        public static void ListBackups(ListOptions opts, BackupCore.Core bcore = null)
+        {
+            if (bcore == null)
+            {
+                bcore = GetCore(opts.BSName);
+            }
             var backups = bcore.GetBackups().ToArray();
-            show = show == -1 ? backups.Length : show;
+            var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
             TablePrinter table = new TablePrinter();
-            if (calculatesizes)
+            if (opts.ShowSizes)
             {
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
@@ -295,11 +281,11 @@ namespace BackupConsole
             Console.WriteLine(table);
         }
 
-        private static void SyncCache(string backupstorename)
+        private static void SyncCache(SyncCacheOptions opts)
         {
             try
             {
-                var bcore = GetCore(backupstorename);
+                var bcore = GetCore(opts.BSName);
                 bcore.SyncCache(true);
             }
             catch (Exception e)
@@ -381,15 +367,16 @@ namespace BackupConsole
             }
         }
 
-        public static void BrowseBackup(string backupstorename, string backuphash)
+        public static void BrowseBackup(BrowseOptions opts)
         {
-            if (backupstorename == null)
+            string backupstorename = null;
+            if (opts.BSName == null)
             {
                 backupstorename = ReadSetting("name");
             }
             if (backupstorename != null)
             {
-                var browser = new BackupBrowser(backupstorename, backuphash);
+                var browser = new BackupBrowser(backupstorename, opts.BackupHash);
                 browser.CommandLoop();
             }
             else
@@ -400,16 +387,17 @@ namespace BackupConsole
             }
         }
 
-        public static void TransferBackupStore(string destpath, string backupstorename)
+        public static void TransferBackupStore(TransferOptions opts)
         {
-            if (backupstorename == null)
+            string backupstorename = null;
+            if (opts.BSName == null)
             {
                 backupstorename = ReadSetting("name");
             }
             if (backupstorename != null)
             {
                 var bcore = GetCore(backupstorename);
-                bcore.TransferBackupStore(destpath, true);
+                bcore.TransferBackupStore(opts.Destination, true);
             }
             else
             {
@@ -463,14 +451,14 @@ namespace BackupConsole
             WriteSettings(settings);
         }
 
-        private static void ClearSetting(string key)
+        private static void ClearSetting(ClearOptions opts)
         {
             var settings = ReadSettings();
             if (settings != null)
             {
-                if (settings.ContainsKey(key))
+                if (settings.ContainsKey(opts.Setting))
                 {
-                    settings.Remove(key);
+                    settings.Remove(opts.Setting);
                     WriteSettings(settings);
                 }
             }
