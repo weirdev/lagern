@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using BackupCoreTest;
+using CoreTest;
 using System.Diagnostics;
 
 namespace Testing

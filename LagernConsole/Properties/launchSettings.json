@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LagernConsole": {
+      "commandName": "Project",
+      "workingDirectory": "C:\\Users\\Wesley\\Desktop\\test\\src"
+    }
+  }
+}
