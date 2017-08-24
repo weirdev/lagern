@@ -28,7 +28,6 @@ namespace BackupConsole
               .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
               .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
               .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
-            Console.ReadLine();
         }
 
         [Verb("show", HelpText = "Show lagern settings")]
