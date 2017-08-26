@@ -23,15 +23,15 @@ namespace BackupConsole
         
         public BackupBrowser(string backupstorename, string backuphash)
         {
-            BCore = Program.GetCore(backupstorename);
+            BCore = Program.GetCore();
             Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord();
+                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backupstorename);
             }
             else
             {
-                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backupstorename, backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.Item1;
             BackupStoreName = backupstorename;

@@ -184,9 +184,9 @@ namespace BackupConsole
             //string backupstorename, string message=null, bool diffbackup=true, string backuphashprefix=null
             try
             {
-                var bcore = GetCore(opts.BSName);
+                var bcore = GetCore();
                 var trackclasses = GetTrackClasses();
-                bcore.RunBackupAsync(opts.Message, !opts.Scan, trackclasses, opts.BackupHash);
+                bcore.RunBackupAsync(opts.BSName, opts.Message, !opts.Scan, trackclasses, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -198,8 +198,8 @@ namespace BackupConsole
         {
             try
             { 
-                var bcore = GetCore(opts.BSName);
-                bcore.RemoveBackup(opts.BackupHash);
+                var bcore = GetCore();
+                bcore.RemoveBackup(opts.BSName, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -211,7 +211,7 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = GetCore(opts.BSName);
+                var bcore = GetCore();
                 bcore.RestoreFileOrDirectory(opts.Path, opts.RestorePath, opts.BackupHash);
             }
             catch (Exception e)
@@ -235,9 +235,10 @@ namespace BackupConsole
         {
             if (bcore == null)
             {
-                bcore = GetCore(opts.BSName);
+                bcore = GetCore();
             }
-            var backups = bcore.GetBackups().ToArray();
+            string bsname = GetBackupSetName(opts.BSName);
+            var backups = bcore.GetBackups(bsname).ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
             TablePrinter table = new TablePrinter();
@@ -284,8 +285,9 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = GetCore(opts.BSName);
-                bcore.SyncCache(true);
+                var bcore = GetCore();
+                string bsname = GetBackupSetName(opts.BSName);
+                bcore.SyncCache(bsname, true);
             }
             catch (Exception e)
             {
@@ -318,18 +320,24 @@ namespace BackupConsole
             }
         }
 
-        public static BackupCore.Core GetCore(string backupstorename)
+        public static string GetBackupSetName(string bsname)
         {
-            if (backupstorename == null)
+            if (bsname == null)
             {
-                backupstorename = ReadSetting("name");
-                if (backupstorename == null)
+                bsname = ReadSetting("name");
+                if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
                     Console.WriteLine("or the store name must be specified with the -n flag.");
                     throw new Exception(); // TODO: more specific exceptions
                 }
             }
+            return bsname;
+        }
+
+        public static BackupCore.Core GetCore()
+        {
+            
             string destination = ReadSetting("dest");
             string cache = ReadSetting("cache");
             if (destination == null)
@@ -339,7 +347,7 @@ namespace BackupConsole
                 {
                     try
                     {
-                        return new BackupCore.Core(backupstorename, null, destination, null, ContinueOrExitPrompt);
+                        return new BackupCore.Core(null, destination, null, ContinueOrExitPrompt);
                     }
                     catch
                     {
@@ -357,7 +365,7 @@ namespace BackupConsole
             {
                 try
                 {
-                    return new BackupCore.Core(backupstorename, cwd, destination, cache, ContinueOrExitPrompt);
+                    return new BackupCore.Core(cwd, destination, cache, ContinueOrExitPrompt);
                 }
                 catch
                 {
@@ -368,42 +376,16 @@ namespace BackupConsole
 
         public static void BrowseBackup(BrowseOptions opts)
         {
-            string backupstorename = null;
-            if (opts.BSName == null)
-            {
-                backupstorename = ReadSetting("name");
-            }
-            if (backupstorename != null)
-            {
-                var browser = new BackupBrowser(backupstorename, opts.BackupHash);
-                browser.CommandLoop();
-            }
-            else
-            {
-                Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
-                Console.WriteLine("or the store name must be specified with the -n flag.");
-                throw new Exception(); // TODO: more specific exceptions
-            }
+            string bsname = GetBackupSetName(opts.BSName);
+            var browser = new BackupBrowser(bsname, opts.BackupHash);
+            browser.CommandLoop();
         }
 
         public static void TransferBackupStore(TransferOptions opts)
         {
-            string backupstorename = null;
-            if (opts.BSName == null)
-            {
-                backupstorename = ReadSetting("name");
-            }
-            if (backupstorename != null)
-            {
-                var bcore = GetCore(backupstorename);
-                bcore.TransferBackupStore(opts.Destination, true);
-            }
-            else
-            {
-                Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
-                Console.WriteLine("or the store name must be specified with the -n flag.");
-                throw new Exception(); // TODO: more specific exceptions
-            }
+            string backupsetname = GetBackupSetName(opts.BSName);
+            var bcore = GetCore();
+            bcore.TransferBackupSet(backupsetname, opts.Destination, true);
         }
 
         public static void ContinueOrExitPrompt(string error)

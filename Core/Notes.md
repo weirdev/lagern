@@ -1,12 +1,11 @@
 ﻿*********************
 IN PROGRESS
-Convert Core to DotnetStandard
-Convert BackupConsole to DotnetCore
 Code cleanup
-	Cleanup heirarchy of Core -> BackupStore, BlobStore
-		Should the API and console app be seing BackupStore and BlobStore directly?
-			If yes always access like Core.B___Store or pull out and use like own variable?
-			If no make BackupStore and BlobStore protected and add needed public interfaces to Core **
+	Backup store should be initialized with respect to all backups
+		Thus a Core object represents all backups in a backup store
+		Rather than initializing Core and BackupStore with a backup store name,
+				a backup store name will be supplied with every method call
+			This more closely mirrors command line usage
 	Comments
 Add status command
 	much like git status

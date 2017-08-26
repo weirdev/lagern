@@ -37,13 +37,13 @@ namespace Testing
             Console.ReadLine();
         }
 
-        static double BackupRun(string name, string src, string dst)
+        static double BackupRun(string bsname, string src, string dst)
         {
-            var backupper = new BackupCore.Core(name, src, dst); // Dont count initial setup in time
+            var backupper = new BackupCore.Core(src, dst); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
-            backupper.RunBackupAsync(null);
+            backupper.RunBackupAsync(bsname, null);
             //backupper.RunBackupSync(null);
             
             //Console.Out.WriteLine("Done.");
