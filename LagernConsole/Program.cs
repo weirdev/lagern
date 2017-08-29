@@ -255,8 +255,8 @@ namespace BackupConsole
                         mlength = message.Length;
                     }
                     table.AddBodyRow(new string[] {backups[i].Item1.Substring(0, 7),
-                        backups[i].Item2.ToLocalTime().ToString(), Utilities.BytesFormatter(sizes.Item1),
-                        Utilities.BytesFormatter(sizes.Item2), message.Substring(0, mlength) });
+                        backups[i].Item2.ToLocalTime().ToString(), Utilities.BytesFormatter(sizes.allreferencesizes),
+                        Utilities.BytesFormatter(sizes.uniquereferencesizes), message.Substring(0, mlength) });
                 }
             }
             else
@@ -337,7 +337,6 @@ namespace BackupConsole
 
         public static BackupCore.Core GetCore()
         {
-            
             string destination = ReadSetting("dest");
             string cache = ReadSetting("cache");
             if (destination == null)

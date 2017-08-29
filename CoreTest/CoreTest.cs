@@ -13,7 +13,7 @@ namespace CoreTest
         {
             string path1 = "a/b/c/d/efg/h.i";
             string pattern1 = "*c*g*";
-            Assert.IsTrue(Core.PathMatchesPattern(path1, pattern1));
+            Assert.IsTrue(Core.PatternMatchesPath(path1, pattern1));
         }
 
         [TestMethod]

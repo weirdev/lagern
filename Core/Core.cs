@@ -14,44 +14,102 @@ namespace BackupCore
     // Calling a public method that modifies blobs or backups automatically triggers an index save
     public class Core
     {
+        /// <summary>
+        /// The directory who's contents will be backed up.
+        /// </summary>
         public string BackupPathSrc { get; set; }
 
+        /// <summary>
+        /// The directory in which to save the backup.
+        /// </summary>
         public string BackupDstPath { get; set; }
 
+        /// <summary>
+        /// The directory in BackupDstPath where blobs are stored. 
+        /// </summary>
         public string BackupBlobDataDir { get; set; }
 
+        /// <summary>
+        /// The directory in BackupDstPath where the lagern index is stored.
+        /// </summary>
         public string BackupIndexDir { get; set; }
 
+        /// <summary>
+        /// The directory in BackupDstPath where BackupStores are saved.
+        /// </summary>
         public string BackupStoresDir { get; set; }
 
+        /// <summary>
+        /// The file containing the mapping of hashes to blob data.
+        /// </summary>
         public string BackupBlobIndexFile { get; set; }
         
+        /// <summary>
+        /// The directory in which to save the cache.
+        /// </summary>
         public string CachePath { get; set; }
 
+        /// <summary>
+        /// The directory in CachePath where blobs are stored.
+        /// </summary>
         public string CacheBlobDataDir { get; set; }
 
+        /// <summary>
+        /// The directory in CachePath where the lagern cache index is stored.
+        /// </summary>
         public string CacheIndexDir { get; set; }
 
+        /// <summary>
+        /// The directory in CacheIndexDir where BackupStores are saved.
+        /// </summary>
         public string CacheBackupStoresDir { get; set; }
 
+        /// <summary>
+        /// The file in CacheIndexDir containing the mapping of hashes to blob data.
+        /// </summary>
         public string CacheBlobIndexFile { get; set; }
 
-        public string CacheBackupStoreFile { get; set; }
-
+        /// <summary>
+        /// The name of the index directory for all lagern backups.
+        /// </summary>
         public static readonly string IndexDirName = "index";
+        /// <summary>
+        /// The name of the backupstore directory for all lagern backups.
+        /// </summary>
         private static readonly string BackupStoreDirName = "backupstores";
+        /// <summary>
+        /// The name of the blob directory for all lagern backups
+        /// </summary>
         private static readonly string BlobDirName = "blobdata";
-        
+
+        /// <summary>
+        /// The BlobStore in which data will be stored for this instance of Core.
+        /// If available, represents BlobStore in the regular destination. Otherwise it is the cache BlobStore.
+        /// </summary>
         public BlobStore DefaultBlobs { get; set; }
+        /// <summary>
+        /// The BackupStore in which backups will be recorded for this instance of Core.
+        /// If available, represents BackupStore in the regular destination. Otherwise it is the cache BackupStore.
+        /// </summary>
         public BackupStore DefaultBackups { get; set; }
 
+        /// <summary>
+        /// The BlobStore in the cache.
+        /// </summary>
         public BlobStore CacheBlobs { get; set; }
+        /// <summary>
+        /// The BackupStore in the cache.
+        /// </summary>
         public BackupStore CacheBackups { get; set; }
 
+        /// <summary>
+        /// True if the regular backup destination is available.
+        /// If the destination is not available we attempt to use the cache.
+        /// </summary>
         public bool DestinationAvailable { get; set; }
 
         /// <summary>
-        /// 
+        /// Initializes a new lagern Core. Core surfaces all public methods for use by programs implementing this library.
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="src">Backup source directory</param>
@@ -59,12 +117,18 @@ namespace BackupCore
         /// <param name="continueorkill">
         /// Function that takes an error message as input.
         /// Meant to be used to optionally halt execution in case of errors.
+        /// Is a safety mechanism so important data is not overwritten if the program
+        /// decides to initialize a new index over an old one.
+        /// TODO: Replace this with a flag like "allowoverwrite=[false]"
+        ///     If false a special error class is thrown when a corrupted index is encountered.
+        ///     The command line program would then handle the functionality of asking to overwrite.
         /// </param>
         public Core(string src, string dst, string cache=null, Action<string> continueorkill=null)
         {
             BackupPathSrc = src;
             BackupDstPath = dst;
             
+            // Attempt to initialize a Core instance to backup to dst
             try
             {
                 (BackupIndexDir, BackupBlobDataDir, BackupStoresDir, BackupBlobIndexFile) = PrepBackupDstPath(dst);
@@ -75,34 +139,33 @@ namespace BackupCore
             {
                 // dst not available
                 // error if no cache specified
+                DestinationAvailable = false;
                 if (cache == null)
                 {
                     throw e;
                 }
-                DefaultBackups = null;
-                DefaultBlobs = null;
-                DestinationAvailable = false;
-            }
-
-            if (cache != null)
-            {
-                // Cache must be available (if specified), so no try block like dst
+                // Attempt to initialize a Core instance to backup in cache
+                // If this fails we allow errors to bubble up
                 CachePath = cache;
                 (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = PrepBackupDstPath(cache);
-                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoreFile, true, continueorkill);
+                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoresDir, true, continueorkill);
                 if (!DestinationAvailable)
                 {
                     DefaultBackups = CacheBackups;
                     DefaultBlobs = CacheBlobs;
                 }
             }
-            else
-            {
-                CacheBlobs = null;
-                CacheBackups = null;
-            }
         }
 
+        /// <summary>
+        /// Loads a lagern index.
+        /// </summary>
+        /// <param name="blobdatadir"></param>
+        /// <param name="blobindexfile"></param>
+        /// <param name="backupstoresdir"></param>
+        /// <param name="iscahce"></param>
+        /// <param name="continueorkill"></param>
+        /// <returns></returns>
         private static (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile, 
             string backupstoresdir, bool iscahce=false, Action<string> continueorkill=null)
         {
@@ -130,45 +193,60 @@ namespace BackupCore
             return (blobs, backups);
         }
 
-        private static void CreateDirectoryIfNotExists(string path)
-        {
-            if (!Directory.Exists(path))
-            {
-                Directory.CreateDirectory(path);
-            }
-        }
-
+        /// <summary>
+        /// Creates needed directory structure at backup destination.
+        /// </summary>
+        /// <param name="dstpath"></param>
+        /// <returns></returns>
         private static (string indexdir, string blobdatadir, string backupstoresdir, string blobindexfile) PrepBackupDstPath(string dstpath)
         {
             string id = Path.Combine(dstpath, IndexDirName);
 
             // Make sure we have an index folder to write to later
-            CreateDirectoryIfNotExists(id);
+            if (!Directory.Exists(id))
+            {
+                Directory.CreateDirectory(id);
+            }
 
             string bsd = Path.Combine(id, BackupStoreDirName);
 
             // Make sure we have a backup list folder to write to later
-            CreateDirectoryIfNotExists(bsd);
+            if (!Directory.Exists(bsd))
+            {
+                Directory.CreateDirectory(bsd);
+            }
 
             string bdd = Path.Combine(dstpath, BlobDirName);
 
-            CreateDirectoryIfNotExists(bdd);
+            if (!Directory.Exists(bdd))
+            {
+                Directory.CreateDirectory(bdd);
+            }
 
             string bif = Path.Combine(id, "hashindex");
             return (id, bdd, bsd, bif);
         }
-        
-        public void RunBackupAsync(string backupsetname, string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaters=null,
+
+        /// <summary>
+        /// Performs a backup, parallelizing backup tasks and using all CPU cores as much as possible.
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <param name="message"></param>
+        /// <param name="differentialbackup">True if we attempt to avoid scanning file data when the 
+        /// data appears not to have been modified based on its metadata</param>
+        /// <param name="trackpatterns">Rules determining which files</param>
+        /// <param name="prev_backup_hash_prefix"></param>
+        public void RunBackupAsync(string backupsetname, string message, bool differentialbackup=true, List<Tuple<int, string>> trackpatterns=null,
             string prev_backup_hash_prefix=null)
         {
-            // TODO: This has major problems on non- input sizes
-            // Esentially creates thousands of threads containing infinite loops checking for completed work
-            // and no work is ever completed
-            // ** Trying without parallelism in fetching files/directories only on operating on those results
+            // The tree in which to store the new backup
             MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
             
+            // The queue of files who's contents must be examined
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
+            // The queue of files who's contents will not be examined, instead a reference to a previous state of the file will be stored
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
+            // The queue of directories who's children will be examined
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
 
             // Save cache to destination
@@ -189,7 +267,7 @@ namespace BackupCore
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
                     //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
-                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters);
+                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpatterns);
                 }
                 else
                 {
@@ -199,7 +277,7 @@ namespace BackupCore
             if (!differentialbackup)
             {
                 //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters));
-                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters);
+                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpatterns);
             }
 
             List<Task> backupops = new List<Task>();
@@ -250,7 +328,10 @@ namespace BackupCore
             // Index save occurred during synccache
         }
 
-        public void SaveBlobs()
+        /// <summary>
+        /// Saves both destination and cache blob indices (as available).
+        /// </summary>
+        public void SaveBlobIndices()
         {
             // Save "index"
             // Writeout all "dirty" cached index nodes
@@ -268,12 +349,26 @@ namespace BackupCore
             }
         }
 
-        public void RunBackupSync(string backupsetname, string message, bool differentialbackup=true, List<Tuple<int, string>> trackpaterns=null)
+        /// <summary>
+        /// Performs a backup synchronously.
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <param name="message"></param>
+        /// <param name="differentialbackup">True if we attempt to avoid scanning file data when the 
+        /// data appears not to have been modified based on its metadata</param>
+        /// <param name="trackpatterns">Rules determining which files</param>
+        /// <param name="prev_backup_hash_prefix"></param>
+        public void RunBackupSync(string backupsetname, string message, bool differentialbackup = true, List<Tuple<int, string>> trackpatterns = null,
+            string prev_backup_hash_prefix = null)
         {
+            // The tree in which to store the new backup
             MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
-            
+
+            // The queue of files who's contents must be examined
             BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
+            // The queue of files who's contents will not be examined, instead a reference to a previous state of the file will be stored
             BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
+            // The queue of directories who's children will be examined
             BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
 
             // Save cache to destination
@@ -285,7 +380,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
-                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaterns);
+                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpatterns);
                 }
                 else
                 {
@@ -294,7 +389,7 @@ namespace BackupCore
             }
             if (!differentialbackup)
             {
-                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaterns);
+                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpatterns);
             }
 
             while (!directoryqueue.IsCompleted)
@@ -348,7 +443,7 @@ namespace BackupCore
                     }
                 }
             }
-            SaveBlobs();
+            SaveBlobIndices();
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -411,6 +506,15 @@ namespace BackupCore
             }
         }
 
+        /// <summary>
+        /// Returns the paths of files and directories in path to be backed up.
+        /// </summary>
+        /// <param name="scanfilequeue"></param>
+        /// <param name="noscanfilequeue"></param>
+        /// <param name="directoryqueue"></param>
+        /// <param name="path"></param>
+        /// <param name="previousmtree"></param>
+        /// <param name="trackpaterns"></param>
         protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
             BlockingCollection<string> directoryqueue, string path=null, MetadataNode previousmtree=null, List<Tuple<int, string>> trackpaterns=null)
         {
@@ -549,7 +653,13 @@ namespace BackupCore
             noscanfilequeue.CompleteAdding();
         }
 
-        public static bool PathMatchesPattern(string path, string pattern)
+        /// <summary>
+        /// Matches a wildcard pattern to path
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="pattern"></param>
+        /// <returns></returns>
+        public static bool PatternMatchesPath(string path, string pattern)
         {
             if (pattern == "*")
             {
@@ -564,7 +674,7 @@ namespace BackupCore
                     if (path.Length >= prefix.Length && prefix == path.Substring(0, prefix.Length))
                     {
                         string wsuffix = pattern.Substring(wildpos, pattern.Length - wildpos);
-                        return PathMatchesPattern(path.Substring(prefix.Length), wsuffix);
+                        return PatternMatchesPath(path.Substring(prefix.Length), wsuffix);
                     }
                     else
                     {
@@ -577,7 +687,7 @@ namespace BackupCore
                     pattern = pattern.Substring(1);
                     while (path.Length > 0)
                     {
-                        if (PathMatchesPattern(path, pattern))
+                        if (PatternMatchesPath(path, pattern))
                         {
                             return true;
                         }
@@ -603,7 +713,7 @@ namespace BackupCore
             int trackclass = 2;
             foreach (var pattern in trackpatterns)
             {
-                if (PathMatchesPattern(file, pattern.Item2))
+                if (PatternMatchesPath(file, pattern.Item2))
                 {
                     trackclass = pattern.Item1;
                 }
@@ -636,7 +746,7 @@ namespace BackupCore
                             }
                             else if (pattern.Item2.Substring(pattern.Item2.Length - 2) == "/*") // trailing wildcard must come immediately after a slash /*
                             {
-                                if (PathMatchesPattern(directory, pattern.Item2.Substring(0, pattern.Item2.Length - 2))) 
+                                if (PatternMatchesPath(directory, pattern.Item2.Substring(0, pattern.Item2.Length - 2))) 
                                 {
                                     track = false;
                                 }
@@ -678,11 +788,21 @@ namespace BackupCore
             return track;
         }
 
-        public Tuple<int, int> GetBackupSizes(string backuphashstring)
+        /// <summary>
+        /// Calculates the size of the blobs and child blobs referenced by the given hash.
+        /// </summary>
+        /// <param name="backuphashstring"></param>
+        /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
+        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string backuphashstring)
         {
             return DefaultBlobs.GetSizes(HashTools.HexStringToByteArray(backuphashstring));
         }
 
+        /// <summary>
+        /// Backup a directory to the given metadatanode
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <param name="mtree"></param>
         private void BackupDirectory(string relpath, MetadataNode mtree)
         {
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackupPathSrc, relpath)));
@@ -706,7 +826,11 @@ namespace BackupCore
             }
         }
 
-        // TODO: This should be a relative filepath
+        /// <summary>
+        /// Backup a file into the given metadatanode
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <param name="mtree"></param>
         protected void BackupFileSync(string relpath, MetadataNode mtree)
         {
             try
@@ -746,7 +870,7 @@ namespace BackupCore
         }
         
         /// <summary>
-        /// 
+        /// Retrieves list of backups from a backupset.
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public IEnumerable<Tuple<string, DateTime, string>> GetBackups(string backupsetname)
@@ -761,15 +885,20 @@ namespace BackupCore
             return backups;
         }
 
+        /// <summary>
+        /// Remove a backup from the BackupStore and its data from the BlobStore.
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <param name="backuphashprefix"></param>
         public void RemoveBackup(string backupsetname, string backuphashprefix)
         {
             DefaultBackups.RemoveBackup(backupsetname, backuphashprefix);
             // TODO: remove from cache or require sync?
-            SaveBlobs();
+            SaveBlobIndices();
         }
 
         /// <summary>
-        /// 
+        /// Transfer a backupset and its data to a new location.
         /// </summary>
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
@@ -781,7 +910,7 @@ namespace BackupCore
             if (dstblobs == null)
             {
                 // Now actually transfer backups
-                dstblobs = new Core(backupsetname, null, dst).DefaultBlobs; // TODO: Add continue or kill support to TransferBackupStore for this call
+                dstblobs = new Core(backupsetname, null, dst).DefaultBlobs;
             }
             foreach (var backup in DefaultBackups.LoadBackupSet(backupsetname).Backups)
             {

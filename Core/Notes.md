@@ -7,6 +7,7 @@ Code cleanup
 				a backup store name will be supplied with every method call
 			This more closely mirrors command line usage
 	Comments
+	A README
 Add status command
 	much like git status
 	would show differences and estimate size of a run

@@ -497,7 +497,12 @@ namespace BackupCore
             hashblobqueue.CompleteAdding();
         }
 
-        public Tuple<int, int> GetSizes(byte[] blobhash)
+        /// <summary>
+        /// Calculates the size of the blobs and child blobs referenced by the given hash.
+        /// </summary>
+        /// <param name="blobhash"></param>
+        /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
+        public (int, int) GetSizes(byte[] blobhash)
         {
             Dictionary<string, object[]> hashfreqsize = new Dictionary<string, object[]>();
             GetBlobReferenceFrequencies(blobhash, hashfreqsize);
@@ -508,10 +513,10 @@ namespace BackupCore
                 allreferences += ((BlobLocation)reference[1]).ByteLength * (int)reference[0];
                 if (((BlobLocation)reference[1]).ReferenceCount == (int)reference[0])
                 {
-                    uniquereferences += ((BlobLocation)reference[1]).ByteLength;
+                    uniquereferences += ((BlobLocation)reference[1]).ByteLength; // TODO: unique referenes 
                 }
             }
-            return new Tuple<int, int>(allreferences, uniquereferences);
+            return (allreferences, uniquereferences);
         }
 
         private void GetBlobReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize) // TODO: use something better than object[] (currently used because tuples are readonly)
