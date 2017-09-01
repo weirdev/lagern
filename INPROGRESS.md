@@ -4,10 +4,6 @@ For now this will remain the home of the project backlog.
 ====
 
 Code cleanup
-	Comments
-	A README
-	Ensure BackupStore saves to disk after every operation
-		Move some functionality to BackupSet?
 Add status command
 	much like git status
 	would show differences and estimate size of a run

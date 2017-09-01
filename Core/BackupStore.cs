@@ -109,6 +109,8 @@ namespace BackupCore
                 dstindex += 1;
                 dstbr = null;
             }
+            cache.SaveBackupSet(chachebset, bsname);
+            SaveBackupSet(bset, bsname);
         }
 
         public IEnumerable<string> GetBackupsAndMetadataReferencesAsStrings(string bsname)
@@ -131,6 +133,7 @@ namespace BackupCore
             byte[] brbytes = newbackup.serialize();
             byte[] backuphash = Blobs.StoreDataSync(brbytes, BlobLocation.BlobTypes.BackupRecord);
             bset.Backups.Add(new Tuple<byte[], bool>(backuphash, shallow));
+            SaveBackupSet(bset, bsname);
         }
 
         public void RemoveBackup(string bsname, string backuphashprefix)
@@ -152,7 +155,7 @@ namespace BackupCore
                     bset.Backups.RemoveAt(i);
                 }
             }
-
+            SaveBackupSet(bset, bsname);
             Blobs.IncrementReferenceCount(backuphash, -1, !bset.Backups[i].Item2);
         }
 
