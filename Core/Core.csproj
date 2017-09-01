@@ -5,6 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Notes.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="treeviewer.py" />
   </ItemGroup>
 

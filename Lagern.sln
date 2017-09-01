@@ -1,15 +1,21 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26730.10
+VisualStudioVersion = 15.0.26730.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core", "Core\Core.csproj", "{2D1AFAA0-7847-48E3-808C-DDCF60CFB44F}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LagernConsole", "LagernConsole\LagernConsole.csproj", "{07827454-AA6E-449A-B52A-2A9EF6C40C48}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Testing", "Testing\Testing.csproj", "{6BF76047-4841-4CDA-91A3-C4B185FC9132}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Testing", "Testing\Testing.csproj", "{6BF76047-4841-4CDA-91A3-C4B185FC9132}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreTest", "CoreTest\CoreTest.csproj", "{ADFFA0F8-E139-4FC8-B101-6AE2A011B270}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CoreTest", "CoreTest\CoreTest.csproj", "{ADFFA0F8-E139-4FC8-B101-6AE2A011B270}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{60F0B546-72AA-46C5-9C90-801168B17287}"
+	ProjectSection(SolutionItems) = preProject
+		INPROGRESS.md = INPROGRESS.md
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
