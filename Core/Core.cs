@@ -140,13 +140,9 @@ namespace BackupCore
                 // dst not available
                 // error if no cache specified
                 DestinationAvailable = false;
-                if (cache == null)
-                {
-                    throw e;
-                }
                 // Attempt to initialize a Core instance to backup in cache
                 // If this fails we allow errors to bubble up
-                CachePath = cache;
+                CachePath = cache ?? throw e;
                 (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = PrepBackupDstPath(cache);
                 (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoresDir, true, continueorkill);
                 if (!DestinationAvailable)
@@ -227,6 +223,392 @@ namespace BackupCore
             return (id, bdd, bsd, bif);
         }
 
+        public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
+            bool usetrackclasses=true, List <Tuple<int, string>> trackpatterns = null, string prev_backup_hash_prefix = null)
+        {
+            MetadataNode deltatree = null;
+
+            if (usetrackclasses)
+            {
+                try
+                {
+                    trackpatterns = GetTrackClasses();
+                }
+                catch (Exception)
+                {
+                    trackpatterns = null;
+                }
+            }
+
+            if (differentialbackup)
+            {
+                BackupRecord previousbackup;
+                try
+                {
+                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                }
+                catch
+                {
+                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                }
+                if (previousbackup != null)
+                {
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
+                    deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
+                }
+                else
+                {
+                    differentialbackup = false;
+                }
+            }
+            if (!differentialbackup)
+            {
+                deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, null);
+            }
+            List<(string path, FileMetadata.FileStatus change)> changes = new List<(string path, FileMetadata.FileStatus change)>();
+            GetDeltaNodeChanges(Path.DirectorySeparatorChar.ToString(), deltatree);
+
+            return changes;
+
+            // Recursive helper function to traverse delta tree
+            void GetDeltaNodeChanges(string relpath, MetadataNode parent)
+            {
+                if (parent.DirMetadata.Changes == null)
+                {
+                    throw new Exception("Reached metadata without delta");
+                }
+                var status = parent.DirMetadata.Changes.Value.status;
+                if (status == FileMetadata.FileStatus.Deleted)
+                {
+                    changes.Add((relpath, status));
+                    // If deleted dont handle children
+                }
+                else
+                {
+                    // Not deleted so will handle children
+                    if (status != FileMetadata.FileStatus.Unchanged)
+                    {
+                        changes.Add((relpath, status));
+                    }
+                    foreach (var file in parent.Files.Values)
+                    {
+                        if (file.Changes == null)
+                        {
+                            throw new Exception("Reached metadata without delta");
+                        }
+                        var fstatus = file.Changes.Value.status;
+                        if (fstatus != FileMetadata.FileStatus.Unchanged)
+                        {
+                            changes.Add((Path.Combine(relpath, file.FileName), fstatus));
+                        } 
+                    }
+                    foreach (var dir in parent.Directories.Values)
+                    {
+                        GetDeltaNodeChanges(Path.Combine(relpath, dir.DirMetadata.FileName) + Path.DirectorySeparatorChar, dir);
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Gets the working tree status, returns a list of (paths, FileStatus)
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <returns>List of mod</returns>
+        private MetadataNode GetDeltaMetadataTree(string backupsetname, List<Tuple<int, string>> trackpatterns = null,
+            MetadataNode previousmtree=null) // TODO: Add detailed information about nature of differences with prev backup
+        {
+            // Save cache to destination
+            SyncCache(backupsetname, true);
+
+            MetadataNode deltamtree = previousmtree;
+            Queue<(string path, MetadataNode node)> deltamnodequeue = new Queue<(string path, MetadataNode node)>();
+            if (deltamtree != null)
+            {
+                // We always assume the matching of deltatree root to fs backup root is valid
+                // So make the name equal, and set status to metadatachange if they were different
+                FileMetadata dirmetadata = new FileMetadata(BackupPathSrc);
+                if (deltamtree.DirMetadata.FileName != dirmetadata.FileName)
+                {
+                    deltamtree.DirMetadata.Changes = (FileMetadata.FileStatus.MetadataChange, dirmetadata);
+                }
+                deltamnodequeue.Enqueue((Path.DirectorySeparatorChar.ToString(), deltamtree));
+            }
+            else
+            {
+                deltamtree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
+                deltamnodequeue.Enqueue((Path.DirectorySeparatorChar.ToString(), deltamtree));
+            }
+            while (deltamnodequeue.Count > 0)
+            {
+                (string reldirpath, MetadataNode deltanode) = deltamnodequeue.Dequeue();
+                string absolutedirpath = Path.Combine(BackupPathSrc, reldirpath.Substring(1));
+
+                // First handle the directory changes (new/deleted already set so either MetadataChnaged or Unchanged)
+                FileMetadata curnode = new FileMetadata(absolutedirpath);
+                if (deltanode.DirMetadata.Changes == null) // Is unset?
+                {
+                    FileMetadata.FileStatus status = curnode.DirectoryDifference(deltanode.DirMetadata);
+                    if (status == FileMetadata.FileStatus.Unchanged)
+                    {
+                        deltanode.DirMetadata.Changes = (status, null);
+                    }
+                    else
+                    {
+                        deltanode.DirMetadata.Changes = (status, curnode);
+                    }
+                }
+
+                // Now handle files
+                List<string> fsfiles = null;
+                try
+                {
+                    fsfiles = new List<string>(Directory.GetFiles(absolutedirpath).Select((string filepath) => Path.GetFileName(filepath)));
+                }
+                catch (UnauthorizedAccessException e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                catch (DirectoryNotFoundException e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                }
+                List<string> deltafiles = new List<string>(deltanode.Files.Keys);
+                deltafiles.Sort();
+                fsfiles.Sort();
+
+                int deltaidx = 0;
+                int fsidx = 0;
+                while (deltaidx < deltafiles.Count && fsidx < fsfiles.Count)
+                {
+                    if (deltafiles[deltaidx] == fsfiles[fsidx]) // Names match
+                    {
+                        string filename = deltafiles[deltaidx];
+                        int trackclass = 2;
+                        if (trackpatterns != null)
+                        {
+                            trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
+                        }
+                        try // We (may) read the file's metadata here so wrap errors
+                        {
+                            FileMetadata deltafm = deltanode.Files[filename];
+                            FileMetadata curfm = new FileMetadata(Path.Combine(absolutedirpath, filename));
+                            switch (trackclass)
+                            {
+                                case 0:
+                                    // file should be ignored completely, but is in the old tree
+                                    // aka the track pattern changed and the file should be marked as "deleted"
+                                    deltafm.Changes = (FileMetadata.FileStatus.Deleted, null);
+                                    break;
+                                case 1: // Dont scan if we have a previous version
+                                    if (curfm.FileDifference(deltanode.DirMetadata))
+                                    {
+                                        deltafm.Changes = (FileMetadata.FileStatus.MetadataChange, curfm);
+                                    }
+                                    else
+                                    {
+                                        deltanode.DirMetadata.Changes = (FileMetadata.FileStatus.Unchanged, null);
+                                    }
+                                    break;
+                                case 2: // Dont scan if we have a previous version and its metadata indicates no change
+                                    // If file size and datemodified unchanged we assume no change
+                                    if (deltafm.FileSize == curfm.FileSize && deltafm.DateModifiedUTC == curfm.DateModifiedUTC)
+                                    {
+                                        // Still update metadata if necessary (ie dateaccessed changed)
+                                        if (curfm.FileDifference(deltanode.DirMetadata))
+                                        {
+                                            deltafm.Changes = (FileMetadata.FileStatus.MetadataChange, curfm);
+                                        }
+                                        else
+                                        {
+                                            deltanode.DirMetadata.Changes = (FileMetadata.FileStatus.Unchanged, null);
+                                        }
+                                    }
+                                    else // May have been a change to data
+                                    {
+                                        deltafm.Changes = (FileMetadata.FileStatus.DataModified, curfm);
+                                    }
+                                    break;
+                                case 3: // Scan file
+                                    deltafm.Changes = (FileMetadata.FileStatus.DataModified, curfm);
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                        deltaidx++;
+                        fsidx++;
+                    }
+                    else if (deltafiles[deltaidx].CompareTo(fsfiles[fsidx]) < 0) // deltafiles[deltaidx] earlier in alphabet than fsfiles[fsidx]
+                    {
+                        // File in old tree but no longer in filesystem
+                        try
+                        {
+                            FileMetadata deltafm = deltanode.Files[deltafiles[deltaidx]];
+                            deltafm.Changes = (FileMetadata.FileStatus.Deleted, null);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                        deltaidx++;
+                    }
+                    else // deltafiles[deltaidx] later in alphabet than fsfiles[fsidx]
+                    {
+                        string filename = fsfiles[fsidx];
+                        int trackclass = 2;
+                        if (trackpatterns != null)
+                        {
+                            trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
+                        }
+                        // File on filesystem not in old tree
+                        try
+                        {
+                            switch (trackclass)
+                            {
+                                case 0: // dont add if untracked
+                                    break;
+                                default:
+                                    FileMetadata curfm = new FileMetadata(Path.Combine(absolutedirpath, filename))
+                                    {
+                                        Changes = (FileMetadata.FileStatus.New, null)
+                                    };
+                                    deltanode.AddFile(curfm);
+                                    break;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                        }
+                        fsidx++;
+                    }
+                }
+                for (; deltaidx < deltafiles.Count; deltaidx++)
+                {
+                    // File in old tree but no longer in filesystem
+                    try
+                    {
+                        FileMetadata deltafm = deltanode.Files[deltafiles[deltaidx]];
+                        deltafm.Changes = (FileMetadata.FileStatus.Deleted, null);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+                for (; fsidx < fsfiles.Count; fsidx++)
+                {
+                    string filename = fsfiles[fsidx];
+                    int trackclass = 2;
+                    if (trackpatterns != null)
+                    {
+                        trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
+                    }
+                    // File on filesystem not in old tree
+                    try
+                    {
+                        switch (trackclass)
+                        {
+                            case 0: // dont add if untracked
+                                break;
+                            default:
+                                FileMetadata curfm = new FileMetadata(Path.Combine(absolutedirpath, fsfiles[fsidx]))
+                                {
+                                    Changes = (FileMetadata.FileStatus.New, null)
+                                };
+                                deltanode.AddFile(curfm);
+                                break;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
+                }
+
+                List<string> fssubdirs;
+                try
+                {
+                    // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
+                    fssubdirs = new List<string>(Directory.GetDirectories(absolutedirpath).Select((string dirpath) => Path.GetFileName(dirpath)));
+                }
+                catch (UnauthorizedAccessException e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+                catch (DirectoryNotFoundException e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    continue;
+                }
+                List<string> deltasubdirs = new List<string>(deltanode.Directories.Keys);
+                deltasubdirs.Sort();
+                fssubdirs.Sort();
+
+                deltaidx = 0;
+                fsidx = 0;
+                while (deltaidx < deltasubdirs.Count && fsidx < fsfiles.Count)
+                {
+                    if (deltasubdirs[deltaidx] == fssubdirs[fsidx]) // Names match
+                    {
+                        string dirname = fssubdirs[fsidx];
+                        deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.Directories[dirname]));
+                        deltaidx++;
+                        fsidx++;
+                    }
+                    else if (deltasubdirs[deltaidx].CompareTo(fssubdirs[fsidx]) < 0) // deltasubdirs[deltaidx] earlier in alphabet than fssubdirs[fsidx]
+                    {
+                        // Directory in oldmtree not but no longer in filesystem
+                        deltanode.Directories[deltasubdirs[deltaidx]].DirMetadata.Changes = (FileMetadata.FileStatus.Deleted, null);
+                        // Dont queue because deleted
+                        deltaidx++;
+                    }
+                    else
+                    {
+                        // Directory in filesystem not in old tree
+                        FileMetadata dirmeta = new FileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]))
+                        {
+                            Changes = (FileMetadata.FileStatus.New, null)
+                        };
+                        deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.AddDirectory(dirmeta)));
+                        fsidx++;
+                    }
+                }
+                for (; deltaidx < deltasubdirs.Count; deltaidx++)
+                {
+                    // Directory in oldmtree not but no longer in filesystem
+                    deltanode.Directories[deltasubdirs[deltaidx]].DirMetadata.Changes = (FileMetadata.FileStatus.Deleted, null);
+                    // Dont queue because deleted
+                }
+                for (; fsidx < fssubdirs.Count; fsidx++)
+                {
+                    // Directory in filesystem not in old tree
+                    FileMetadata dirmeta = new FileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]))
+                    {
+                        Changes = (FileMetadata.FileStatus.New, null)
+                    };
+                    MetadataNode newnode = deltanode.AddDirectory(dirmeta);
+                    deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), newnode));
+                }
+            }
+            return deltamtree;
+        }
+
         /// <summary>
         /// Performs a backup, parallelizing backup tasks and using all CPU cores as much as possible.
         /// </summary>
@@ -236,8 +618,8 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackupAsync(string backupsetname, string message, bool differentialbackup=true, List<Tuple<int, string>> trackpatterns=null,
-            string prev_backup_hash_prefix=null)
+        public void RunBackupAsync(string backupsetname, string message, bool differentialbackup=true, bool usetrackclasses=true, 
+            List<Tuple<int, string>> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
             // The tree in which to store the new backup
             MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
@@ -252,12 +634,24 @@ namespace BackupCore
             // Save cache to destination
             SyncCache(backupsetname, true);
 
+            if (usetrackclasses)
+            {
+                try
+                {
+                    trackpatterns = GetTrackClasses();
+                }
+                catch (Exception)
+                {
+                    trackpatterns = null;
+                }
+            }
+
             if (differentialbackup)
             {
                 BackupRecord previousbackup;
                 try
                 {
-                    previousbackup = DefaultBackups.GetBackupRecord(prev_backup_hash_prefix);
+                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
                 }
                 catch
                 {
@@ -358,8 +752,8 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackupSync(string backupsetname, string message, bool differentialbackup = true, List<Tuple<int, string>> trackpatterns = null,
-            string prev_backup_hash_prefix = null)
+        public void RunBackupSync(string backupsetname, string message, bool differentialbackup = true, bool usetrackclasses = false, 
+            List<Tuple<int, string>> trackpatterns = null, string prev_backup_hash_prefix = null)
         {
             // The tree in which to store the new backup
             MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
@@ -374,9 +768,29 @@ namespace BackupCore
             // Save cache to destination
             SyncCache(backupsetname, true);
 
+            if (usetrackclasses)
+            {
+                try
+                {
+                    trackpatterns = GetTrackClasses();
+                }
+                catch
+                {
+                    trackpatterns = null;
+                }
+            }
+
             if (differentialbackup)
             {
-                BackupRecord previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                BackupRecord previousbackup;
+                try
+                {
+                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                }
+                catch
+                {
+                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                }
                 if (previousbackup != null)
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
@@ -786,6 +1200,24 @@ namespace BackupCore
                 }
             }
             return track;
+        }
+
+        private List<Tuple<int, string>> GetTrackClasses()
+        {
+            List<Tuple<int, string>> trackclasses = new List<Tuple<int, string>>();
+            using (FileStream fs = new FileStream(Path.Combine(BackupPathSrc, ".backuptrack"), FileMode.Open))
+            {
+                using (StreamReader reader = new StreamReader(fs))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        string[] ctp = line.Split(' ');
+                        trackclasses.Add(new Tuple<int, string>(Convert.ToInt32(ctp[0]), ctp[1]));
+                    }
+                }
+            }
+            return trackclasses;
         }
 
         /// <summary>

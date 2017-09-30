@@ -4,6 +4,7 @@ For now this will remain the home of the project backlog.
 ====
 
 Code cleanup
+	TODO's
 Add status command
 	much like git status
 	would show differences and estimate size of a run

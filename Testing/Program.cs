@@ -32,8 +32,8 @@ namespace Testing
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));
 
-            Console.WriteLine(BackupRun("test", @"D:\src", @"D:\dst"));
-
+            //Console.WriteLine(BackupRun("test", @"D:\src", @"D:\dst"));
+            GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
             Console.ReadLine();
         }
 
@@ -52,6 +52,15 @@ namespace Testing
             //Console.Out.WriteLine("Done.");
             stopwatch.Stop();
             return stopwatch.ElapsedMilliseconds / 1000.0;
+        }
+
+        static void GetStatus(string bsname, string src, string dst)
+        {
+            var core = new BackupCore.Core(src, dst);
+            foreach (var item in core.GetWTStatus(bsname))
+            {
+                Console.WriteLine(string.Format("{0}:\t{1}", item.path, item.change));
+            }
         }
 
         static double TimeSimpleCopy(string src, string dst)

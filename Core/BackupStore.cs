@@ -269,7 +269,7 @@ namespace BackupCore
         /// <returns>A previously stored BackupStore object</returns>
         public BackupSet LoadBackupSet(string bsname)
         {
-            var backuplistfile = bsname; // TODO....
+            var backuplistfile = Path.Combine(DiskStorePath, bsname);
             using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
             {
                 using (BinaryReader reader = new BinaryReader(fs))

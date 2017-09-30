@@ -155,17 +155,20 @@ namespace BackupCore
         /// Adds or updates a directory.
         /// </summary>
         /// <param name="metadata"></param>
-        public void AddDirectory(FileMetadata metadata)
+        public MetadataNode AddDirectory(FileMetadata metadata)
         {
+            MetadataNode node;
             if (Directories.ContainsKey(metadata.FileName))
             {
-                Directories[metadata.FileName].DirMetadata = metadata;
+                node = Directories[metadata.FileName];
+                node.DirMetadata = metadata;
             }
             else
             {
-                MetadataNode ndir = new MetadataNode(metadata, this);
-                Directories[metadata.FileName] = ndir;
+                node = new MetadataNode(metadata, this);
+                Directories[metadata.FileName] = node;
             }
+            return node;
         }
 
         /// <summary>

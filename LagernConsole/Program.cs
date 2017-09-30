@@ -16,11 +16,12 @@ namespace BackupConsole
         public static void Main(string[] args)
         {
             Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
-                RunOptions, DeleteOptions, RestoreOptions, ListOptions, BrowseOptions,
-                TransferOptions, SyncCacheOptions>(args)
+                StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions, 
+                BrowseOptions, TransferOptions, SyncCacheOptions>(args)
               .WithParsed<ShowOptions>(opts => ShowSettings(opts))
               .WithParsed<SetOptions>(opts => SetSetting(opts))
               .WithParsed<ClearOptions>(opts => ClearSetting(opts))
+              .WithParsed<StatusOptions>(opts => Status(opts))
               .WithParsed<RunOptions>(opts => RunBackup(opts))
               .WithParsed<DeleteOptions>(opts => DeleteBackup(opts))
               .WithParsed<RestoreOptions>(opts => RestoreFile(opts))
@@ -52,6 +53,16 @@ namespace BackupConsole
         {
             [Value(0, Required = true, HelpText = "The setting to clear")]
             public string Setting { get; set; }
+        }
+
+        [Verb("status", HelpText = "Show the working tree status")]
+        class StatusOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            public string BSName { get; set; }
+
+            [Option('b', "backup", Required = false, HelpText = "The hash of the backup to use for a differential backup")]
+            public string BackupHash { get; set; }
         }
 
         [Verb("run", HelpText = "Run a backup.")]
@@ -179,14 +190,33 @@ namespace BackupConsole
             WriteSetting(opts.Setting, opts.Value);
         }
 
-        private static void RunBackup(RunOptions opts)
+        private static void Status(StatusOptions opts)
         {
-            //string backupstorename, string message=null, bool diffbackup=true, string backuphashprefix=null
             try
             {
                 var bcore = GetCore();
-                var trackclasses = GetTrackClasses();
-                bcore.RunBackupAsync(opts.BSName, opts.Message, !opts.Scan, trackclasses, opts.BackupHash);
+                string bsname = GetBackupSetName(opts.BSName);
+                TablePrinter table = new TablePrinter();
+                table.AddHeaderRow(new string[] { "Path", "Status" });
+                foreach (var change in bcore.GetWTStatus(bsname, true, true, null, opts.BackupHash))
+                {
+                    table.AddBodyRow(new string[] { change.path, change.change.ToString() });
+                }
+                Console.WriteLine(table);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+
+        private static void RunBackup(RunOptions opts)
+        {
+            try
+            {
+                var bcore = GetCore();
+                string bsname = GetBackupSetName(opts.BSName);
+                bcore.RunBackupAsync(bsname, opts.Message, !opts.Scan, true, null, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -199,7 +229,8 @@ namespace BackupConsole
             try
             { 
                 var bcore = GetCore();
-                bcore.RemoveBackup(opts.BSName, opts.BackupHash);
+                string bsname = GetBackupSetName(opts.BSName);
+                bcore.RemoveBackup(bsname, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -212,7 +243,8 @@ namespace BackupConsole
             try
             {
                 var bcore = GetCore();
-                bcore.RestoreFileOrDirectory(opts.Path, opts.RestorePath, opts.BackupHash);
+                string bsname = GetBackupSetName(opts.BSName);
+                bcore.RestoreFileOrDirectory(bsname, opts.Path, opts.RestorePath, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -292,31 +324,6 @@ namespace BackupConsole
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-            }
-        }
-
-        private static List<Tuple<int, string>> GetTrackClasses()
-        {
-            try
-            {
-                List<Tuple<int, string>> trackclasses = new List<Tuple<int, string>>();
-                using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), ".backuptrack"), FileMode.Open))
-                {
-                    using (StreamReader reader = new StreamReader(fs))
-                    {
-                        string line;
-                        while ((line = reader.ReadLine()) != null)
-                        {
-                            string[] ctp = line.Split(' ');
-                            trackclasses.Add(new Tuple<int, string>(Convert.ToInt32(ctp[0]), ctp[1]));
-                        }
-                    }
-                }
-                return trackclasses;
-            }
-            catch (Exception)
-            {
-                return null;
             }
         }
 

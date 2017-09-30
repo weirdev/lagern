@@ -45,6 +45,8 @@ namespace BackupCore
         
         public byte[] FileHash { get; set; }
 
+        public (FileStatus status, FileMetadata updated)? Changes { get; set; } = null;
+
         /// <summary>
         /// New FileMetadata by explicitly specifying each field of
         /// a file's metadata.
@@ -55,7 +57,8 @@ namespace BackupCore
         /// <param name="datecreated"></param>
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
-            DateTime datecreated, FileAttributes attributes, long filesize, byte[] filehash)
+            DateTime datecreated, FileAttributes attributes, long filesize, byte[] filehash,
+            (FileStatus, FileMetadata)? changes=null)
         {
             FileName = filename;
             DateAccessedUTC = dateaccessed;
@@ -64,6 +67,7 @@ namespace BackupCore
             FileSize = filesize;
             DateCreatedUTC = datecreated;
             FileHash = filehash;
+            Changes = changes;
         }
 
         /// <summary>
@@ -76,7 +80,7 @@ namespace BackupCore
         /// <exception cref="UnauthorizedAccessException"/>
         /// <exception cref="PathTooLongException"/>
         /// <exception cref="NotSupportedException"/>
-        public FileMetadata(string filepath)
+        public FileMetadata(string filepath, (FileStatus, FileMetadata)? changes = null)
         {
             FileName = Path.GetFileName(filepath);
             FileInfo fi = new FileInfo(filepath);
@@ -92,6 +96,7 @@ namespace BackupCore
                 FileSize = fi.Length;
             }
             DateCreatedUTC = fi.CreationTimeUtc;
+            Changes = changes;
         }
 
         public void WriteOutMetadata(string filepath)
@@ -109,6 +114,38 @@ namespace BackupCore
             {
                 fi.Attributes = Attributes;
             }
+        }
+
+        /*
+        public FileStatus FileDifference(FileMetadata other)
+        {
+            if (FileSize != other.FileSize)
+            {
+                return FileStatus.DataModified;
+            }
+            if (!(Attributes == other.Attributes && DateAccessedUTC.Equals(other.DateAccessedUTC) &&
+                DateModifiedUTC.Equals(other.DateModifiedUTC) && DateCreatedUTC.Equals(other.DateCreatedUTC)))
+            {
+                return FileStatus.MetadataChange;
+            }
+            return FileStatus.Unchanged;
+        }*/
+
+        public bool FileDifference(FileMetadata other)
+        {
+            return !(Attributes == other.Attributes && DateAccessedUTC.Equals(other.DateAccessedUTC) &&
+                DateModifiedUTC.Equals(other.DateModifiedUTC) && DateCreatedUTC.Equals(other.DateCreatedUTC) &&
+                FileSize == other.FileSize);
+        }
+        
+        public FileStatus DirectoryDifference(FileMetadata other)
+        {
+            if (!(Attributes == other.Attributes && DateAccessedUTC.Equals(other.DateAccessedUTC) &&
+                DateModifiedUTC.Equals(other.DateModifiedUTC) && DateCreatedUTC.Equals(other.DateCreatedUTC)))
+            {
+                return FileStatus.MetadataChange;
+            }
+            return FileStatus.Unchanged;
         }
 
         public byte[] serialize()
@@ -176,5 +213,7 @@ namespace BackupCore
                 filesize,
                 filehash);
         }
+        
+        public enum FileStatus { Unchanged, New, DataModified, MetadataChange, Deleted }
     }
 }
