@@ -16,7 +16,8 @@ namespace Testing
             //BPlusTreeTest bpt_test = new BPlusTreeTest();
             //bpt_test.TestSerializeDeserialize();
 
-            //BackupRun(@"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+            GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+            BackupRun("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
 
             //BinaryEncodingTest betest = new BinaryEncodingTest();
             //betest.TestDictEncodeDecode();
@@ -43,7 +44,7 @@ namespace Testing
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
-            backupper.RunBackupAsync(bsname, null);
+            backupper.RunBackup(bsname, null, true);
             //backupper.RunBackupSync(null);
             
             //Console.Out.WriteLine("Done.");

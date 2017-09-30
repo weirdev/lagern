@@ -419,13 +419,13 @@ namespace BackupCore
                                     if (deltafm.FileSize == curfm.FileSize && deltafm.DateModifiedUTC == curfm.DateModifiedUTC)
                                     {
                                         // Still update metadata if necessary (ie dateaccessed changed)
-                                        if (curfm.FileDifference(deltanode.DirMetadata))
+                                        if (curfm.FileDifference(deltafm))
                                         {
                                             deltafm.Changes = (FileMetadata.FileStatus.MetadataChange, curfm);
                                         }
                                         else
                                         {
-                                            deltanode.DirMetadata.Changes = (FileMetadata.FileStatus.Unchanged, null);
+                                            deltafm.Changes = (FileMetadata.FileStatus.Unchanged, null);
                                         }
                                     }
                                     else // May have been a change to data
@@ -618,21 +618,10 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackupAsync(string backupsetname, string message, bool differentialbackup=true, bool usetrackclasses=true, 
+        public void RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, bool usetrackclasses=true, 
             List<Tuple<int, string>> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
-            // The tree in which to store the new backup
-            MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
-            
-            // The queue of files who's contents must be examined
-            BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
-            // The queue of files who's contents will not be examined, instead a reference to a previous state of the file will be stored
-            BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
-            // The queue of directories who's children will be examined
-            BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
-
-            // Save cache to destination
-            SyncCache(backupsetname, true);
+            MetadataNode deltatree = null;
 
             if (usetrackclasses)
             {
@@ -660,8 +649,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
-                    //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpaters));
-                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpatterns);
+                    deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
                 else
                 {
@@ -670,42 +658,61 @@ namespace BackupCore
             }
             if (!differentialbackup)
             {
-                //Task getfilestask = Task.Run(() => GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpaters));
-                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpatterns);
+                deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, null);
             }
 
             List<Task> backupops = new List<Task>();
-            while (!directoryqueue.IsCompleted)
+            BackupDeltaNode(Path.DirectorySeparatorChar.ToString(), deltatree);
+            void BackupDeltaNode(string relpath, MetadataNode parent)
             {
-                if (directoryqueue.TryTake(out string directory))
+                if (parent.DirMetadata.Changes == null)
                 {
-                    // We do not backup diretories asychronously
-                    // becuase a. they should not take long anyway
-                    // and b. the metadatastore needs to have stored directories
-                    // before it stores their children.
-                    BackupDirectory(directory, newmetatree);
+                    throw new Exception("Reached metadata without delta");
                 }
-            }
-            while (!scanfilequeue.IsCompleted)
-            {
-                if (scanfilequeue.TryTake(out string file))
+                var status = parent.DirMetadata.Changes.Value.status;
+                if (status != FileMetadata.FileStatus.Deleted)
                 {
-                    //backupops.Add(Task.Run(() => BackupFileAsync(file, newmetatree)));
-                    backupops.Add(Task.Run(() => BackupFileSync(file, newmetatree)));
-                }
-            }
-            while (!noscanfilequeue.IsCompleted)
-            {
-                if (noscanfilequeue.TryTake(out Tuple<string, FileMetadata> dir_fmeta))
-                {
-                    newmetatree.AddFile(dir_fmeta.Item1, dir_fmeta.Item2);
-                    if (DestinationAvailable)
+                    // Not deleted so will handle children
+                    if (status == FileMetadata.FileStatus.MetadataChange)
                     {
-                        DefaultBlobs.IncrementReferenceCount(dir_fmeta.Item2.FileHash, 1, true); // no files in cache store
+                        parent.DirMetadata = parent.DirMetadata.Changes.Value.updated;
+                    }
+                    var files = parent.Files.Keys.ToList();
+                    foreach (var file in files)
+                    {
+                        if (parent.Files[file].Changes == null)
+                        {
+                            throw new Exception("Reached metadata without delta");
+                        }
+                        var fstatus = parent.Files[file].Changes.Value.status;
+                        // Exchnage for metadata in Changes
+                        if (fstatus == FileMetadata.FileStatus.MetadataChange || fstatus == FileMetadata.FileStatus.DataModified)
+                        {
+                            parent.Files[file] = parent.Files[file].Changes.Value.updated;
+                        }
+                        // Store file data
+                        if (fstatus == FileMetadata.FileStatus.New || fstatus == FileMetadata.FileStatus.DataModified)
+                        {
+                            if (async)
+                            {
+                                backupops.Add(Task.Run(() => BackupFileSync(Path.Combine(relpath, file), parent.Files[file])));
+                            }
+                            else
+                            {
+                                BackupFileSync(Path.Combine(relpath, file), parent.Files[file]);
+                            }
+                        }
+                    }
+                    foreach (var dir in parent.Directories.Values)
+                    {
+                        BackupDeltaNode(Path.Combine(relpath, dir.DirMetadata.FileName) + Path.DirectorySeparatorChar, dir);
                     }
                 }
             }
-            Task.WaitAll(backupops.ToArray());
+            if (async)
+            {
+                Task.WaitAll(backupops.ToArray());
+            }
 
             /*
             // Add new metadatatree to metastore
@@ -714,7 +721,7 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            byte[] newmtreehash = newmetatree.Store(DefaultBlobs);
+            byte[] newmtreehash = deltatree.Store(DefaultBlobs);
 
             DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
 
@@ -742,108 +749,7 @@ namespace BackupCore
                 Console.WriteLine(e.Message);
             }
         }
-
-        /// <summary>
-        /// Performs a backup synchronously.
-        /// </summary>
-        /// <param name="backupsetname"></param>
-        /// <param name="message"></param>
-        /// <param name="differentialbackup">True if we attempt to avoid scanning file data when the 
-        /// data appears not to have been modified based on its metadata</param>
-        /// <param name="trackpatterns">Rules determining which files</param>
-        /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackupSync(string backupsetname, string message, bool differentialbackup = true, bool usetrackclasses = false, 
-            List<Tuple<int, string>> trackpatterns = null, string prev_backup_hash_prefix = null)
-        {
-            // The tree in which to store the new backup
-            MetadataNode newmetatree = new MetadataNode(new FileMetadata(BackupPathSrc), null);
-
-            // The queue of files who's contents must be examined
-            BlockingCollection<string> scanfilequeue = new BlockingCollection<string>();
-            // The queue of files who's contents will not be examined, instead a reference to a previous state of the file will be stored
-            BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue = new BlockingCollection<Tuple<string, FileMetadata>>();
-            // The queue of directories who's children will be examined
-            BlockingCollection<string> directoryqueue = new BlockingCollection<string>();
-
-            // Save cache to destination
-            SyncCache(backupsetname, true);
-
-            if (usetrackclasses)
-            {
-                try
-                {
-                    trackpatterns = GetTrackClasses();
-                }
-                catch
-                {
-                    trackpatterns = null;
-                }
-            }
-
-            if (differentialbackup)
-            {
-                BackupRecord previousbackup;
-                try
-                {
-                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
-                }
-                catch
-                {
-                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
-                }
-                if (previousbackup != null)
-                {
-                    MetadataNode previousmtree = MetadataNode.Load(DefaultBlobs, previousbackup.MetadataTreeHash);
-                    GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, previousmtree, trackpatterns);
-                }
-                else
-                {
-                    differentialbackup = false;
-                }
-            }
-            if (!differentialbackup)
-            {
-                GetFilesAndDirectories(scanfilequeue, noscanfilequeue, directoryqueue, null, null, trackpatterns);
-            }
-
-            while (!directoryqueue.IsCompleted)
-            {
-                if (directoryqueue.TryTake(out string directory))
-                {
-                    // We backup directories first because
-                    // the metadatastore needs to have stored directories
-                    // before it stores their children.
-                    BackupDirectory(directory, newmetatree);
-                }
-            }
-            while (!scanfilequeue.IsCompleted)
-            {
-                if (scanfilequeue.TryTake(out string file))
-                {
-                    BackupFileSync(file, newmetatree);
-                }
-            }
-            while (!noscanfilequeue.IsCompleted)
-            {
-                if (noscanfilequeue.TryTake(out Tuple<string, FileMetadata> dir_fmeta))
-                {
-                    newmetatree.AddFile(dir_fmeta.Item1, dir_fmeta.Item2);
-                    if (DestinationAvailable)
-                    {
-                        DefaultBlobs.IncrementReferenceCount(dir_fmeta.Item2.FileHash, 1, true);
-                    }
-                }
-            }
-            
-            byte[] newmtreehash = newmetatree.Store(DefaultBlobs);
-
-            DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
-
-            // Save just backups and metadata, no actual data to cache
-            SyncCache(backupsetname, false);
-            // Index save occurred during synccache
-        }
-
+        
         public void SyncCache(string backupsetname, bool cleardata)
         {
             if (CacheBackups != null)
@@ -918,153 +824,6 @@ namespace BackupCore
                 }
                 throw;
             }
-        }
-
-        /// <summary>
-        /// Returns the paths of files and directories in path to be backed up.
-        /// </summary>
-        /// <param name="scanfilequeue"></param>
-        /// <param name="noscanfilequeue"></param>
-        /// <param name="directoryqueue"></param>
-        /// <param name="path"></param>
-        /// <param name="previousmtree"></param>
-        /// <param name="trackpaterns"></param>
-        protected void GetFilesAndDirectories(BlockingCollection<string> scanfilequeue, BlockingCollection<Tuple<string, FileMetadata>> noscanfilequeue, 
-            BlockingCollection<string> directoryqueue, string path=null, MetadataNode previousmtree=null, List<Tuple<int, string>> trackpaterns=null)
-        {
-            if (path == null)
-            {
-                path = BackupPathSrc;
-            }
-
-            // TODO: Bigger inital stack size?
-            Stack<string> dirs = new Stack<string>(20);
-
-            dirs.Push(path);
-
-            while (dirs.Count > 0)
-            {
-                string currentDir = dirs.Pop();
-                string[] subDirs;
-                try
-                {
-                    subDirs = Directory.GetDirectories(currentDir);
-                }
-                catch (UnauthorizedAccessException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-                catch (DirectoryNotFoundException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-
-                foreach (var sd in subDirs)
-                {
-                    bool trackdir = true;
-                    if (trackpaterns != null)
-                    {
-                        trackdir = CheckTrackAnyDirectoryChild(sd.Substring(BackupPathSrc.Length + 1), trackpaterns);
-                    }
-                    if (trackdir)
-                    {
-                        dirs.Push(sd);
-                        string relpath = sd.Substring(BackupPathSrc.Length + 1);
-                        directoryqueue.Add(relpath);
-                    }
-                }
-
-                string[] files = null;
-                try
-                {
-                    files = Directory.GetFiles(currentDir);
-                }
-                catch (UnauthorizedAccessException e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-                catch (DirectoryNotFoundException e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-
-                foreach (var file in files)
-                {
-                    int trackclass = 2;
-                    if (trackpaterns != null)
-                    {
-                        trackclass = FileTrackClass(file.Substring(BackupPathSrc.Length + 1), trackpaterns);
-                    }
-                    // Convert file path to a relative path
-                    string relpath = file.Substring(BackupPathSrc.Length + 1);
-                    try // We (may) read the file's metadata here so wrap errors
-                    {
-                        switch (trackclass)
-                        {
-                            case 0: // ignore file completely
-                                break;
-                            case 1: // Dont scan if we have a previous version
-                                bool dontscan = false;
-                                if (previousmtree != null)
-                                {
-                                    FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackupPathSrc, relpath));
-                                    if (previousfm != null)
-                                    {
-                                        noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                                        dontscan = true;
-                                    }
-                                }
-                                if (!dontscan)
-                                {
-                                    scanfilequeue.Add(relpath);
-                                }
-                                break;
-                            case 2: // Dont scan if we have a previous version and its metadata indicates no change
-                                dontscan = false;
-                                if (previousmtree != null)
-                                {
-                                    FileMetadata previousfm = previousmtree.GetFile(relpath);
-                                    FileMetadata curfm = new FileMetadata(Path.Combine(BackupPathSrc, relpath));
-                                    if (previousfm != null && previousfm.FileSize == curfm.FileSize
-                                        && previousfm.DateModifiedUTC == curfm.DateModifiedUTC)
-                                    {
-                                        noscanfilequeue.Add(new Tuple<string, FileMetadata>(Path.GetDirectoryName(relpath), previousfm));
-                                        dontscan = true;
-                                    }
-                                }
-                                if (!dontscan)
-                                {
-                                    scanfilequeue.Add(relpath);
-                                }
-                                break;
-                            case 3: // Scan file
-                                scanfilequeue.Add(relpath);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e.Message);
-                    }
-                }
-            }
-            directoryqueue.CompleteAdding();
-            scanfilequeue.CompleteAdding();
-            noscanfilequeue.CompleteAdding();
         }
 
         /// <summary>
@@ -1240,64 +999,26 @@ namespace BackupCore
             mtree.AddDirectory(Path.GetDirectoryName(relpath), new FileMetadata(Path.Combine(BackupPathSrc, relpath)));
         }
 
-        // TODO: This has problems (see todo on BlobStore.StoreDataAsync()
-        protected void BackupFileAsync(string relpath, MetadataNode mtree)
-        {
-            throw new NotImplementedException(); // Dont use until BlobStore.StoreDataAsync() fixed
-            // NOTE: If more detailed error handling is added, replace this try/catch and the 
-            // equivelent one in BackupFileSync with a single method for getting a stream
-            try
-            {
-                FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
-                byte[] filehash = DefaultBlobs.StoreDataAsync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
-                BackupFileMetadata(relpath, filehash, mtree);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
-        }
-
         /// <summary>
         /// Backup a file into the given metadatanode
         /// </summary>
         /// <param name="relpath"></param>
         /// <param name="mtree"></param>
-        protected void BackupFileSync(string relpath, MetadataNode mtree)
+        protected void BackupFileSync(string relpath, FileMetadata fileMetadata)
         {
             try
             {
+                if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+                {
+                    relpath = relpath.Substring(1);
+                }
                 FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
                 byte[] filehash = DefaultBlobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
-                BackupFileMetadata(relpath, filehash, mtree);
+                fileMetadata.FileHash = filehash;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
-            }
-        }
-
-        /// <summary>
-        /// Loads metadata from a file and adds it to the metdata tree.
-        /// </summary>
-        /// <param name="relpath"></param>
-        /// <param name="filehash"></param>
-        /// <param name="mtree"></param>
-        /// <exception cref="ArgumentNullException"/>
-        /// <exception cref="System.Security.SecurityException"/>
-        /// <exception cref="ArgumentException"/>
-        /// <exception cref="UnauthorizedAccessException"/>
-        /// <exception cref="PathTooLongException"/>
-        /// <exception cref="NotSupportedException"/>
-        protected void BackupFileMetadata(string relpath, byte[] filehash, MetadataNode mtree)
-        {
-            FileMetadata fm = new FileMetadata(Path.Combine(BackupPathSrc, relpath))
-            {
-                FileHash = filehash
-            };
-            lock (DefaultBackups)
-            {
-                mtree.AddFile(Path.GetDirectoryName(relpath), fm);
             }
         }
         

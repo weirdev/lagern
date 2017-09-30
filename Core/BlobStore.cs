@@ -36,52 +36,6 @@ namespace BackupCore
             IsCache = iscache;
         }
 
-        // TODO: These async methods have parallelization problems as written and dont provide
-        // any execution time benefit
-        public byte[] StoreDataAsync(byte[] inputdata, BlobLocation.BlobTypes type)
-        {
-            throw new NotImplementedException();
-            return StoreDataAsync(new MemoryStream(inputdata), type);
-        }
-
-        public byte[] StoreDataAsync(Stream readerbuffer, BlobLocation.BlobTypes type)
-        {
-            throw new NotImplementedException(); // Not currently working
-            BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
-            byte[] filehash = new byte[20]; // Overall hash of file
-            Task getfileblobstask = Task.Run(() => SplitData(readerbuffer, filehash, fileblobqueue));
-
-            List<byte[]> blobshashes = new List<byte[]>();
-            while (!fileblobqueue.IsCompleted)
-            {
-                if (fileblobqueue.TryTake(out HashBlobPair blob))
-                {
-                    this.AddBlob(blob, BlobLocation.BlobTypes.Simple);
-                    blobshashes.Add(blob.Hash);
-                }
-                if (getfileblobstask.IsFaulted)
-                {
-                    throw getfileblobstask.Exception;
-                }
-            }
-            if (blobshashes.Count > 1)
-            {
-                // Multiple blobs so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blobshashes.Count * blobshashes[0].Length];
-                for (int i = 0; i < blobshashes.Count; i++)
-                {
-                    Array.Copy(blobshashes[i], 0, hashlist, i * blobshashes[i].Length, blobshashes[i].Length);
-                }
-                AddMultiBlobReferenceBlob(filehash, hashlist, type);
-            }
-            else
-            {
-                // Just the one blob, so change its type to `type`
-                GetBlobLocation(filehash).BlobType = type; // filehash should match individual blob hash used earlier since total file == single blob
-            }
-            return filehash;
-        }
-
         public byte[] StoreDataSync(byte[] inputdata, BlobLocation.BlobTypes type)
         {
             return StoreDataSync(new MemoryStream(inputdata), type);

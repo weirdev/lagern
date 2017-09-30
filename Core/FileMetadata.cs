@@ -133,6 +133,10 @@ namespace BackupCore
 
         public bool FileDifference(FileMetadata other)
         {
+            bool[] test = {Attributes == other.Attributes, DateAccessedUTC.Equals(other.DateAccessedUTC),
+                DateModifiedUTC.Equals(other.DateModifiedUTC), DateCreatedUTC.Equals(other.DateCreatedUTC),
+                FileSize == other.FileSize};
+
             return !(Attributes == other.Attributes && DateAccessedUTC.Equals(other.DateAccessedUTC) &&
                 DateModifiedUTC.Equals(other.DateModifiedUTC) && DateCreatedUTC.Equals(other.DateCreatedUTC) &&
                 FileSize == other.FileSize);

@@ -227,7 +227,9 @@ namespace BackupCore
             // -"-v2"
             // Directories = enum_encode([dirrefs,...])
             mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
-            mtdata.Add("Files-v1", BinaryEncoding.enum_encode(from fm in Files.Values.AsEnumerable() select fm.serialize()));
+            mtdata.Add("Files-v1", BinaryEncoding.enum_encode(Files.Values.AsEnumerable()
+                                                              .Where(fm => fm.Changes==null||!(fm.Changes.Value.status==FileMetadata.FileStatus.Deleted))
+                                                              .Select(fm => fm.serialize())));
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             

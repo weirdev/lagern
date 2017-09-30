@@ -216,7 +216,7 @@ namespace BackupConsole
             {
                 var bcore = GetCore();
                 string bsname = GetBackupSetName(opts.BSName);
-                bcore.RunBackupAsync(bsname, opts.Message, !opts.Scan, true, null, opts.BackupHash);
+                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, true, null, opts.BackupHash);
             }
             catch (Exception e)
             {
