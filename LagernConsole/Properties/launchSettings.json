@@ -2,7 +2,7 @@
   "profiles": {
     "LagernConsole": {
       "commandName": "Project",
-      "commandLineArgs": "status",
+      "commandLineArgs": "browse",
       "workingDirectory": "C:\\Users\\Wesley\\Desktop\\test\\src"
     }
   }

@@ -195,7 +195,7 @@ namespace BackupCore
         public Tuple<string, BackupRecord> GetBackupHashAndRecord(string bsname, int offset = 0)
         {
             var bset = LoadBackupSet(bsname);
-            return GetBackupHashAndRecord(HashTools.ByteArrayToHexViaLookup32(bset.Backups[bset.Backups.Count - 1].Item1).ToLower(), offset);
+            return GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[bset.Backups.Count - 1].Item1).ToLower(), offset);
         }
 
         public Tuple<string, BackupRecord> GetBackupHashAndRecord(string bsname, string prefix, int offset = 0)
