@@ -15,20 +15,25 @@ namespace BackupConsole
         
         public static void Main(string[] args)
         {
-            Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
-                StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions, 
-                BrowseOptions, TransferOptions, SyncCacheOptions>(args)
-              .WithParsed<ShowOptions>(opts => ShowSettings(opts))
-              .WithParsed<SetOptions>(opts => SetSetting(opts))
-              .WithParsed<ClearOptions>(opts => ClearSetting(opts))
-              .WithParsed<StatusOptions>(opts => Status(opts))
-              .WithParsed<RunOptions>(opts => RunBackup(opts))
-              .WithParsed<DeleteOptions>(opts => DeleteBackup(opts))
-              .WithParsed<RestoreOptions>(opts => RestoreFile(opts))
-              .WithParsed<ListOptions>(opts => ListBackups(opts))
-              .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
-              .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
-              .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
+            // This overall try catch looks ugly, but helps crashes seem to occur gracefully to the user
+            try
+            {
+                Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
+                    StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions,
+                    BrowseOptions, TransferOptions, SyncCacheOptions>(args)
+                  .WithParsed<ShowOptions>(opts => ShowSettings(opts))
+                  .WithParsed<SetOptions>(opts => SetSetting(opts))
+                  .WithParsed<ClearOptions>(opts => ClearSetting(opts))
+                  .WithParsed<StatusOptions>(opts => Status(opts))
+                  .WithParsed<RunOptions>(opts => RunBackup(opts))
+                  .WithParsed<DeleteOptions>(opts => DeleteBackup(opts))
+                  .WithParsed<RestoreOptions>(opts => RestoreFile(opts))
+                  .WithParsed<ListOptions>(opts => ListBackups(opts))
+                  .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
+                  .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
+                  .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
+            }
+            catch { }
         }
 
         [Verb("show", HelpText = "Show lagern settings")]

@@ -24,7 +24,7 @@ namespace BackupConsole
         public BackupBrowser(string backupstorename, string backuphash)
         {
             BCore = Program.GetCore();
-            Tuple<string, BackupCore.BackupRecord> targetbackuphashandrecord;
+            (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
                 targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backupstorename);
@@ -33,9 +33,9 @@ namespace BackupConsole
             {
                 targetbackuphashandrecord = BCore.DefaultBackups.GetBackupHashAndRecord(backupstorename, backuphash, 0);
             }
-            BackupHash = targetbackuphashandrecord.Item1;
+            BackupHash = targetbackuphashandrecord.hash;
             BackupStoreName = backupstorename;
-            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
+            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.record;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultBlobs, backuprecord.MetadataTreeHash);
             CurrentNode = BackupTree;
         }

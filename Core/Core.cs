@@ -249,7 +249,14 @@ namespace BackupCore
                 }
                 catch
                 {
-                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                    try
+                    {
+                        previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                    }
+                    catch
+                    {
+                        previousbackup = null;
+                    }
                 }
                 if (previousbackup != null)
                 {
@@ -644,7 +651,14 @@ namespace BackupCore
                 }
                 catch
                 {
-                    previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                    try
+                    {
+                        previousbackup = DefaultBackups.GetBackupRecord(backupsetname);
+                    }
+                    catch
+                    {
+                        previousbackup = null;
+                    }
                 }
                 if (previousbackup != null)
                 {
@@ -695,11 +709,11 @@ namespace BackupCore
                         {
                             if (async)
                             {
-                                backupops.Add(Task.Run(() => BackupFileSync(Path.Combine(relpath, file), parent.Files[file])));
+                                backupops.Add(Task.Run(() => BackupFileSync(backupsetname, Path.Combine(relpath, file), parent.Files[file])));
                             }
                             else
                             {
-                                BackupFileSync(Path.Combine(relpath, file), parent.Files[file]);
+                                BackupFileSync(backupsetname, Path.Combine(relpath, file), parent.Files[file]);
                             }
                         }
                     }
@@ -721,7 +735,7 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            byte[] newmtreehash = deltatree.Store(DefaultBlobs);
+            byte[] newmtreehash = deltatree.Store(DefaultBlobs, backupsetname);
 
             DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
 
@@ -1004,7 +1018,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <param name="mtree"></param>
-        protected void BackupFileSync(string relpath, FileMetadata fileMetadata)
+        protected void BackupFileSync(string backupset, string relpath, FileMetadata fileMetadata)
         {
             try
             {
@@ -1013,7 +1027,7 @@ namespace BackupCore
                     relpath = relpath.Substring(1);
                 }
                 FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
-                byte[] filehash = DefaultBlobs.StoreDataSync(readerbuffer, BlobLocation.BlobTypes.FileBlob);
+                byte[] filehash = DefaultBlobs.StoreDataSync(backupset, readerbuffer, BlobLocation.BlobTypes.FileBlob);
                 fileMetadata.FileHash = filehash;
             }
             catch (Exception e)
@@ -1067,7 +1081,7 @@ namespace BackupCore
             }
             foreach (var backup in DefaultBackups.LoadBackupSet(backupsetname).Backups)
             {
-                DefaultBlobs.TransferBackup(dstblobs, backup.Item1, includefiles & !backup.Item2);
+                DefaultBlobs.TransferBackup(dstblobs, backupsetname, backup.Item1, includefiles & !backup.Item2);
             }
             dstblobs.SaveToDisk();
         }

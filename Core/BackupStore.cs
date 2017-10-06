@@ -47,14 +47,14 @@ namespace BackupCore
                             if (chachebset.Backups[srcindex].Item2)
                             {
                                 // Remove shallow backups from cache not present in dst
-                                cache.Blobs.IncrementReferenceCount(chachebset.Backups[srcindex].Item1, -1, false);
+                                cache.Blobs.IncrementReferenceCount(bsname, chachebset.Backups[srcindex].Item1, -1, false);
                                 chachebset.Backups.RemoveAt(srcindex);
                             }
                             else
                             {
                                 // Add non shallow backups from cache not present in dst
                                 bset.Backups.Insert(dstindex, new Tuple<byte[], bool>(chachebset.Backups[srcindex].Item1, false));
-                                cache.Blobs.TransferBackup(Blobs, chachebset.Backups[srcindex].Item1, true);
+                                cache.Blobs.TransferBackup(Blobs, bsname, chachebset.Backups[srcindex].Item1, true);
                                 dstindex += 1;
                                 // After insert and increment j still referes to the same backup (dstbr)
                                 srcindex += 1;
@@ -65,7 +65,7 @@ namespace BackupCore
                         {
                             // Add (as shallow) backups in dst not present in cache
                             chachebset.Backups.Insert(srcindex, new Tuple<byte[], bool>(bset.Backups[dstindex].Item1, true));
-                            Blobs.TransferBackup(cache.Blobs, bset.Backups[dstindex].Item1, false);
+                            Blobs.TransferBackup(cache.Blobs, bsname, bset.Backups[dstindex].Item1, false);
                             srcindex += 1;
                             dstindex += 1;
                             dstbr = null;
@@ -86,14 +86,14 @@ namespace BackupCore
                 if (chachebset.Backups[srcindex].Item2)
                 {
                     // Remove shallow backups from cache not present in dst
-                    cache.Blobs.IncrementReferenceCount(chachebset.Backups[srcindex].Item1, -1, false);
+                    cache.Blobs.IncrementReferenceCount(bsname, chachebset.Backups[srcindex].Item1, -1, false);
                     chachebset.Backups.RemoveAt(srcindex);
                 }
                 else
                 {
                     // Add non shallow backups from cache not present in dst
                     bset.Backups.Add(new Tuple<byte[], bool>(chachebset.Backups[srcindex].Item1, false));
-                    cache.Blobs.TransferBackup(Blobs, chachebset.Backups[srcindex].Item1, true);
+                    cache.Blobs.TransferBackup(Blobs, bsname, chachebset.Backups[srcindex].Item1, true);
                     dstindex += 1;
                     // After insert and increment j still referes to the same backup (dstbr)
                     srcindex += 1;
@@ -104,7 +104,7 @@ namespace BackupCore
             {
                 // Add (as shallow) backups in dst not present in cache
                 chachebset.Backups.Add(new Tuple<byte[], bool>(bset.Backups[dstindex].Item1, true));
-                Blobs.TransferBackup(cache.Blobs, bset.Backups[dstindex].Item1, false);
+                Blobs.TransferBackup(cache.Blobs, bsname, bset.Backups[dstindex].Item1, false);
                 srcindex += 1;
                 dstindex += 1;
                 dstbr = null;
@@ -131,7 +131,7 @@ namespace BackupCore
             var bset = LoadBackupSet(bsname);
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
             byte[] brbytes = newbackup.serialize();
-            byte[] backuphash = Blobs.StoreDataSync(brbytes, BlobLocation.BlobTypes.BackupRecord);
+            byte[] backuphash = Blobs.StoreDataSync(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
             bset.Backups.Add(new Tuple<byte[], bool>(backuphash, shallow));
             SaveBackupSet(bset, bsname);
         }
@@ -139,14 +139,14 @@ namespace BackupCore
         public void RemoveBackup(string bsname, string backuphashprefix)
         {
             var bset = LoadBackupSet(bsname);
-            Tuple<bool, byte[]> match = HashByPrefix(bsname, backuphashprefix);
+            var match = HashByPrefix(bsname, backuphashprefix);
             // TODO: Better error messages depending on return value of HashByPrefix()
             // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
-            if (match == null || match.Item1 == true)
+            if (match == null || match.Value.multiplematches == true)
             {
                 throw new KeyNotFoundException();
             }
-            byte[] backuphash = match.Item2;
+            byte[] backuphash = match.Value.singlematchhash;
             int i;
             for (i = 0; i < bset.Backups.Count; i++)
             {
@@ -156,7 +156,7 @@ namespace BackupCore
                 }
             }
             SaveBackupSet(bset, bsname);
-            Blobs.IncrementReferenceCount(backuphash, -1, !bset.Backups[i].Item2);
+            Blobs.IncrementReferenceCount(bsname, backuphash, -1, !bset.Backups[i].Item2);
         }
 
         public BackupRecord GetBackupRecord(string bsname)
@@ -176,11 +176,11 @@ namespace BackupCore
                 return GetBackupRecord(bsname);
             }
             var match = HashByPrefix(bsname, prefix);
-            if (match == null || match.Item1 == true)
+            if (match == null || match.Value.multiplematches == true)
             {
                 throw new KeyNotFoundException();
             }
-            return GetBackupRecord(bsname, match.Item2);
+            return GetBackupRecord(bsname, match.Value.singlematchhash);
         }
 
         public BackupRecord GetBackupRecord(string bsname, byte[] hash)
@@ -192,17 +192,17 @@ namespace BackupCore
             return BackupRecord.deserialize(Blobs.RetrieveData(hash));
         }
 
-        public Tuple<string, BackupRecord> GetBackupHashAndRecord(string bsname, int offset = 0)
+        public (string, BackupRecord) GetBackupHashAndRecord(string bsname, int offset = 0)
         {
             var bset = LoadBackupSet(bsname);
             return GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[bset.Backups.Count - 1].Item1).ToLower(), offset);
         }
 
-        public Tuple<string, BackupRecord> GetBackupHashAndRecord(string bsname, string prefix, int offset = 0)
+        public (string, BackupRecord) GetBackupHashAndRecord(string bsname, string prefix, int offset = 0)
         {
             var bset = LoadBackupSet(bsname);
             var match = HashByPrefix(bsname, prefix);
-            if (match == null || match.Item1 == true)
+            if (match == null || match.Value.multiplematches == true)
             {
                 // TODO: throw this exception out of HashByPrefix?
                 throw new KeyNotFoundException();
@@ -210,7 +210,7 @@ namespace BackupCore
             int pidx = 0;
             for (int i = 0; i < bset.Backups.Count; i++)
             {
-                if (bset.Backups[i].Item1.SequenceEqual(match.Item2))
+                if (bset.Backups[i].Item1.SequenceEqual(match.Value.singlematchhash))
                 {
                     pidx = i;
                     break;
@@ -219,7 +219,7 @@ namespace BackupCore
             int bidx = pidx + offset;
             if (bidx >= 0 && bidx < bset.Backups.Count)
             {
-                return new Tuple<string, BackupRecord>(HashTools.ByteArrayToHexViaLookup32(bset.Backups[bidx].Item1).ToLower(), GetBackupRecord(bsname, bset.Backups[bidx].Item1));
+                return (HashTools.ByteArrayToHexViaLookup32(bset.Backups[bidx].Item1).ToLower(), GetBackupRecord(bsname, bset.Backups[bidx].Item1));
             }
             else
             {
@@ -238,7 +238,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="prefix"></param>
         /// <returns>Null if no matches, (true, null) for multiple matches, (false, hashstring) for exact match.</returns>
-        public Tuple<bool, byte[]> HashByPrefix(string bsname, string prefix)
+        public (bool multiplematches, byte[] singlematchhash)? HashByPrefix(string bsname, string prefix)
         {
             var bset = LoadBackupSet(bsname);
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
@@ -252,17 +252,17 @@ namespace BackupCore
             }
             else if (matches.Count > 1)
             {
-                return new Tuple<bool, byte[]>(true, null);
+                return (true, null);
             }
             else
             {
-                return new Tuple<bool, byte[]>(false, HashTools.HexStringToByteArray(matches[0]));
+                return (false, HashTools.HexStringToByteArray(matches[0]));
             }
         }
 
         /// <summary>
         /// Attempts to load a BackupSet from a file.
-        /// If loading fails an error is thrown.
+        /// If loading fails creates a new backupset.
         /// </summary>
         /// <param name="backuplistfile"></param>
         /// <param name="blobs"></param>
@@ -270,12 +270,19 @@ namespace BackupCore
         public BackupSet LoadBackupSet(string bsname)
         {
             var backuplistfile = Path.Combine(DiskStorePath, bsname);
-            using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
+            try
             {
-                using (BinaryReader reader = new BinaryReader(fs))
+                using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
                 {
-                    return BackupSet.deserialize(reader.ReadBytes((int)fs.Length));
+                    using (BinaryReader reader = new BinaryReader(fs))
+                    {
+                        return BackupSet.deserialize(reader.ReadBytes((int)fs.Length));
+                    }
                 }
+            }
+            catch
+            {
+                return new BackupSet();
             }
         }
 

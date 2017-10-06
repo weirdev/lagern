@@ -212,12 +212,12 @@ namespace BackupCore
         /// </summary>
         /// <param name="blobs"></param>
         /// <returns></returns>
-        public byte[] Store(BlobStore blobs)
+        public byte[] Store(BlobStore blobs, string backupset)
         {
             List<byte[]> dirhashes = new List<byte[]>();
             foreach (MetadataNode dir in Directories.Values)
             {
-                dirhashes.Add(dir.Store(blobs));
+                dirhashes.Add(dir.Store(blobs, backupset));
             }
             Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
             // -"-v1"
@@ -233,7 +233,7 @@ namespace BackupCore
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             
-            return blobs.StoreDataSync(BinaryEncoding.dict_encode(mtdata), BlobLocation.BlobTypes.MetadataNode);
+            return blobs.StoreDataSync(backupset, BinaryEncoding.dict_encode(mtdata), BlobLocation.BlobTypes.MetadataNode);
         }
 
         public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)
