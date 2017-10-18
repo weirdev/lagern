@@ -15,12 +15,29 @@ namespace BackupConsole
         
         public static void Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "loop")
+            {
+                while (true)
+                {
+                    Console.Write("lagern> ");
+                    string[] largs = ReadArgs();
+                    ParseArgs(largs, true);
+                }
+            }
+            else
+            {
+                ParseArgs(args, false);
+            }
+        }
+
+        private static void ParseArgs(string[] args, bool loop)
+        {
             // This overall try catch looks ugly, but helps crashes seem to occur gracefully to the user
             try
             {
-                Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
+                var p = Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
                     StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions,
-                    BrowseOptions, TransferOptions, SyncCacheOptions>(args)
+                    BrowseOptions, TransferOptions, SyncCacheOptions, ExitOptions>(args)
                   .WithParsed<ShowOptions>(opts => ShowSettings(opts))
                   .WithParsed<SetOptions>(opts => SetSetting(opts))
                   .WithParsed<ClearOptions>(opts => ClearSetting(opts))
@@ -32,9 +49,17 @@ namespace BackupConsole
                   .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
                   .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
                   .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
+                if (loop)
+                {
+                    p.WithParsed<ExitOptions>(opts => Exit());
+                }
             }
             catch { }
         }
+
+
+        [Verb("exit", HelpText = "Exit the command loop")]
+        public class ExitOptions { }
 
         [Verb("show", HelpText = "Show lagern settings")]
         class ShowOptions
@@ -92,7 +117,7 @@ namespace BackupConsole
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
             public string BSName { get; set; }
 
-            [Value(0, Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
+            [Option('b', "backup", Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
             public string BackupHash { get; set; }
         }
 
@@ -275,7 +300,8 @@ namespace BackupConsole
                 bcore = GetCore();
             }
             string bsname = GetBackupSetName(opts.BSName);
-            var backups = bcore.GetBackups(bsname).ToArray();
+            (var backupsenum, bool cache) = bcore.GetBackups(bsname);
+            var backups = backupsenum.ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
             TablePrinter table = new TablePrinter();
@@ -284,15 +310,15 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var sizes = bcore.GetBackupSizes(backups[i].Item1);
-                    string message = backups[i].Item3;
+                    var sizes = bcore.GetBackupSizes(backups[i].backuphash);
+                    string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
                     {
                         mlength = message.Length;
                     }
-                    table.AddBodyRow(new string[] {backups[i].Item1.Substring(0, 7),
-                        backups[i].Item2.ToLocalTime().ToString(), Utilities.BytesFormatter(sizes.allreferencesizes),
+                    table.AddBodyRow(new string[] {backups[i].backuphash.Substring(0, 7),
+                        backups[i].backuptime.ToLocalTime().ToString(), Utilities.BytesFormatter(sizes.allreferencesizes),
                         Utilities.BytesFormatter(sizes.uniquereferencesizes), message.Substring(0, mlength) });
                 }
             }
@@ -301,17 +327,17 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    string message = backups[i].Item3;
+                    string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
                     {
                         mlength = message.Length;
                     }
-                    table.AddBodyRow(new string[] { backups[i].Item1.Substring(0, 7),
-                        backups[i].Item2.ToLocalTime().ToString(), message.Substring(0, mlength) });
+                    table.AddBodyRow(new string[] { backups[i].backuphash.Substring(0, 7),
+                        backups[i].backuptime.ToLocalTime().ToString(), message.Substring(0, mlength) });
                 }
             }
-            if (bcore.DefaultBlobs.IsCache)
+            if (cache)
             {
                 Console.WriteLine("(cache)");
             }
@@ -484,6 +510,8 @@ namespace BackupConsole
             return null;
         }
 
+        public static void Exit() => Environment.Exit(0);
+
         private static Dictionary<string, string> ReadSettings()
         {
             try
@@ -526,6 +554,41 @@ namespace BackupConsole
                     }
                 }
             }
+        }
+
+        public static string[] ReadArgs()
+        {
+            string command = Console.ReadLine();
+            if (command != "")
+            {
+                return SplitArguments(command);
+            }
+            return new string[0];
+        }
+
+        /// <summary>
+        /// Splits a command string, respecting args enclosed in double quotes
+        /// </summary>
+        /// <param name="commandLine"></param>
+        /// <returns></returns>
+        public static string[] SplitArguments(string commandLine)
+        {
+            char[] parmChars = commandLine.ToCharArray();
+            bool inQuote = false;
+            for (int index = 0; index < parmChars.Length; index++)
+            {
+                if (parmChars[index] == '"')
+                    inQuote = !inQuote;
+                if (!inQuote && parmChars[index] == ' ')
+                    parmChars[index] = '\n';
+            }
+            string split = new string(parmChars);
+            while (split.Contains("\n\n"))
+            {
+                split = split.Replace("\n\n", "\n");
+            }
+            split = split.Replace("\"", "");
+            return split.Split('\n');
         }
     }
 }

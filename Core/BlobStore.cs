@@ -16,8 +16,7 @@ namespace BackupCore
     /// </summary>
     public class BlobStore
     {
-        // TODO: Consider some inheritance relationship between this class and BPlusTree
-        public BPlusTree<BlobLocation> TreeIndexStore { get; private set; }
+        private BPlusTree<BlobLocation> TreeIndexStore { get; set; }
 
         public string StoreFilePath { get; set; }
 
@@ -26,19 +25,16 @@ namespace BackupCore
         // all blobs in single directory
         public string BlobSaveDirectory { get; set; }
 
-        public bool IsCache { get; set; }
-
-        public BlobStore(string indexpath, string blobsavedir, bool iscache)
+        public BlobStore(string indexpath, string blobsavedir)
         {
             StoreFilePath = indexpath;
             BlobSaveDirectory = blobsavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
-            IsCache = iscache;
         }
 
         public byte[] StoreDataSync(string backupset, byte[] inputdata, BlobLocation.BlobTypes type)
         {
-            return StoreDataSync(backupset, new MemoryStream(inputdata), type);
+            return StoreData(backupset, new MemoryStream(inputdata), type);
         }
 
         /// <summary>
@@ -46,7 +42,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <returns>A list of hashes representing the file contents.</returns>
-        public byte[] StoreDataSync(string backupset, Stream readerbuffer, BlobLocation.BlobTypes type)
+        public byte[] StoreData(string backupset, Stream readerbuffer, BlobLocation.BlobTypes type)
         {
             BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
@@ -99,6 +95,19 @@ namespace BackupCore
             else // file is single blob
             {
                 return LoadBlob(blobbl);
+            }
+        }
+
+
+        public void CacheBlobList(string backupsetname, BlobStore cacheblobs)
+        {
+            string bloblistcachebsname = backupsetname + Core.BlobListCacheSuffix;
+            cacheblobs.RemoveAllBackupSetReferences(bloblistcachebsname);
+            foreach (KeyValuePair<byte[], BlobLocation> hashblob in GetAllHashesAndBlobLocations(backupsetname))
+            {
+                var bloc = new BlobLocation(hashblob.Value.BlobType, hashblob.Value.IsMultiBlobReference, "", 0, hashblob.Value.ByteLength);
+                bloc.BSetReferenceCounts[bloblistcachebsname] = 1;
+                cacheblobs.AddBlob(bloblistcachebsname, new HashBlobPair(hashblob.Key, null), hashblob.Value.BlobType, false, true);
             }
         }
 
@@ -155,33 +164,33 @@ namespace BackupCore
                 throw new Exception("Negative reference count in blobstore");
             }
 
-            if (blocation.TotalReferenceCount == 0)
+            if (blocation.TotalNonShallowReferenceCount == 0)
             {
-                if (!IsCache)
+                try
                 {
-                    try
-                    {
-                        File.Delete(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
-                    }
-                    catch (Exception)
-                    {
-                        throw new Exception("Error deleting unreferenced file.");
-                    }
+                    File.Delete(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
                 }
-                TreeIndexStore.RemoveKey(blobhash);
+                catch (Exception)
+                {
+                    throw new Exception("Error deleting unreferenced file.");
+                }
+                if (blocation.TotalReferenceCount == 0)
+                {
+                    TreeIndexStore.RemoveKey(blobhash);
+                }
             }
         }
 
-        public void TransferBackup(BlobStore dst, string backupset, byte[] bblobhash, bool includefiles)
+        public void TransferBackup(BlobStore dst, string dstbackupset, byte[] bblobhash, bool includefiles)
         {
-            TransferBlobAndReferences(dst, backupset, bblobhash, includefiles);
+            TransferBlobAndReferences(dst, dstbackupset, bblobhash, includefiles);
         }
 
-        private void TransferBlobAndReferences(BlobStore dst, string backupset, byte[] blobhash, bool includefiles)
+        private void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, bool includefiles)
         {
-            if (!TransferBlobNoReferences(dst, backupset, blobhash, includefiles))
+            if (!TransferBlobNoReferences(dst, dstbackupset, blobhash, includefiles))
             {
-                TransferFromBlobReferenceIterator(dst, backupset, GetAllBlobReferences(blobhash, includefiles, false), includefiles);
+                TransferFromBlobReferenceIterator(dst, dstbackupset, GetAllBlobReferences(blobhash, includefiles, false), includefiles);
             }
         }
 
@@ -214,17 +223,17 @@ namespace BackupCore
         /// <param name="dst"></param>
         /// <param name="blobhash"></param>
         /// <returns>True Blob exists in destination</returns>
-        private bool TransferBlobNoReferences(BlobStore dst, string backupset, byte[] blobhash, bool includefiles)
+        private bool TransferBlobNoReferences(BlobStore dst, string dstbackupset, byte[] blobhash, bool includefiles)
         {
             bool existsindst = dst.ContainsHash(blobhash);
             if (existsindst)
             {
-                dst.IncrementReferenceCount(backupset, blobhash, 1, includefiles);
+                dst.IncrementReferenceCount(dstbackupset, blobhash, 1, includefiles);
             }
             else
             {
                 BlobLocation bloc = GetBlobLocation(blobhash);
-                dst.AddBlob(backupset, new HashBlobPair(blobhash, LoadBlob(bloc)), bloc.BlobType);
+                dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc)), bloc.BlobType);
             }
             return existsindst;
         }
@@ -238,13 +247,16 @@ namespace BackupCore
         /// Returns the existing location if we already have the hash stored. Null if we used
         /// the parameter blocation and need to save the corresponding blob data.
         /// </returns>
-        private BlobLocation AddHash(byte[] hash, BlobLocation blocation)
+        private (BlobLocation existinglocation, bool datastored)? AddHash(byte[] hash, BlobLocation blocation)
         {
             // Adds a hash and Blob Location to the BlockHashStore
             BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
-            return existingblocation;
+            if (existingblocation == null)
+            {
+                return null;
+            }            
+            return (existingblocation, existingblocation.TotalNonShallowReferenceCount > 0);
         }
-
         /// <summary>
         /// Add list of blobs to blobstore. Automatically creates a reference blob (hashlist) if blobs.count > 1
         /// </summary>
@@ -280,32 +292,69 @@ namespace BackupCore
             return AddBlob(backupset, blob, type, false);
         }
 
-        private BlobLocation AddBlob(string backupset, HashBlobPair blob, BlobLocation.BlobTypes type, bool isMultiblobReference)
+        private BlobLocation AddBlob(string backupset, HashBlobPair blob, BlobLocation.BlobTypes type, bool isMultiblobReference, bool shallow=false)
         {
             string relpath = HashTools.ByteArrayToHexViaLookup32(blob.Hash);
 
             // We navigate down 
 
             // Where we will put the blob data if we dont already have it stored
-            BlobLocation posblocation = new BlobLocation(type, isMultiblobReference, relpath, 0, blob.Block.Length);
+            BlobLocation posblocation;
+            if (shallow)
+            {
+                posblocation = new BlobLocation(type, isMultiblobReference, relpath, 0, 0);
+            }
+            else
+            {
+                posblocation = new BlobLocation(type, isMultiblobReference, relpath, 0, blob.Block.Length);
+            }
+             
 
             // Where the data is already stored if it exists
-            BlobLocation existingbloc;
+            (BlobLocation bloc, bool datastored)? existingblocstored;
             lock (this)
             {
                 // Have we already stored this?
-                existingbloc = AddHash(blob.Hash, posblocation);
+                existingblocstored = AddHash(blob.Hash, posblocation);
             }
-            if (existingbloc == null)
+            if (existingblocstored == null)
             {
-                WriteBlob(posblocation, blob.Block);
+                if (!shallow)
+                {
+                    WriteBlob(posblocation, blob.Block);
+                }
                 IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
                 return posblocation;
             }
             else
             {
+                (BlobLocation existingbloc, bool datastored) = existingblocstored.Value;
+                // Is the data not already stored in the blobstore (are all references shallow thus far)?
+                if (!datastored)
+                {
+                    // Data is not already stored
+                    // If we are saving to a cache and the bloblist cache indicates the destination has the data
+                    // Then dont store, Else save
+                    if (!(backupset.EndsWith(Core.CacheSuffix) 
+                            && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0, 
+                                backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
+                    {
+                        WriteBlob(existingbloc, blob.Block);
+                    }
+                }
                 IncrementReferenceCountNoRecurse(backupset, existingbloc, blob.Hash, 1);
                 return existingbloc;
+            }
+        }
+
+        public void RemoveAllBackupSetReferences(string bsname)
+        {
+            foreach (KeyValuePair<byte[], BlobLocation> hashblob in TreeIndexStore)
+            {
+                if (hashblob.Value.BSetReferenceCounts.ContainsKey(bsname))
+                {
+                    IncrementReferenceCountNoRecurse(bsname, hashblob.Key, -hashblob.Value.BSetReferenceCounts[bsname]);
+                }
             }
         }
 
@@ -529,6 +578,17 @@ namespace BackupCore
             }
         }
 
+        private IEnumerable<KeyValuePair<byte[], BlobLocation>> GetAllHashesAndBlobLocations(string bsname)
+        {
+            foreach (KeyValuePair<byte[], BlobLocation> hashblob in TreeIndexStore)
+            {
+                if (hashblob.Value.BSetReferenceCounts.ContainsKey(bsname))
+                {
+                    yield return hashblob;
+                }
+            }
+        }
+
         /// <summary>
         /// Attempts to save the BlobStore to disk.
         /// If saving fails an error is thrown.
@@ -579,8 +639,10 @@ namespace BackupCore
             // HashBLocationPairs = enum_encode(List<byte[]> [hash,... & backuplocation.serialize(),...])
             // -"-v2"
             // IsCache = BitConverter.GetBytes(bool)
+            // -"-v3"
+            // Removed IsCache
+
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
-            bptdata.Add("IsCache-v2", BitConverter.GetBytes(IsCache));
 
             List<byte[]> binkeyvals = new List<byte[]>();
             foreach (KeyValuePair<byte[], BlobLocation> kvp in TreeIndexStore)
@@ -602,17 +664,8 @@ namespace BackupCore
 
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
-            bool iscache;
-            if (savedobjects.ContainsKey("IsCache-v2"))
-            {
-                iscache = BitConverter.ToBoolean(savedobjects["IsCache-v2"], 0);
-            }
-            else
-            {
-                iscache = false;
-            }
 
-            BlobStore bs = new BlobStore(indexpath, blobsavedir, iscache);
+            BlobStore bs = new BlobStore(indexpath, blobsavedir);
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];

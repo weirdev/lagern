@@ -10,8 +10,6 @@ namespace BackupConsole
 {
     class BackupBrowser
     {
-        private bool continueloop;
-
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
         
@@ -49,10 +47,7 @@ namespace BackupConsole
 
         [Verb("ls", HelpText = "List the contents of a directory")]
         class LSOptions { }
-
-        [Verb("exit", HelpText = "Exit the command loop")]
-        class ExitOptions { }
-
+        
         [Verb("cb", HelpText = "Change the backup being browsed")]
         class CBOptions
         {
@@ -65,59 +60,24 @@ namespace BackupConsole
 
         public void CommandLoop()
         {
-            continueloop = true;
-            while (continueloop)
+            while (true)
             {
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
                 string cachewarning = "";
-                if (BCore.DefaultBlobs.IsCache)
+                if (!BCore.DestinationAvailable)
                 {
                     cachewarning = "(cache)";
                 }
                 Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
-                string command = Console.ReadLine();
-                string[] args;
-                if (command != "")
-                {
-                    args = SplitArguments(command);
-                }
-                else
-                {
-                    args = new string[0];
-                }
-                Parser.Default.ParseArguments<CDOptions, LSOptions, ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
+                string[] args = Program.ReadArgs();
+                Parser.Default.ParseArguments<CDOptions, LSOptions, Program.ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
                     .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
                     .WithParsed<LSOptions>(opts => ListDirectory())
-                    .WithParsed<ExitOptions>(opts => Exit())
+                    .WithParsed<Program.ExitOptions>(opts => Program.Exit())
                     .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
                     .WithParsed<CBOptions>(opts => ChangeBackup(opts))
                     .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupStoreName, BCore));
             }
-        }
-
-        /// <summary>
-        /// Splits a command string, respecting args enclosed in double quotes
-        /// </summary>
-        /// <param name="commandLine"></param>
-        /// <returns></returns>
-        static string[] SplitArguments(string commandLine)
-        {
-            char[] parmChars = commandLine.ToCharArray();
-            bool inQuote = false;
-            for (int index = 0; index < parmChars.Length; index++)
-            {
-                if (parmChars[index] == '"')
-                    inQuote = !inQuote;
-                if (!inQuote && parmChars[index] == ' ')
-                    parmChars[index] = '\n';
-            }
-            string split = new string(parmChars);
-            while (split.Contains("\n\n"))
-            {
-                split = split.Replace("\n\n", "\n");
-            }
-            split = split.Replace("\"", "");
-            return split.Split('\n');
         }
 
         private  string GetBUDestinationDir()
@@ -203,11 +163,6 @@ namespace BackupConsole
                 CurrentNode = BackupTree;
             }
             Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
-        }
-
-        private void Exit()
-        {
-            Environment.Exit(0);
         }
     }
 }

@@ -12,7 +12,6 @@ namespace BackupCore
 {
     public class BPlusTree<T> : IEnumerable<KeyValuePair<byte[], T>> where T : class
     {
-
         private BPlusTreeNode<T> Root { get; set; }
 
         // Head of linked list allowing for efficient in order traversal of leaf nodes
@@ -43,7 +42,6 @@ namespace BackupCore
         {
             // Traverse down the tree
             BPlusTreeNode<T> node = FindLeafNode(hash);
-
             T dosave = AddKeyToNode(node, hash, blocation);
             return dosave;
         }

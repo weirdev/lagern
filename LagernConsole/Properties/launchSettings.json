@@ -2,8 +2,8 @@
   "profiles": {
     "LagernConsole": {
       "commandName": "Project",
-      "commandLineArgs": "browse -n test",
-      "workingDirectory": "C:\\Users\\Wesley\\Desktop\\test\\dst"
+      "commandLineArgs": "loop",
+      "workingDirectory": "C:\\Users\\Wesley\\Desktop\\test\\src"
     }
   }
 }

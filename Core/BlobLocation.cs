@@ -27,7 +27,9 @@ namespace BackupCore
         /// </summary>
         public Dictionary<string, int> BSetReferenceCounts { get; set; }
 
-        public int TotalReferenceCount { get { return BSetReferenceCounts.Values.Sum(); } }
+        public int TotalReferenceCount => BSetReferenceCounts.Values.Sum();
+
+        public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.EndsWith(Core.ShallowSuffix)).Select(kvp => kvp.Value).Sum();
 
         public BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen) : this(blobtype, ismultiblockref, relpath, bytepos, bytelen, new Dictionary<string, int>()) { }
 

@@ -82,6 +82,13 @@ namespace BackupCore
         /// </summary>
         private static readonly string BlobDirName = "blobdata";
 
+
+        public static readonly string CacheSuffix = "~cache";
+        
+        public static readonly string ShallowSuffix = "~shallow";
+
+        public static readonly string BlobListCacheSuffix = "~bloblistcache" + ShallowSuffix;
+
         /// <summary>
         /// The BlobStore in which data will be stored for this instance of Core.
         /// If available, represents BlobStore in the regular destination. Otherwise it is the cache BlobStore.
@@ -135,20 +142,30 @@ namespace BackupCore
                 (DefaultBlobs, DefaultBackups) = LoadIndex(BackupBlobDataDir, BackupBlobIndexFile, BackupStoresDir, false, continueorkill);
                 DestinationAvailable = true;
             }
-            catch (Exception e)
+            catch
             {
                 // dst not available
                 // error if no cache specified
                 DestinationAvailable = false;
-                // Attempt to initialize a Core instance to backup in cache
-                // If this fails we allow errors to bubble up
-                CachePath = cache ?? throw e;
+            }
+            // No try/catch because chache should always be available if one is specified
+            if (cache != null)
+            {
+                // Initialize cache
                 (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = PrepBackupDstPath(cache);
                 (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoresDir, true, continueorkill);
-                if (!DestinationAvailable)
+            }
+            // If no destination, use cache as default
+            if (!DestinationAvailable)
+            {
+                if (cache != null)
                 {
                     DefaultBackups = CacheBackups;
                     DefaultBlobs = CacheBlobs;
+                }
+                else
+                {
+                    throw new Exception("Cannot initialize cache or dst");
                 }
             }
         }
@@ -177,12 +194,12 @@ namespace BackupCore
                 {
                     continueorkill?.Invoke("Failed to read blob index. Continuing may " +
                         "result in block index being overwritten and old blocks being lost.");
-                    blobs = new BlobStore(blobindexfile, blobdatadir, iscahce);
+                    blobs = new BlobStore(blobindexfile, blobdatadir);
                 }
             }
             else // Safe to write a new file since one not already there
             {
-                blobs = new BlobStore(blobindexfile, blobdatadir, iscahce);
+                blobs = new BlobStore(blobindexfile, blobdatadir);
             }
 
             BackupStore backups = new BackupStore(backupstoresdir, blobs);
@@ -226,6 +243,11 @@ namespace BackupCore
         public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
             bool usetrackclasses=true, List <Tuple<int, string>> trackpatterns = null, string prev_backup_hash_prefix = null)
         {
+            if (!DestinationAvailable)
+            {
+                backupsetname = backupsetname + CacheSuffix;
+            }
+
             MetadataNode deltatree = null;
 
             if (usetrackclasses)
@@ -325,8 +347,10 @@ namespace BackupCore
         private MetadataNode GetDeltaMetadataTree(string backupsetname, List<Tuple<int, string>> trackpatterns = null,
             MetadataNode previousmtree=null) // TODO: Add detailed information about nature of differences with prev backup
         {
-            // Save cache to destination
-            SyncCache(backupsetname, true);
+            if (!DestinationAvailable)
+            {
+                backupsetname = backupsetname + CacheSuffix;
+            }
 
             MetadataNode deltamtree = previousmtree;
             Queue<(string path, MetadataNode node)> deltamnodequeue = new Queue<(string path, MetadataNode node)>();
@@ -542,6 +566,7 @@ namespace BackupCore
                     }
                 }
 
+                // Handle directories
                 List<string> fssubdirs;
                 try
                 {
@@ -574,7 +599,10 @@ namespace BackupCore
                     if (deltasubdirs[deltaidx] == fssubdirs[fsidx]) // Names match
                     {
                         string dirname = fssubdirs[fsidx];
-                        deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.Directories[dirname]));
+                        if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                        {
+                            deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.Directories[dirname]));
+                        }
                         deltaidx++;
                         fsidx++;
                     }
@@ -592,7 +620,10 @@ namespace BackupCore
                         {
                             Changes = (FileMetadata.FileStatus.New, null)
                         };
-                        deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.AddDirectory(dirmeta)));
+                        if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                        {
+                            deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.AddDirectory(dirmeta)));
+                        }
                         fsidx++;
                     }
                 }
@@ -610,7 +641,10 @@ namespace BackupCore
                         Changes = (FileMetadata.FileStatus.New, null)
                     };
                     MetadataNode newnode = deltanode.AddDirectory(dirmeta);
-                    deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), newnode));
+                    if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                    {
+                        deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), newnode));
+                    }
                 }
             }
             return deltamtree;
@@ -628,6 +662,11 @@ namespace BackupCore
         public void RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, bool usetrackclasses=true, 
             List<Tuple<int, string>> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
+            if (!DestinationAvailable)
+            {
+                backupsetname = backupsetname + CacheSuffix;
+            }
+
             MetadataNode deltatree = null;
 
             if (usetrackclasses)
@@ -773,7 +812,7 @@ namespace BackupCore
                     DefaultBackups.SyncCache(CacheBackups, backupsetname);
                     if (cleardata)
                     {
-                        CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings(backupsetname)));
+                        CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings(backupsetname + CacheSuffix)));
                     }
                 }
             }
@@ -789,6 +828,11 @@ namespace BackupCore
         /// <param name="backupindex"></param>
         public void RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, string backuphashprefix = null)
         {
+            if (!DestinationAvailable)
+            {
+                backupsetname = backupsetname + CacheSuffix;
+            }
+
             try
             {
                 MetadataNode mtree = MetadataNode.Load(DefaultBlobs, DefaultBackups.GetBackupRecord(backupsetname, backuphashprefix).MetadataTreeHash);
@@ -1027,7 +1071,7 @@ namespace BackupCore
                     relpath = relpath.Substring(1);
                 }
                 FileStream readerbuffer = File.OpenRead(Path.Combine(BackupPathSrc, relpath));
-                byte[] filehash = DefaultBlobs.StoreDataSync(backupset, readerbuffer, BlobLocation.BlobTypes.FileBlob);
+                byte[] filehash = DefaultBlobs.StoreData(backupset, readerbuffer, BlobLocation.BlobTypes.FileBlob);
                 fileMetadata.FileHash = filehash;
             }
             catch (Exception e)
@@ -1040,16 +1084,21 @@ namespace BackupCore
         /// Retrieves list of backups from a backupset.
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
-        public IEnumerable<Tuple<string, DateTime, string>> GetBackups(string backupsetname)
+        public (IEnumerable<(string backuphash, DateTime backuptime, string message)>, bool chache) GetBackups(string backupsetname)
         {// TODO: does this need to exist here
-            List<Tuple<string, DateTime, string>> backups = new List<Tuple<string, DateTime, string>>();
+            if (!DestinationAvailable)
+            {
+                backupsetname = backupsetname + CacheSuffix;
+            }
+
+            List<(string, DateTime, string)> backups = new List<(string, DateTime, string)>();
             foreach (var backup in DefaultBackups.LoadBackupSet(backupsetname).Backups)
             {
                 var br = DefaultBackups.GetBackupRecord(backupsetname, backup.Item1);
-                backups.Add(new Tuple<string, DateTime, string>(HashTools.ByteArrayToHexViaLookup32(backup.Item1).ToLower(),
+                backups.Add((HashTools.ByteArrayToHexViaLookup32(backup.Item1).ToLower(),
                     br.BackupTime, br.BackupMessage));
             }
-            return backups;
+            return (backups, !DestinationAvailable);
         }
 
         /// <summary>

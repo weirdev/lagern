@@ -20,7 +20,7 @@ namespace CoreTest
         
         public BlobStoreTest()
         {
-            BS = new BlobStore(null, null, false); // keep this entirely in memory
+            BS = new BlobStore(null, null); // keep this entirely in memory
         }
 
         private TestContext testContextInstance;

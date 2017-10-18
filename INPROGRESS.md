@@ -3,12 +3,30 @@ For now this will remain the home of the project backlog.
 
 ====
 
+Cachev2
+	build on blobstorev2
+	need to handle diferences between backing up different backupsets when cache and dsts exist from the same blobstore
+	Currently when saving blob data we check if hash exists in the blobstore to determine whether to write data to disk
+		Need to check if hash exists and has a nonshallow reference
 Code cleanup
 	TODO's
-Add status command
-	much like git status
-	would show differences and estimate size of a run
-	also show path to src/dst
+Add init command
+	much like git init
+	would specify destination and other common parameters
+		save in .backup
+	would create an empty .backuptrack file
+	Initializing core would no longer automatically create the dst directory structure
+Locking for destinations seperated from their caches
+	Prevent deleting (adding?) backups without cache
+		Cache may contain references in its backups to data no longer in destination
+	Browsing and restoring from destination without cache still allowed
+	Not true locking but display warnings
+		Require "force" parameter to be passed to continue
+	Only lock/warn once
+		After warned operation performed at dst
+			Cache may have bad references
+			Have some kind of safe way of attempting to integrate cache
+				Otherwise need to clear and reinitialize cache
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions
