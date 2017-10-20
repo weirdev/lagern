@@ -19,12 +19,12 @@ namespace CoreTest
         [TestMethod]
         public void TestCheckTrackFile()
         {
-            List<Tuple<int, string>> patterns = new List<Tuple<int, string>>
+            List<(int, string)> patterns = new List<(int, string)>
             {
-                new Tuple<int, string>(2, "*"),
-                new Tuple<int, string>(3, "*/cats/*"),
-                new Tuple<int, string>(0, "*.jpeg"),
-                new Tuple<int, string>(1, "*/dogs/*.jpeg")
+                (2, "*"),
+                (3, "*/cats/*"),
+                (0, "*.jpeg"),
+                (1, "*/dogs/*.jpeg")
             };
 
             string[] files = new string[]
@@ -50,13 +50,13 @@ namespace CoreTest
         [TestMethod]
         public void TestCheckTrackAnyDirectoryChild()
         {
-            List<Tuple<int, string>> patterns = new List<Tuple<int, string>>
+            List<(int, string)> patterns = new List<(int, string)>
             {
-                new Tuple<int, string>(2, "*"),
-                new Tuple<int, string>(1, "*/cats"),
-                new Tuple<int, string>(0, "*.jpeg"),
-                new Tuple<int, string>(3, "*/dogs/*.jpeg"),
-                new Tuple<int, string>(0, "/dogs*")
+                (2, "*"),
+                (1, "*/cats"),
+                (0, "*.jpeg"),
+                (3, "*/dogs/*.jpeg"),
+                (0, "/dogs*")
             };
 
             string[] directories = new string[]

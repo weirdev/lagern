@@ -3,19 +3,16 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Cachev2
-	build on blobstorev2
-	need to handle diferences between backing up different backupsets when cache and dsts exist from the same blobstore
-	Currently when saving blob data we check if hash exists in the blobstore to determine whether to write data to disk
-		Need to check if hash exists and has a nonshallow reference
-Code cleanup
-	TODO's
 Add init command
 	much like git init
 	would specify destination and other common parameters
 		save in .backup
 	would create an empty .backuptrack file
 	Initializing core would no longer automatically create the dst directory structure
+Code cleanup
+	TODO's
+Add more unit tests
+	deteting backups and dereferencing
 Locking for destinations seperated from their caches
 	Prevent deleting (adding?) backups without cache
 		Cache may contain references in its backups to data no longer in destination
@@ -39,15 +36,7 @@ Locking for destinations seperated from their caches
 	Special link support
 	Generic permissions support ie. Linux (POSIX)
 		Handle restoring to different OS/permissions scheme than saved to
-Support a cache
-	Warn when deleting backups from destination when the cache is not present
-		Cache depends on metadatatrees from previous backups for differential backups
-			especially last backup (default)
-	Warn when trying to sync cache but cache and destination aren't both available
-	Eventually implement blob-level cache?
-Add more unit tests
-	deteting backups and dereferencing
-Support deleting entire backup stores (at dest)
+Support deleting entire backup sets (at dest)
 Test support for large backup sets
 	Optimize B+ tree BlobStore
 		bulk loading of tree

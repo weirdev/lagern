@@ -37,7 +37,7 @@ namespace BackupCore
         /// <summary>
         /// The directory in BackupDstPath where BackupStores are saved.
         /// </summary>
-        public string BackupStoresDir { get; set; }
+        public string BackupStoreDir { get; set; }
 
         /// <summary>
         /// The file containing the mapping of hashes to blob data.
@@ -138,8 +138,8 @@ namespace BackupCore
             // Attempt to initialize a Core instance to backup to dst
             try
             {
-                (BackupIndexDir, BackupBlobDataDir, BackupStoresDir, BackupBlobIndexFile) = PrepBackupDstPath(dst);
-                (DefaultBlobs, DefaultBackups) = LoadIndex(BackupBlobDataDir, BackupBlobIndexFile, BackupStoresDir, false, continueorkill);
+                (BackupIndexDir, BackupBlobDataDir, BackupStoreDir, BackupBlobIndexFile) = GetDestinationPaths(dst);
+                (DefaultBlobs, DefaultBackups) = LoadIndex(BackupBlobDataDir, BackupBlobIndexFile, BackupStoreDir);
                 DestinationAvailable = true;
             }
             catch
@@ -152,8 +152,8 @@ namespace BackupCore
             if (cache != null)
             {
                 // Initialize cache
-                (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = PrepBackupDstPath(cache);
-                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoresDir, true, continueorkill);
+                (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = GetDestinationPaths(cache);
+                (CacheBlobs, CacheBackups) = LoadIndex(CacheBlobDataDir, CacheBlobIndexFile, CacheBackupStoresDir);
             }
             // If no destination, use cache as default
             if (!DestinationAvailable)
@@ -180,28 +180,9 @@ namespace BackupCore
         /// <param name="continueorkill"></param>
         /// <returns></returns>
         private static (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile, 
-            string backupstoresdir, bool iscahce=false, Action<string> continueorkill=null)
+            string backupstoresdir)
         {
-            BlobStore blobs;
-            // Create blob index and backup store
-            if (File.Exists(blobindexfile))
-            {
-                try
-                {
-                    blobs = BlobStore.LoadFromFile(blobindexfile, blobdatadir);
-                }
-                catch (Exception)
-                {
-                    continueorkill?.Invoke("Failed to read blob index. Continuing may " +
-                        "result in block index being overwritten and old blocks being lost.");
-                    blobs = new BlobStore(blobindexfile, blobdatadir);
-                }
-            }
-            else // Safe to write a new file since one not already there
-            {
-                blobs = new BlobStore(blobindexfile, blobdatadir);
-            }
-
+            BlobStore blobs = BlobStore.LoadFromFile(blobindexfile, blobdatadir);
             BackupStore backups = new BackupStore(backupstoresdir, blobs);
             return (blobs, backups);
         }
@@ -211,37 +192,62 @@ namespace BackupCore
         /// </summary>
         /// <param name="dstpath"></param>
         /// <returns></returns>
-        private static (string indexdir, string blobdatadir, string backupstoresdir, string blobindexfile) PrepBackupDstPath(string dstpath)
+        private static void PrepBackupDstPath(string dstpath)
         {
-            string id = Path.Combine(dstpath, IndexDirName);
-
+            (string id, string bsd, string bdd, _) = GetDestinationPaths(dstpath);
             // Make sure we have an index folder to write to later
             if (!Directory.Exists(id))
             {
                 Directory.CreateDirectory(id);
             }
-
-            string bsd = Path.Combine(id, BackupStoreDirName);
-
             // Make sure we have a backup list folder to write to later
             if (!Directory.Exists(bsd))
             {
                 Directory.CreateDirectory(bsd);
             }
-
-            string bdd = Path.Combine(dstpath, BlobDirName);
-
             if (!Directory.Exists(bdd))
             {
                 Directory.CreateDirectory(bdd);
             }
+        }
 
+        private static (string indexdir, string blobdatadir, string backupstoresdir, string blobindexfile) GetDestinationPaths(string dstpath)
+        {
+            string id = Path.Combine(dstpath, IndexDirName);
+            string bsd = Path.Combine(id, BackupStoreDirName);
+            string bdd = Path.Combine(dstpath, BlobDirName);
             string bif = Path.Combine(id, "hashindex");
             return (id, bdd, bsd, bif);
         }
 
+        public static void InitializeNewBackupDst(string bsname, string source, string destination, string cache=null)
+        {
+            // Create lagern directory structure at destination if it doesn't already exist
+            (string backupindexdir, string backupblobdatadir, string backupstoredir, string backupblobindexfile) = GetDestinationPaths(destination);
+            PrepBackupDstPath(destination);
+
+            if (File.Exists(Path.Combine(backupstoredir, bsname)))
+            {
+                throw new Exception("A backup set of the given name already exists at the destination");
+            }
+            BlobStore blobs;
+            if (!File.Exists(backupblobindexfile))
+            {
+                blobs = new BlobStore(backupblobindexfile, backupblobdatadir);
+                blobs.SaveToDisk();
+            }
+            var bstore = new BackupStore(backupstoredir, null);
+            bstore.SaveBackupSet(new BackupSet(), bsname);
+
+            // Recurse once to initialize cache
+            if (cache != null)
+            {
+                InitializeNewBackupDst(bsname + CacheSuffix, source, cache, null);
+            }
+        }
+
         public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
-            bool usetrackclasses=true, List <Tuple<int, string>> trackpatterns = null, string prev_backup_hash_prefix = null)
+            List<(int trackclass, string pattern)> trackpatterns = null, string prev_backup_hash_prefix = null)
         {
             if (!DestinationAvailable)
             {
@@ -249,18 +255,6 @@ namespace BackupCore
             }
 
             MetadataNode deltatree = null;
-
-            if (usetrackclasses)
-            {
-                try
-                {
-                    trackpatterns = GetTrackClasses();
-                }
-                catch (Exception)
-                {
-                    trackpatterns = null;
-                }
-            }
 
             if (differentialbackup)
             {
@@ -344,7 +338,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <returns>List of mod</returns>
-        private MetadataNode GetDeltaMetadataTree(string backupsetname, List<Tuple<int, string>> trackpatterns = null,
+        private MetadataNode GetDeltaMetadataTree(string backupsetname, List<(int trackclass, string pattern)> trackpatterns = null,
             MetadataNode previousmtree=null) // TODO: Add detailed information about nature of differences with prev backup
         {
             if (!DestinationAvailable)
@@ -659,8 +653,8 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, bool usetrackclasses=true, 
-            List<Tuple<int, string>> trackpatterns=null, string prev_backup_hash_prefix=null)
+        public void RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, 
+            List<(int trackclass, string pattern)> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
             if (!DestinationAvailable)
             {
@@ -668,18 +662,6 @@ namespace BackupCore
             }
 
             MetadataNode deltatree = null;
-
-            if (usetrackclasses)
-            {
-                try
-                {
-                    trackpatterns = GetTrackClasses();
-                }
-                catch (Exception)
-                {
-                    trackpatterns = null;
-                }
-            }
 
             if (differentialbackup)
             {
@@ -939,14 +921,14 @@ namespace BackupCore
         /// <param name="file"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static int FileTrackClass(string file, List<Tuple<int, string>> trackpatterns)
+        public static int FileTrackClass(string file, List<(int trackclass, string pattern)> trackpatterns)
         {
             int trackclass = 2;
-            foreach (var pattern in trackpatterns)
+            foreach (var trackpatter in trackpatterns)
             {
-                if (PatternMatchesPath(file, pattern.Item2))
+                if (PatternMatchesPath(file, trackpatter.pattern))
                 {
-                    trackclass = pattern.Item1;
+                    trackclass = trackpatter.trackclass;
                 }
             }
             return trackclass;
@@ -958,26 +940,26 @@ namespace BackupCore
         /// <param name="folder"></param>
         /// <param name="trackpatterns"></param>
         /// <returns></returns>
-        public static bool CheckTrackAnyDirectoryChild(string directory, List<Tuple<int, string>> trackpatterns)
+        public static bool CheckTrackAnyDirectoryChild(string directory, List<(int trackpattern, string pattern)> trackpatterns)
         {
             bool track = true;
-            foreach (var pattern in trackpatterns)
+            foreach (var trackpattern in trackpatterns)
             {
                 if (track)
                 {
-                    if (pattern.Item1 == 0)
+                    if (trackpattern.trackpattern == 0)
                     {
                         // Can only exclude if there is a trailing wildcard after 
                         // the rest of the pattern matches to this directory
-                        if (pattern.Item2[pattern.Item2.Length - 1] == '*')
+                        if (trackpattern.pattern[trackpattern.pattern.Length - 1] == '*')
                         {
-                            if (pattern.Item2.Length == 1) // just "*"
+                            if (trackpattern.pattern.Length == 1) // just "*"
                             {
                                 track = false;
                             }
-                            else if (pattern.Item2.Substring(pattern.Item2.Length - 2) == "/*") // trailing wildcard must come immediately after a slash /*
+                            else if (trackpattern.pattern.Substring(trackpattern.pattern.Length - 2) == "/*") // trailing wildcard must come immediately after a slash /*
                             {
-                                if (PatternMatchesPath(directory, pattern.Item2.Substring(0, pattern.Item2.Length - 2))) 
+                                if (PatternMatchesPath(directory, trackpattern.pattern.Substring(0, trackpattern.pattern.Length - 2))) 
                                 {
                                     track = false;
                                 }
@@ -987,16 +969,16 @@ namespace BackupCore
                 }
                 else
                 {
-                    if (pattern.Item1 != 0)
+                    if (trackpattern.trackpattern != 0)
                     {
-                        int wildpos = pattern.Item2.IndexOf('*');
+                        int wildpos = trackpattern.pattern.IndexOf('*');
                         if (wildpos == 0)
                         {
                             track = true;
                         }
                         else if (wildpos > 0)
                         {
-                            string prefix = pattern.Item2.Substring(0, wildpos);
+                            string prefix = trackpattern.pattern.Substring(0, wildpos);
                             if (prefix.Length >= directory.Length)
                             {
                                 if (prefix.StartsWith(directory))
@@ -1019,10 +1001,10 @@ namespace BackupCore
             return track;
         }
 
-        private List<Tuple<int, string>> GetTrackClasses()
+        public List<(int trackclass, string pattern)> ReadTrackClassFile(string trackfilepath)
         {
-            List<Tuple<int, string>> trackclasses = new List<Tuple<int, string>>();
-            using (FileStream fs = new FileStream(Path.Combine(BackupPathSrc, ".backuptrack"), FileMode.Open))
+            List<(int, string)> trackclasses = new List<(int, string)>();
+            using (FileStream fs = new FileStream(trackfilepath, FileMode.Open))
             {
                 using (StreamReader reader = new StreamReader(fs))
                 {
@@ -1030,7 +1012,7 @@ namespace BackupCore
                     while ((line = reader.ReadLine()) != null)
                     {
                         string[] ctp = line.Split(' ');
-                        trackclasses.Add(new Tuple<int, string>(Convert.ToInt32(ctp[0]), ctp[1]));
+                        trackclasses.Add((Convert.ToInt32(ctp[0]), ctp[1]));
                     }
                 }
             }
@@ -1094,8 +1076,8 @@ namespace BackupCore
             List<(string, DateTime, string)> backups = new List<(string, DateTime, string)>();
             foreach (var backup in DefaultBackups.LoadBackupSet(backupsetname).Backups)
             {
-                var br = DefaultBackups.GetBackupRecord(backupsetname, backup.Item1);
-                backups.Add((HashTools.ByteArrayToHexViaLookup32(backup.Item1).ToLower(),
+                var br = DefaultBackups.GetBackupRecord(backupsetname, backup.hash);
+                backups.Add((HashTools.ByteArrayToHexViaLookup32(backup.hash).ToLower(),
                     br.BackupTime, br.BackupMessage));
             }
             return (backups, !DestinationAvailable);
@@ -1120,8 +1102,9 @@ namespace BackupCore
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
         public void TransferBackupSet(string backupsetname, string dst, bool includefiles, BlobStore dstblobs=null)
         {
-            (string dstbackupindexdir, string dstblobdatadir, string dstbackupstoresdir, _) = PrepBackupDstPath(dst);
-            File.Copy(Path.Combine(BackupStoresDir, backupsetname), Path.Combine(dstbackupstoresdir, backupsetname));
+            (string dstbackupindexdir, string dstblobdatadir, string dstbackupstoresdir, _) = GetDestinationPaths(dst);
+            PrepBackupDstPath(dst);
+            File.Copy(Path.Combine(BackupStoreDir, backupsetname), Path.Combine(dstbackupstoresdir, backupsetname));
 
             if (dstblobs == null)
             {
@@ -1130,7 +1113,7 @@ namespace BackupCore
             }
             foreach (var backup in DefaultBackups.LoadBackupSet(backupsetname).Backups)
             {
-                DefaultBlobs.TransferBackup(dstblobs, backupsetname, backup.Item1, includefiles & !backup.Item2);
+                DefaultBlobs.TransferBackup(dstblobs, backupsetname, backup.hash, includefiles & !backup.shallow);
             }
             dstblobs.SaveToDisk();
         }

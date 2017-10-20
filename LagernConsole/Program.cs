@@ -12,6 +12,9 @@ namespace BackupConsole
     {
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
+
+        public static readonly string LagernSettingsFilename = ".lagern";
+        public static readonly string TrackClassFilename = ".lagerntrack";
         
         public static void Main(string[] args)
         {
@@ -35,9 +38,10 @@ namespace BackupConsole
             // This overall try catch looks ugly, but helps crashes seem to occur gracefully to the user
             try
             {
-                var p = Parser.Default.ParseArguments<ShowOptions, SetOptions, ClearOptions,
+                var p = Parser.Default.ParseArguments<InitOptions, ShowOptions, SetOptions, ClearOptions,
                     StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions,
                     BrowseOptions, TransferOptions, SyncCacheOptions, ExitOptions>(args)
+                  .WithParsed<InitOptions>(opts => Initialize(opts))
                   .WithParsed<ShowOptions>(opts => ShowSettings(opts))
                   .WithParsed<SetOptions>(opts => SetSetting(opts))
                   .WithParsed<ClearOptions>(opts => ClearSetting(opts))
@@ -57,6 +61,19 @@ namespace BackupConsole
             catch { }
         }
 
+        [Verb("init", HelpText = "Setup this directory to be backed up into a new BackupSet")]
+        class InitOptions
+        {
+            [Option('n', "bsname", Required = true, HelpText = "The name of the new backup set")]
+            public string BSName { get; set; }
+
+            [Value(0, Required = true, HelpText = "The destination path in which to store the new backup set")]
+            public string Destination { get; set; }
+
+            [Option('c', "cache", Required = false, HelpText = "The path of the cache, should be on the same disk " +
+                "as the files being backed up")]
+            public string Cache { get; set; }
+        }
 
         [Verb("exit", HelpText = "Exit the command loop")]
         public class ExitOptions { }
@@ -65,14 +82,14 @@ namespace BackupConsole
         class ShowOptions
         {
             [Value(0, Required = false, HelpText = "The setting to show")]
-            public string Setting { get; set; }
+            public BackupSettings? Setting { get; set; }
         }
 
         [Verb("set", HelpText = "Set a lagern setting")]
         class SetOptions
         {
             [Value(0, Required = true, HelpText = "The setting to set")]
-            public string Setting { get; set; }
+            public BackupSettings Setting { get; set; }
 
             [Value(0, Required = true, HelpText = "The value to give setting")]
             public string Value { get; set; }
@@ -88,7 +105,7 @@ namespace BackupConsole
         [Verb("status", HelpText = "Show the working tree status")]
         class StatusOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to use for a differential backup")]
@@ -98,7 +115,7 @@ namespace BackupConsole
         [Verb("run", HelpText = "Run a backup.")]
         class RunOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Option('b', "backup", Required = false, SetName = "differential", HelpText = "The hash of the backup to use for a differential backup")]
@@ -114,7 +131,7 @@ namespace BackupConsole
         [Verb("delete", HelpText = "Delete a backup")]
         class DeleteOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Option('b', "backup", Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
@@ -124,7 +141,7 @@ namespace BackupConsole
         [Verb("restore", HelpText = "Restore a file or directory")]
         public class RestoreOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
@@ -150,14 +167,14 @@ namespace BackupConsole
         [Verb("list", HelpText = "List saved backups")]
         public class ListOptions : ListNoNameOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
         }
 
         [Verb("browse", HelpText = "Browse a previous backup")]
         public class BrowseOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
@@ -167,7 +184,7 @@ namespace BackupConsole
         [Verb("transfer", HelpText = "Transfer a backup store to another location")]
         public class TransferOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
 
             [Value(0, Required = true, HelpText = "The destination which to transfer the backup store")]
@@ -177,7 +194,7 @@ namespace BackupConsole
         [Verb("synccache", HelpText = "Sync the cache to the destination")]
         class SyncCacheOptions
         {
-            [Option('n', "bsname", Required = false, HelpText = "The name of the backup store")]
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string BSName { get; set; }
         }
 
@@ -192,11 +209,30 @@ namespace BackupConsole
                 errs => 1);
         }*/
 
+        private static void Initialize(InitOptions opts)
+        {
+            try
+            {
+                using (File.Create(Path.Combine(cwd, LagernSettingsFilename))) { }
+                WriteSetting(BackupSettings.dest, opts.Destination);
+                WriteSetting(BackupSettings.name, opts.BSName);
+                if (opts.Cache != null)
+                {
+                    WriteSetting(BackupSettings.cache, opts.Cache);
+                }
+                BackupCore.Core.InitializeNewBackupDst(opts.BSName, cwd, opts.Destination, opts.Cache);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+
         private static void ShowSettings(ShowOptions opts)
         {
             if (opts.Setting != null)
             {
-                var settingval = ReadSetting(opts.Setting);
+                var settingval = ReadSetting(opts.Setting.Value);
                 if (settingval != null)
                 {
                     Console.WriteLine(settingval);
@@ -228,7 +264,16 @@ namespace BackupConsole
                 string bsname = GetBackupSetName(opts.BSName);
                 TablePrinter table = new TablePrinter();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
-                foreach (var change in bcore.GetWTStatus(bsname, true, true, null, opts.BackupHash))
+                List<(int, string)> trackclasses;
+                try
+                {
+                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), LagernSettingsFilename));
+                }
+                catch
+                {
+                    trackclasses = null;
+                }
+                foreach (var change in bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash))
                 {
                     table.AddBodyRow(new string[] { change.path, change.change.ToString() });
                 }
@@ -246,7 +291,16 @@ namespace BackupConsole
             {
                 var bcore = GetCore();
                 string bsname = GetBackupSetName(opts.BSName);
-                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, true, null, opts.BackupHash);
+                List<(int, string)> trackclasses;
+                try
+                {
+                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFilename));
+                }
+                catch
+                {
+                    trackclasses = null;
+                }
+                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, opts.BackupHash);
             }
             catch (Exception e)
             {
@@ -362,7 +416,7 @@ namespace BackupConsole
         {
             if (bsname == null)
             {
-                bsname = ReadSetting("name");
+                bsname = ReadSetting(BackupSettings.name);
                 if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
@@ -375,8 +429,8 @@ namespace BackupConsole
 
         public static BackupCore.Core GetCore()
         {
-            string destination = ReadSetting("dest");
-            string cache = ReadSetting("cache");
+            string destination = ReadSetting(BackupSettings.dest);
+            string cache = ReadSetting(BackupSettings.cache);
             if (destination == null)
             {
                 destination = GetBUDestinationDir();
@@ -445,7 +499,7 @@ namespace BackupConsole
             }
         }
 
-        public static string ReadSetting(string key)
+        public static string ReadSetting(BackupSettings key)
         {
             var settings = ReadSettings();
             if (settings != null)
@@ -458,12 +512,12 @@ namespace BackupConsole
             return null;
         }
         
-        private static void WriteSetting(string key, string value)
+        private static void WriteSetting(BackupSettings key, string value)
         {
             var settings = ReadSettings();
             if (settings == null)
             {
-                settings = new Dictionary<string, string>();
+                settings = new Dictionary<BackupSettings, string>();
             }
             settings[key] = value;
             WriteSettings(settings);
@@ -474,10 +528,13 @@ namespace BackupConsole
             var settings = ReadSettings();
             if (settings != null)
             {
-                if (settings.ContainsKey(opts.Setting))
+                if (Enum.TryParse(opts.Setting, out BackupSettings setting))
                 {
-                    settings.Remove(opts.Setting);
-                    WriteSettings(settings);
+                    if (settings.ContainsKey(setting))
+                    {
+                        settings.Remove(setting);
+                        WriteSettings(settings);
+                    }
                 }
             }
         }
@@ -487,7 +544,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (File.Exists(Path.Combine(dir, ".backup")))
+                if (File.Exists(Path.Combine(dir, LagernSettingsFilename)))
                 {
                     return dir;
                 }
@@ -512,15 +569,15 @@ namespace BackupConsole
 
         public static void Exit() => Environment.Exit(0);
 
-        private static Dictionary<string, string> ReadSettings()
+        private static Dictionary<BackupSettings, string> ReadSettings()
         {
             try
             {
-                Dictionary<string, string> settings = new Dictionary<string, string>();
+                Dictionary<BackupSettings, string> settings = new Dictionary<BackupSettings, string>();
                 string src = GetBUSourceDir();
                 if (src != null)
                 {
-                    using (FileStream fs = new FileStream(Path.Combine(src, ".backup"), FileMode.Open))
+                    using (FileStream fs = new FileStream(Path.Combine(src, LagernSettingsFilename), FileMode.Open))
                     {
                         using (StreamReader reader = new StreamReader(fs))
                         {
@@ -528,7 +585,10 @@ namespace BackupConsole
                             while ((line = reader.ReadLine()) != null)
                             {
                                 string[] kv = line.Split(' ');
-                                settings[kv[0]] = kv[1];
+                                if (Enum.TryParse(kv[0], out BackupSettings key))
+                                {
+                                    settings[key] = kv[1];
+                                }
                             }
                         }
                     }
@@ -542,18 +602,25 @@ namespace BackupConsole
             }
         }
 
-        private static void WriteSettings(Dictionary<string, string> settings)
+        private static void WriteSettings(Dictionary<BackupSettings, string> settings)
         {
-            using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), ".backup"), FileMode.Create))
+            using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), LagernSettingsFilename), FileMode.Create))
             {
                 using (StreamWriter writer = new StreamWriter(fs))
                 {
                     foreach (var kv in settings)
                     {
-                        writer.WriteLine(kv.Key + " " + kv.Value);
+                        writer.WriteLine(kv.Key.ToString() + " " + kv.Value);
                     }
                 }
             }
+        }
+
+        public enum BackupSettings
+        {
+            dest,
+            cache,
+            name
         }
 
         public static string[] ReadArgs()
