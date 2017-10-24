@@ -18,18 +18,12 @@ namespace BackupCore
     {
         private BPlusTree<BlobLocation> TreeIndexStore { get; set; }
 
-        public string StoreFilePath { get; set; }
+        private IBlobStoreDependencies Dependencies { get; set; }
 
-        // NOTE: TransferBlobAndReferences will need to be updated if blob 
-        // addressing is changed to be no longer 1 blob per file and 
-        // all blobs in single directory
-        public string BlobSaveDirectory { get; set; }
-
-        public BlobStore(string indexpath, string blobsavedir)
+        public BlobStore(IBlobStoreDependencies dependencies)
         {
-            StoreFilePath = indexpath;
-            BlobSaveDirectory = blobsavedir;
             TreeIndexStore = new BPlusTree<BlobLocation>(100);
+            Dependencies = dependencies;
         }
 
         public byte[] StoreDataSync(string backupset, byte[] inputdata, BlobLocation.BlobTypes type)
@@ -120,11 +114,7 @@ namespace BackupCore
         {
             try
             {
-                FileStream blobstream = File.OpenRead(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
-                byte[] buffer = new byte[blobstream.Length];
-                blobstream.Read(buffer, blocation.BytePosition, blocation.ByteLength);
-                blobstream.Close();
-                return buffer;
+                return Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
             }
             catch (Exception)
             {
@@ -168,7 +158,7 @@ namespace BackupCore
             {
                 try
                 {
-                    File.Delete(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
+                    Dependencies.DeleteBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
                 }
                 catch (Exception)
                 {

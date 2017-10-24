@@ -10,14 +10,11 @@ namespace BackupCore
 {
     public class BackupStore
     {
-        public string DiskStorePath { get; set; }
+        private IBackupStoreDependencies Dependencies { get; set; }
 
-        private BlobStore Blobs { get; set; }
-
-        public BackupStore(string savepath, BlobStore blobs)
+        public BackupStore(string savepath, IBackupStoreDependencies dependencies)
         {
-            DiskStorePath = savepath;
-            Blobs = blobs;
+            Dependencies = dependencies;
         }
 
         public void SyncCache(BackupStore cache, string bsname)
@@ -28,8 +25,7 @@ namespace BackupCore
             BackupRecord dstbr = null;
 
             string cachebsname = bsname + Core.CacheSuffix;
-
-
+            
             var bset = LoadBackupSet(bsname);
             var chachebset = cache.LoadBackupSet(cachebsname);
             if (chachebset.Backups.Count > 0 && bset.Backups.Count > 0)
@@ -51,14 +47,14 @@ namespace BackupCore
                             if (chachebset.Backups[srcindex].shallow)
                             {
                                 // Remove shallow backups from cache not present in dst
-                                cache.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, -1, false);
+                                cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, -1, false);
                                 chachebset.Backups.RemoveAt(srcindex);
                             }
                             else
                             {
                                 // Add non shallow backups from cache not present in dst
                                 bset.Backups.Insert(dstindex, (chachebset.Backups[srcindex].hash, false));
-                                cache.Blobs.TransferBackup(Blobs, bsname, chachebset.Backups[srcindex].hash, true);
+                                cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, chachebset.Backups[srcindex].hash, true);
                                 dstindex += 1;
                                 // After insert and increment j still referes to the same backup (dstbr)
                                 srcindex += 1;
@@ -69,7 +65,7 @@ namespace BackupCore
                         {
                             // Add (as shallow) backups in dst not present in cache
                             chachebset.Backups.Insert(srcindex, (bset.Backups[dstindex].hash, true));
-                            Blobs.TransferBackup(cache.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
+                            Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
                             srcindex += 1;
                             dstindex += 1;
                             dstbr = null;
@@ -90,14 +86,14 @@ namespace BackupCore
                 if (chachebset.Backups[srcindex].shallow)
                 {
                     // Remove shallow backups from cache not present in dst
-                    cache.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, -1, false);
+                    cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, -1, false);
                     chachebset.Backups.RemoveAt(srcindex);
                 }
                 else
                 {
                     // Add non shallow backups from cache not present in dst
                     bset.Backups.Add((chachebset.Backups[srcindex].hash, false));
-                    cache.Blobs.TransferBackup(Blobs, bsname, chachebset.Backups[srcindex].hash, true);
+                    cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, chachebset.Backups[srcindex].hash, true);
                     dstindex += 1;
                     // After insert and increment j still referes to the same backup (dstbr)
                     srcindex += 1;
@@ -108,14 +104,14 @@ namespace BackupCore
             {
                 // Add (as shallow) backups in dst not present in cache
                 chachebset.Backups.Add((bset.Backups[dstindex].hash, true));
-                Blobs.TransferBackup(cache.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
+                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
                 srcindex += 1;
                 dstindex += 1;
                 dstbr = null;
             }
             cache.SaveBackupSet(chachebset, cachebsname);
             SaveBackupSet(bset, bsname);
-            Blobs.CacheBlobList(bsname, cache.Blobs);
+            Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
         }
 
 
@@ -125,7 +121,7 @@ namespace BackupCore
             foreach ((byte[] backupref, bool _) in bset.Backups)
             {
                 yield return HashTools.ByteArrayToHexViaLookup32(backupref);
-                foreach (byte[] reference in Blobs.GetAllBlobReferences(backupref, false))
+                foreach (byte[] reference in Dependencies.Blobs.GetAllBlobReferences(backupref, false))
                 {
                     yield return HashTools.ByteArrayToHexViaLookup32(reference);
                 }
@@ -137,7 +133,7 @@ namespace BackupCore
             var bset = LoadBackupSet(bsname);
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
             byte[] brbytes = newbackup.serialize();
-            byte[] backuphash = Blobs.StoreDataSync(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
+            byte[] backuphash = Dependencies.Blobs.StoreDataSync(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
             bset.Backups.Add((backuphash, shallow));
             SaveBackupSet(bset, bsname);
         }
@@ -161,7 +157,7 @@ namespace BackupCore
                     break;
                 }
             }
-            Blobs.IncrementReferenceCount(bsname, backuphash, -1, !bset.Backups[i].shallow);
+            Dependencies.Blobs.IncrementReferenceCount(bsname, backuphash, -1, !bset.Backups[i].shallow);
             bset.Backups.RemoveAt(i);
             SaveBackupSet(bset, bsname);
         }
@@ -196,7 +192,7 @@ namespace BackupCore
             {
                 return GetBackupRecord(bsname);
             }
-            return BackupRecord.deserialize(Blobs.RetrieveData(hash));
+            return BackupRecord.deserialize(Dependencies.Blobs.RetrieveData(hash));
         }
 
         public (string, BackupRecord) GetBackupHashAndRecord(string bsname, int offset = 0)
@@ -276,16 +272,9 @@ namespace BackupCore
         /// <returns>A previously stored BackupStore object</returns>
         public BackupSet LoadBackupSet(string bsname)
         {
-            var backuplistfile = Path.Combine(DiskStorePath, bsname);
             try
             {
-                using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
-                {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        return BackupSet.deserialize(reader.ReadBytes((int)fs.Length));
-                    }
-                }
+                return BackupSet.deserialize(Dependencies.LoadBackupSetData(bsname));
             }
             catch
             {
@@ -298,22 +287,15 @@ namespace BackupCore
         /// If saving fails an error is thrown.
         /// </summary>
         /// <param name="path"></param>
-        public void SaveBackupSet(BackupSet bset, string bsname, string path = null)
+        public void SaveBackupSet(BackupSet bset, string bsname, Action<string, byte[]> storebset=null)
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
-            if (path == null)
+            if (storebset == null)
             {
-                path = DiskStorePath;
+                storebset = Dependencies.StoreBackupSetData;
             }
-            path = Path.Combine(path, bsname);
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(bset.serialize());
-                }
-            }
+            storebset(bsname, bset.serialize());
         }
     }
 }
