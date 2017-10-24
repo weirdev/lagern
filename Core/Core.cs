@@ -792,6 +792,8 @@ namespace BackupCore
                 if (DestinationAvailable)
                 {
                     DefaultBackups.SyncCache(CacheBackups, backupsetname);
+                    // TODO: Dereference data blobs as the are transferred from cache to destination
+                    //      instead of deleting in bulk in the horrible manner below
                     if (cleardata)
                     {
                         CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings(backupsetname + CacheSuffix)));

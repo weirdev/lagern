@@ -194,6 +194,7 @@ namespace BackupCore
             }
         }
 
+        // TODO: This is horrible remove all references then delete
         public void ClearData(HashSet<string> exceptions)
         {
             foreach (FileInfo file in new DirectoryInfo(BlobSaveDirectory).GetFiles())
