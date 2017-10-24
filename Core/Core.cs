@@ -878,6 +878,10 @@ namespace BackupCore
             {
                 return true;
             }
+            if (pattern.EndsWith("/"))
+            {
+                pattern = pattern.Substring(0, pattern.Length - 1);
+            }
             int wildpos = pattern.IndexOf('*');
             if (wildpos >= 0)
             {
@@ -957,12 +961,9 @@ namespace BackupCore
                             {
                                 track = false;
                             }
-                            else if (trackpattern.pattern.Substring(trackpattern.pattern.Length - 2) == "/*") // trailing wildcard must come immediately after a slash /*
+                            else if (PatternMatchesPath(directory, trackpattern.pattern)) 
                             {
-                                if (PatternMatchesPath(directory, trackpattern.pattern.Substring(0, trackpattern.pattern.Length - 2))) 
-                                {
-                                    track = false;
-                                }
+                                track = false;
                             }
                         }
                     }

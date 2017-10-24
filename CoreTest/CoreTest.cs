@@ -72,7 +72,8 @@ namespace CoreTest
             bool[] correctoutput = new bool[] { true, true, true, false, true, false };
             for (int i = 0; i < directories.Length; i++)
             {
-                Assert.AreEqual(Core.CheckTrackAnyDirectoryChild(directories[i], patterns), correctoutput[i]);
+                var res = Core.CheckTrackAnyDirectoryChild(directories[i], patterns);
+                Assert.AreEqual(res, correctoutput[i]);
             }
         }
     }
