@@ -122,7 +122,7 @@ namespace BackupCore
             {
                 FileStream blobstream = File.OpenRead(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
                 byte[] buffer = new byte[blobstream.Length];
-                blobstream.Read(buffer, 0, blocation.ByteLength);
+                blobstream.Read(buffer, blocation.BytePosition, blocation.ByteLength);
                 blobstream.Close();
                 return buffer;
             }
