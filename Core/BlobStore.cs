@@ -171,9 +171,7 @@ namespace BackupCore
                     File.Delete(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
                 }
                 catch (Exception)
-                {
-                    throw new Exception("Error deleting unreferenced file.");
-                }
+                { }
                 if (blocation.TotalReferenceCount == 0)
                 {
                     TreeIndexStore.RemoveKey(blobhash);
@@ -192,19 +190,6 @@ namespace BackupCore
             {
                 TransferFromBlobReferenceIterator(dst, dstbackupset, GetAllBlobReferences(blobhash, includefiles, false), includefiles);
             }
-        }
-
-        // TODO: This is horrible remove all references then delete
-        public void ClearData(HashSet<string> exceptions)
-        {
-            foreach (FileInfo file in new DirectoryInfo(BlobSaveDirectory).GetFiles())
-            {
-                if (!exceptions.Contains(file.Name))
-                {
-                    file.Delete();
-                }
-            }
-
         }
 
         private void TransferFromBlobReferenceIterator(BlobStore dst, string backupset, IBlobReferenceIterator references, bool includefiles)
@@ -449,7 +434,8 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Chunks and saves data to blobstore. 
+        /// Chunks data to be added to the blobstore. Outputted HashBlobPairs
+        /// are added to hashblobqueue.
         /// Operates on stream input, so Filestreams can be used and 
         /// entire files need not be loaded into memory.
         /// If an error occurs (typically when reading from a stream

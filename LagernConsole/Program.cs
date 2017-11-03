@@ -404,7 +404,7 @@ namespace BackupConsole
             {
                 var bcore = GetCore();
                 string bsname = GetBackupSetName(opts.BSName);
-                bcore.SyncCache(bsname, true);
+                bcore.SyncCache(bsname);
             }
             catch (Exception e)
             {

@@ -28,8 +28,7 @@ namespace BackupCore
             BackupRecord dstbr = null;
 
             string cachebsname = bsname + Core.CacheSuffix;
-
-
+            
             var bset = LoadBackupSet(bsname);
             var chachebset = cache.LoadBackupSet(cachebsname);
             if (chachebset.Backups.Count > 0 && bset.Backups.Count > 0)
@@ -59,6 +58,14 @@ namespace BackupCore
                                 // Add non shallow backups from cache not present in dst
                                 bset.Backups.Insert(dstindex, (chachebset.Backups[srcindex].hash, false));
                                 cache.Blobs.TransferBackup(Blobs, bsname, chachebset.Backups[srcindex].hash, true);
+
+                                // After transfer, make the cache backup shallow
+                                // Since no clean way to only get file references and not "parent" references,
+                                // we delete the entire backup data from cache, then add it back shallow
+                                // TODO: Means to iterate through blobs not including files
+                                cache.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, -1, true);
+                                Blobs.TransferBackup(cache.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
+
                                 dstindex += 1;
                                 // After insert and increment j still referes to the same backup (dstbr)
                                 srcindex += 1;
