@@ -760,7 +760,7 @@ namespace BackupCore
 
             DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
 
-            SyncCache(backupsetname, false);
+            SyncCache(backupsetname);
             // Index save occurred during synccache
         }
 
@@ -785,17 +785,13 @@ namespace BackupCore
             }
         }
         
-        public void SyncCache(string backupsetname, bool cleardata)
+        public void SyncCache(string backupsetname)
         {
             if (CacheBackups != null)
             {
                 if (DestinationAvailable)
                 {
                     DefaultBackups.SyncCache(CacheBackups, backupsetname);
-                    if (cleardata)
-                    {
-                        CacheBlobs.ClearData(new HashSet<string>(CacheBackups.GetBackupsAndMetadataReferencesAsStrings(backupsetname + CacheSuffix)));
-                    }
                 }
             }
             SaveBlobIndices();
