@@ -233,7 +233,7 @@ namespace BackupCore
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             
-            return blobs.StoreDataSync(backupset, BinaryEncoding.dict_encode(mtdata), BlobLocation.BlobTypes.MetadataNode);
+            return blobs.StoreData(backupset, BinaryEncoding.dict_encode(mtdata), BlobLocation.BlobTypes.MetadataNode);
         }
 
         public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)

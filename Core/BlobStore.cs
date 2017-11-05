@@ -18,7 +18,7 @@ namespace BackupCore
     {
         private BPlusTree<BlobLocation> TreeIndexStore { get; set; }
 
-        private IBlobStoreDependencies Dependencies { get; set; }
+        IBlobStoreDependencies Dependencies { get; set; }
 
         public BlobStore(IBlobStoreDependencies dependencies)
         {
@@ -26,7 +26,7 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public byte[] StoreDataSync(string backupset, byte[] inputdata, BlobLocation.BlobTypes type)
+        public byte[] StoreData(string backupset, byte[] inputdata, BlobLocation.BlobTypes type)
         {
             return StoreData(backupset, new MemoryStream(inputdata), type);
         }
@@ -112,15 +112,7 @@ namespace BackupCore
         /// <returns></returns>
         private byte[] LoadBlob(BlobLocation blocation)
         {
-            try
-            {
-                return Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Failed to read blob");
-                throw;
-            }
+            return Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
         }
 
         public void IncrementReferenceCount(string backupsetname, byte[] blobhash, int amount, bool includefiles)
@@ -161,7 +153,9 @@ namespace BackupCore
                     Dependencies.DeleteBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
                 }
                 catch (Exception)
-                { }
+                {
+                    throw new Exception("Error deleting unreferenced file.");
+                }
                 if (blocation.TotalReferenceCount == 0)
                 {
                     TreeIndexStore.RemoveKey(blobhash);
@@ -347,22 +341,7 @@ namespace BackupCore
 
         private void WriteBlob(BlobLocation blocation, byte[] blob)
         {
-            string path = Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath);
-            try
-            {
-                using (FileStream writer = File.OpenWrite(path))
-                {
-                    writer.Seek(blocation.BytePosition, SeekOrigin.Begin);
-                    writer.Write(blob, 0, blob.Length);
-                    writer.Flush();
-                    writer.Close();
-                }
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Failed to write blob");
-                throw;
-            }
+            Dependencies.StoreBlob(blob, blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
         }
 
         public bool ContainsHash(byte[] hash)
@@ -393,15 +372,14 @@ namespace BackupCore
             }
             try
             {
-                FileStream blobhashstream = File.OpenRead(Path.Combine(BlobSaveDirectory, blocation.RelativeFilePath));
+                byte[] hashlistblob = LoadBlob(blocation);
                 List<byte[]> blobhashes = new List<byte[]>();
-                for (int i = 0; i < blobhashstream.Length / 20; i++)
+                for (int i = 0; i < hashlistblob.Length / 20; i++)
                 {
-                    byte[] buffer = new byte[20];
-                    blobhashstream.Read(buffer, 0, 20);
-                    blobhashes.Add(buffer);
+                    byte[] hash = new byte[20];
+                    Array.Copy(hashlistblob, i * 20, hash, 0, 20);
+                    blobhashes.Add(hash);
                 }
-                blobhashstream.Close();
                 return blobhashes;
             }
             catch (Exception)
@@ -424,8 +402,7 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Chunks data to be added to the blobstore. Outputted HashBlobPairs
-        /// are added to hashblobqueue.
+        /// Chunks and saves data to blobstore. 
         /// Operates on stream input, so Filestreams can be used and 
         /// entire files need not be loaded into memory.
         /// If an error occurs (typically when reading from a stream
@@ -566,48 +543,6 @@ namespace BackupCore
             }
         }
 
-        /// <summary>
-        /// Attempts to save the BlobStore to disk.
-        /// If saving fails an error is thrown.
-        /// </summary>
-        /// <param name="path"></param>
-        public void SaveToDisk(string path = null)
-        {
-            // NOTE: This overwrites the previous file every time.
-            // The list of hash keys stored in the serialized BlobStore
-            // is always sorted, so appending to that list would cause its
-            // own problems. Overwriting the cache may be the correct tradeoff.
-            if (path == null)
-            {
-                path = StoreFilePath;
-            }
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(this.serialize());
-                }
-            }
-        }
-
-        /// <summary>
-        /// Attempts to load a previously saved BlobStore object from a file.
-        /// If loading fails, an error is thrown.
-        /// </summary>
-        /// <param name="blobindexfile"></param>
-        /// <param name="backupdstpath"></param>
-        /// <returns></returns>
-        public static BlobStore LoadFromFile(string blobindexfile, string blobdatadir)
-        {
-            using (FileStream fs = new FileStream(blobindexfile, FileMode.Open, FileAccess.Read))
-            {
-                using (BinaryReader reader = new BinaryReader(fs))
-                {
-                    return BlobStore.deserialize(reader.ReadBytes((int)fs.Length), blobindexfile, blobdatadir);
-                }
-            }
-        }
-
         public byte[] serialize()
         {
             Dictionary<string, byte[]> bptdata = new Dictionary<string, byte[]>();
@@ -636,13 +571,13 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(bptdata);
         }
 
-        public static BlobStore deserialize(byte[] data, string indexpath, string blobsavedir)
+        public static BlobStore deserialize(byte[] data, IBlobStoreDependencies dependencies)
         {
 
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
 
-            BlobStore bs = new BlobStore(indexpath, blobsavedir);
+            BlobStore bs = new BlobStore(dependencies);
             foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
             {
                 byte[] keybytes = new byte[keysize];

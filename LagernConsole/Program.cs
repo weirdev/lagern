@@ -220,7 +220,8 @@ namespace BackupConsole
                 {
                     WriteSetting(BackupSettings.cache, opts.Cache);
                 }
-                BackupCore.Core.InitializeNewBackupDst(opts.BSName, cwd, opts.Destination, opts.Cache);
+                BackupCore.FSCoreDependencies coreDependencies = new BackupCore.FSCoreDependencies(cwd, opts.Destination, opts.Cache);
+                BackupCore.Core.InitializeNew(coreDependencies, opts.BSName);
             }
             catch (Exception e)
             {
@@ -438,7 +439,7 @@ namespace BackupConsole
                 {
                     try
                     {
-                        return new BackupCore.Core(null, destination, null, ContinueOrExitPrompt);
+                        return new BackupCore.Core(null, destination, null);
                     }
                     catch
                     {
@@ -456,7 +457,7 @@ namespace BackupConsole
             {
                 try
                 {
-                    return new BackupCore.Core(cwd, destination, cache, ContinueOrExitPrompt);
+                    return new BackupCore.Core(cwd, destination, cache);
                 }
                 catch
                 {
@@ -476,27 +477,8 @@ namespace BackupConsole
         {
             string backupsetname = GetBackupSetName(opts.BSName);
             var bcore = GetCore();
-            bcore.TransferBackupSet(backupsetname, opts.Destination, true);
-        }
-
-        public static void ContinueOrExitPrompt(string error)
-        {
-            Console.WriteLine(error);
-            Console.Write("Continue (y/n)? ");
-            while (true)
-            {
-                ConsoleKeyInfo k = Console.ReadKey();
-                if (k.KeyChar.ToString().ToLower() == "y")
-                {
-                    Console.WriteLine();
-                    return;
-                }
-                else if (k.KeyChar.ToString().ToLower() == "n")
-                {
-                    Console.WriteLine();
-                    throw new Exception("User chose not to continue");
-                }
-            }
+            BackupCore.FSCoreDependencies dstCoreDependencies = new BackupCore.FSCoreDependencies(null, opts.Destination);
+            bcore.TransferBackupSet(backupsetname, dstCoreDependencies, true);
         }
 
         public static string ReadSetting(BackupSettings key)
@@ -558,7 +540,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (Directory.Exists(Path.Combine(dir, BackupCore.Core.IndexDirName)))
+                if (Directory.Exists(Path.Combine(dir, BackupCore.FSCoreDependencies.IndexDirName)))
                 {
                     return dir;
                 }

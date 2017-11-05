@@ -12,7 +12,7 @@ namespace BackupCore
     {
         private IBackupStoreDependencies Dependencies { get; set; }
 
-        public BackupStore(string savepath, IBackupStoreDependencies dependencies)
+        public BackupStore(IBackupStoreDependencies dependencies)
         {
             Dependencies = dependencies;
         }
@@ -140,7 +140,7 @@ namespace BackupCore
             var bset = LoadBackupSet(bsname);
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
             byte[] brbytes = newbackup.serialize();
-            byte[] backuphash = Dependencies.Blobs.StoreDataSync(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
+            byte[] backuphash = Dependencies.Blobs.StoreData(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
             bset.Backups.Add((backuphash, shallow));
             SaveBackupSet(bset, bsname);
         }
@@ -294,15 +294,11 @@ namespace BackupCore
         /// If saving fails an error is thrown.
         /// </summary>
         /// <param name="path"></param>
-        public void SaveBackupSet(BackupSet bset, string bsname, Action<string, byte[]> storebset=null)
+        public void SaveBackupSet(BackupSet bset, string bsname)
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
-            if (storebset == null)
-            {
-                storebset = Dependencies.StoreBackupSetData;
-            }
-            storebset(bsname, bset.serialize());
+            Dependencies.StoreBackupSetData(bsname, bset.serialize());
         }
     }
 }

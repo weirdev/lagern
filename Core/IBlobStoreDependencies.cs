@@ -6,10 +6,10 @@ namespace BackupCore
 {
     public interface IBlobStoreDependencies
     {
-        void StoreBlobIndex();
-
         byte[] LoadBlob(string relpath, int byteposition, int bytelength);
 
-        byte[] DeleteBlob(string relpath, int byteposition, int bytelength);
+        void DeleteBlob(string relpath, int byteposition, int bytelength);
+
+        void StoreBlob(byte[] blobdata, string relpath, int byteposition, int bytelength);
     }
 }
