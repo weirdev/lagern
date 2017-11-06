@@ -45,6 +45,8 @@ namespace BackupCore
 
         IEnumerable<string> GetDirectoryFiles(string relpath);
 
+        IEnumerable<string> GetSubDirectories(string relpath);
+
         FileStream GetFileData(string relpath);
     }
 }

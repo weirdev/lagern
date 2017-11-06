@@ -227,12 +227,20 @@ namespace BackupCore
 
         public FileMetadata GetFileMetadata(string relpath)
         {
-            return new FileMetadata(Path.Combine(BackupPathSrc, relpath.Substring(1)));
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                relpath = relpath.Substring(1);
+            }
+            return new FileMetadata(Path.Combine(BackupPathSrc, relpath));
         }
 
         public IEnumerable<string> GetDirectoryFiles(string relpath)
         {
-            return Directory.GetFiles(Path.Combine(BackupPathSrc, relpath.Substring(1))).Select(filepath => Path.GetFileName(filepath));
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                relpath = relpath.Substring(1);
+            }
+            return Directory.GetFiles(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
 
         public FileStream GetFileData(string relpath)
@@ -267,6 +275,15 @@ namespace BackupCore
                     writer.Write(CacheBlobs.serialize());
                 }
             }
+        }
+
+        public IEnumerable<string> GetSubDirectories(string relpath)
+        {
+            if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                relpath = relpath.Substring(1);
+            }
+            return Directory.GetDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
     }
 }

@@ -220,8 +220,7 @@ namespace BackupConsole
                 {
                     WriteSetting(BackupSettings.cache, opts.Cache);
                 }
-                BackupCore.FSCoreDependencies coreDependencies = new BackupCore.FSCoreDependencies(cwd, opts.Destination, opts.Cache);
-                BackupCore.Core.InitializeNew(coreDependencies, opts.BSName);
+                BackupCore.Core.InitializeNew(opts.BSName, cwd, opts.Destination, opts.Cache);
             }
             catch (Exception e)
             {
@@ -268,7 +267,7 @@ namespace BackupConsole
                 List<(int, string)> trackclasses;
                 try
                 {
-                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), LagernSettingsFilename));
+                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFilename));
                 }
                 catch
                 {
@@ -439,7 +438,7 @@ namespace BackupConsole
                 {
                     try
                     {
-                        return new BackupCore.Core(null, destination, null);
+                        return BackupCore.Core.LoadCore(null, destination, null);
                     }
                     catch
                     {
@@ -457,7 +456,7 @@ namespace BackupConsole
             {
                 try
                 {
-                    return new BackupCore.Core(cwd, destination, cache);
+                    return BackupCore.Core.LoadCore(cwd, destination, cache);
                 }
                 catch
                 {

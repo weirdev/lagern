@@ -37,9 +37,8 @@ namespace BackupCore
         ///     If false a special error class is thrown when a corrupted index is encountered.
         ///     The command line program would then handle the functionality of asking to overwrite.
         /// </param>
-        public Core(string src, string dst, string cache=null) : this(new FSCoreDependencies(src, dst, cache))
-        {   }
-        
+
+        public static Core LoadCore(string src, string dst, string cache = null) => LoadCore(new FSCoreDependencies(src, dst, cache));
 
         public static Core LoadCore(ICoreDependencies dependencies)
         {
@@ -51,7 +50,9 @@ namespace BackupCore
         {
             Dependencies = dependencies;
         }
-        
+
+        public static Core InitializeNew(string bsname, string src, string dst, string cache = null) => InitializeNew(new FSCoreDependencies(src, dst, cache), bsname);
+
         public static Core InitializeNew(ICoreDependencies dependencies, string bsname)
         {
             dependencies.InitializeNewDstAndCache(bsname);
@@ -372,7 +373,7 @@ namespace BackupCore
                 try
                 {
                     // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(Dependencies.GetDirectoryFiles(reldirpath));
+                    fssubdirs = new List<string>(Dependencies.GetSubDirectories(reldirpath));
                 }
                 catch (UnauthorizedAccessException e)
                 {
@@ -395,7 +396,7 @@ namespace BackupCore
 
                 deltaidx = 0;
                 fsidx = 0;
-                while (deltaidx < deltasubdirs.Count && fsidx < fsfiles.Count)
+                while (deltaidx < deltasubdirs.Count && fsidx < fssubdirs.Count)
                 {
                     if (deltasubdirs[deltaidx] == fssubdirs[fsidx]) // Names match
                     {
