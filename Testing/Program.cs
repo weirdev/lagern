@@ -40,7 +40,7 @@ namespace Testing
 
         static double BackupRun(string bsname, string src, string dst)
         {
-            var backupper = new BackupCore.Core(src, dst); // Dont count initial setup in time
+            var backupper = BackupCore.Core.LoadCore(src, dst); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
@@ -57,7 +57,7 @@ namespace Testing
 
         static void GetStatus(string bsname, string src, string dst)
         {
-            var core = new BackupCore.Core(src, dst);
+            var core = BackupCore.Core.LoadCore(src, dst);
             foreach (var item in core.GetWTStatus(bsname))
             {
                 Console.WriteLine(string.Format("{0}:\t{1}", item.path, item.change));

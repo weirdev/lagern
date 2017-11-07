@@ -13,6 +13,8 @@ namespace BackupCore
 
         private static readonly MD5 md5hasher = MD5.Create();
 
+        public static SHA1 GetSHA1Hasher() => SHA1.Create();
+
         // We hash one byte at a time, so there are only 256 possible values to hash
         // Thus, there are only 256 possible hash results and we need not compute these more than once.
         public static readonly byte[][] md5hashes = CreateMD5ByteLookupTable();

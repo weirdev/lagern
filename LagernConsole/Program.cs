@@ -476,8 +476,7 @@ namespace BackupConsole
         {
             string backupsetname = GetBackupSetName(opts.BSName);
             var bcore = GetCore();
-            BackupCore.FSCoreDependencies dstCoreDependencies = new BackupCore.FSCoreDependencies(null, opts.Destination);
-            bcore.TransferBackupSet(backupsetname, dstCoreDependencies, true);
+            bcore.TransferBackupSet(backupsetname, BackupCore.Core.InitializeNew(backupsetname, null, opts.Destination), true);
         }
 
         public static string ReadSetting(BackupSettings key)

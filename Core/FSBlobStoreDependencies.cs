@@ -12,25 +12,24 @@ namespace BackupCore
         // all blobs in single directory
         public string BlobSaveDirectory { get; set; }
 
-        public FSBlobStoreDependencies(string blobsavedir)
+        private IFSInterop FSInterop { get; set; }
+
+        public FSBlobStoreDependencies(IFSInterop fsinterop, string blobsavedir)
         {
             BlobSaveDirectory = blobsavedir;
+            FSInterop = fsinterop;
         }
 
         public void DeleteBlob(string relpath, int byteposition, int bytelength)
         {
-            File.Delete(Path.Combine(BlobSaveDirectory, relpath));
+            FSInterop.DeleteFile(Path.Combine(BlobSaveDirectory, relpath));
         }
 
         public byte[] LoadBlob(string relpath, int byteposition, int bytelength)
         {
             try
             {
-                FileStream blobstream = File.OpenRead(Path.Combine(BlobSaveDirectory, relpath));
-                byte[] buffer = new byte[blobstream.Length];
-                blobstream.Read(buffer, byteposition, bytelength);
-                blobstream.Close();
-                return buffer;
+                return FSInterop.ReadFileRegion(Path.Combine(BlobSaveDirectory, relpath), byteposition, bytelength);
             }
             catch (Exception)
             {
@@ -39,18 +38,12 @@ namespace BackupCore
             }
         }
 
-        public void StoreBlob(byte[] blobdata, string relpath, int byteposition, int bytelength)
+        public void StoreBlob(byte[] blobdata, string relpath, int byteposition)
         {
             string path = Path.Combine(BlobSaveDirectory, relpath);
             try
             {
-                using (FileStream writer = File.OpenWrite(path))
-                {
-                    writer.Seek(byteposition, SeekOrigin.Begin);
-                    writer.Write(blobdata, 0, blobdata.Length);
-                    writer.Flush();
-                    writer.Close();
-                }
+                FSInterop.WriteFileRegion(path, byteposition, blobdata);
             }
             catch (Exception)
             {

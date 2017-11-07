@@ -102,11 +102,14 @@ namespace BackupCore
         /// </summary>
         public bool DestinationAvailable { get; set; }
 
-        public FSCoreDependencies(string src, string dst, string cache = null)
+        private IFSInterop FSInterop { get; set; }
+
+        public FSCoreDependencies(IFSInterop fsinterop, string src, string dst, string cache = null)
         {
             BackupPathSrc = src;
             BackupDstPath = dst;
             CachePath = cache;
+            FSInterop = fsinterop;
         }
 
         public void InitializeNewDstAndCache(string bsname)
@@ -115,17 +118,17 @@ namespace BackupCore
             (string backupindexdir, string backupblobdatadir, string backupstoredir, string backupblobindexfile) = GetDestinationPaths(BackupDstPath);
             PrepBackupDstPath(BackupDstPath);
 
-            if (File.Exists(Path.Combine(backupstoredir, bsname)))
+            if (FSInterop.FileExists(Path.Combine(backupstoredir, bsname)))
             {
                 throw new Exception("A backup set of the given name already exists at the destination");
             }
-            if (!File.Exists(backupblobindexfile))
+            if (!FSInterop.FileExists(backupblobindexfile))
             {
-                FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(backupblobdatadir);
+                FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, backupblobdatadir);
                 DefaultBlobs = new BlobStore(blobStoreDependencies);
                 SaveDefaultBlobStoreIndex();
             }
-            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(DefaultBlobs, backupstoredir);
+            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, DefaultBlobs, backupstoredir);
             DefaultBackups = new BackupStore(backupStoreDependencies);
             DefaultBackups.SaveBackupSet(new BackupSet(), bsname);
 
@@ -141,22 +144,22 @@ namespace BackupCore
         /// </summary>
         /// <param name="dstpath"></param>
         /// <returns></returns>
-        private static void PrepBackupDstPath(string dstpath)
+        protected void PrepBackupDstPath(string dstpath)
         {
             (string id, string bsd, string bdd, _) = GetDestinationPaths(dstpath);
             // Make sure we have an index folder to write to later
-            if (!Directory.Exists(id))
+            if (!FSInterop.DirectoryExists(id))
             {
-                Directory.CreateDirectory(id);
+                FSInterop.CreateDirectory(id);
             }
             // Make sure we have a backup list folder to write to later
-            if (!Directory.Exists(bsd))
+            if (!FSInterop.DirectoryExists(bsd))
             {
-                Directory.CreateDirectory(bsd);
+                FSInterop.CreateDirectory(bsd);
             }
-            if (!Directory.Exists(bdd))
+            if (!FSInterop.DirectoryExists(bdd))
             {
-                Directory.CreateDirectory(bdd);
+                FSInterop.CreateDirectory(bdd);
             }
         }
 
@@ -169,12 +172,12 @@ namespace BackupCore
         /// <param name="iscahce"></param>
         /// <param name="continueorkill"></param>
         /// <returns></returns>
-        private static (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile,
+        private (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile,
             string backupstoresdir)
         {
-            FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(blobdatadir);
-            BlobStore blobs = BlobStore.deserialize(File.ReadAllBytes(blobindexfile), blobStoreDependencies);
-            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(blobs, backupstoresdir);
+            FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, blobdatadir);
+            BlobStore blobs = BlobStore.deserialize(FSInterop.ReadAllFileBytes(blobindexfile), blobStoreDependencies);
+            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, blobs, backupstoresdir);
             BackupStore backups = new BackupStore(backupStoreDependencies);
             return (blobs, backups);
         }
@@ -216,7 +219,7 @@ namespace BackupCore
             }
         }
 
-        private static (string indexdir, string blobdatadir, string backupstoresdir, string blobindexfile) GetDestinationPaths(string dstpath)
+        protected static (string indexdir, string blobdatadir, string backupstoresdir, string blobindexfile) GetDestinationPaths(string dstpath)
         {
             string id = Path.Combine(dstpath, IndexDirName);
             string bsd = Path.Combine(id, BackupStoreDirName);
@@ -231,7 +234,7 @@ namespace BackupCore
             {
                 relpath = relpath.Substring(1);
             }
-            return new FileMetadata(Path.Combine(BackupPathSrc, relpath));
+            return FSInterop.GetFileMetadata(Path.Combine(BackupPathSrc, relpath));
         }
 
         public IEnumerable<string> GetDirectoryFiles(string relpath)
@@ -240,25 +243,19 @@ namespace BackupCore
             {
                 relpath = relpath.Substring(1);
             }
-            return Directory.GetFiles(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
+            return FSInterop.GetDirectoryFiles(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
 
-        public FileStream GetFileData(string relpath)
+        public Stream GetFileData(string relpath)
         {
-            return File.OpenRead(Path.Combine(BackupPathSrc, relpath));
+            return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath));
         }
 
         public void SaveDefaultBlobStoreIndex()
         {
             if (DestinationAvailable)
             {
-                using (FileStream fs = new FileStream(BackupBlobIndexFile, FileMode.Create, FileAccess.Write))
-                {
-                    using (BinaryWriter writer = new BinaryWriter(fs))
-                    {
-                        writer.Write(DefaultBlobs.serialize());
-                    }
-                }
+                FSInterop.OverwriteOrCreateFile(BackupBlobIndexFile, DefaultBlobs.serialize());
             }
             else
             {
@@ -268,13 +265,7 @@ namespace BackupCore
 
         public void SaveCacheBlobStoreIndex()
         {
-            using (FileStream fs = new FileStream(CacheBlobIndexFile, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(CacheBlobs.serialize());
-                }
-            }
+            FSInterop.OverwriteOrCreateFile(CacheBlobIndexFile, CacheBlobs.serialize());
         }
 
         public IEnumerable<string> GetSubDirectories(string relpath)
@@ -283,7 +274,7 @@ namespace BackupCore
             {
                 relpath = relpath.Substring(1);
             }
-            return Directory.GetDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
+            return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
     }
 }

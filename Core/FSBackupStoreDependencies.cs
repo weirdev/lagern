@@ -11,10 +11,13 @@ namespace BackupCore
 
         private string DiskStorePath { get; set; }
 
-        public FSBackupStoreDependencies(BlobStore blobs, string savepath)
+        private IFSInterop FSInterop { get; set; }
+
+        public FSBackupStoreDependencies(IFSInterop fsinterop, BlobStore blobs, string savepath)
         {
             Blobs = blobs;
             DiskStorePath = savepath;
+            FSInterop = fsinterop;
         }
 
         public byte[] LoadBackupSetData(string backupsetname)
@@ -22,13 +25,7 @@ namespace BackupCore
             var backuplistfile = Path.Combine(DiskStorePath, backupsetname);
             try
             {
-                using (FileStream fs = new FileStream(backuplistfile, FileMode.Open, FileAccess.Read))
-                {
-                    using (BinaryReader reader = new BinaryReader(fs))
-                    {
-                        return reader.ReadBytes((int)fs.Length);
-                    }
-                }
+                return FSInterop.ReadAllFileBytes(backuplistfile);
             }
             catch
             {
@@ -41,13 +38,7 @@ namespace BackupCore
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small
             string path = Path.Combine(DiskStorePath, backupsetname);
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(bsdata);
-                }
-            }
+            FSInterop.OverwriteOrCreateFile(path, bsdata);
         }
     }
 }

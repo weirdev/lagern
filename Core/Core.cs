@@ -38,7 +38,7 @@ namespace BackupCore
         ///     The command line program would then handle the functionality of asking to overwrite.
         /// </param>
 
-        public static Core LoadCore(string src, string dst, string cache = null) => LoadCore(new FSCoreDependencies(src, dst, cache));
+        public static Core LoadCore(string src, string dst, string cache = null) => LoadCore(new FSCoreDependencies(new DiskFSInterop(), src, dst, cache));
 
         public static Core LoadCore(ICoreDependencies dependencies)
         {
@@ -51,7 +51,7 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public static Core InitializeNew(string bsname, string src, string dst, string cache = null) => InitializeNew(new FSCoreDependencies(src, dst, cache), bsname);
+        public static Core InitializeNew(string bsname, string src, string dst, string cache = null) => InitializeNew(new FSCoreDependencies(new DiskFSInterop(), src, dst, cache), bsname);
 
         public static Core InitializeNew(ICoreDependencies dependencies, string bsname)
         {
@@ -857,7 +857,7 @@ namespace BackupCore
                 {
                     relpath = relpath.Substring(1);
                 }
-                FileStream readerbuffer = Dependencies.GetFileData(relpath);
+                Stream readerbuffer = Dependencies.GetFileData(relpath);
                 byte[] filehash = Dependencies.DefaultBlobs.StoreData(backupset, readerbuffer, BlobLocation.BlobTypes.FileBlob);
                 fileMetadata.FileHash = filehash;
             }
@@ -905,9 +905,8 @@ namespace BackupCore
         /// </summary>
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
-        public void TransferBackupSet(string backupsetname, ICoreDependencies dstDependencies, bool includefiles)
+        public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles)
         {
-            Core dstCore = InitializeNew(dstDependencies, backupsetname);
             BackupSet backupSet = Dependencies.DefaultBackups.LoadBackupSet(backupsetname);
             // Transfer backup set
             dstCore.Dependencies.DefaultBackups.SaveBackupSet(backupSet, backupsetname);

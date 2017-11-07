@@ -341,7 +341,7 @@ namespace BackupCore
 
         private void WriteBlob(BlobLocation blocation, byte[] blob)
         {
-            Dependencies.StoreBlob(blob, blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+            Dependencies.StoreBlob(blob, blocation.RelativeFilePath, blocation.BytePosition);
         }
 
         public bool ContainsHash(byte[] hash)
@@ -418,8 +418,8 @@ namespace BackupCore
             List<byte> newblob = new List<byte>();
             byte[] alphachksum = new byte[2];
             byte[] betachksum = new byte[2];
-            SHA1 sha1filehasher = SHA1.Create();
-            SHA1 sha1blobhasher = SHA1.Create();
+            SHA1 sha1filehasher = HashTools.GetSHA1Hasher();
+            SHA1 sha1blobhasher = HashTools.GetSHA1Hasher(); ;
 
             if (inputstream.Length != 0)
             {
