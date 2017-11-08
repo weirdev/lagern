@@ -21,7 +21,7 @@ namespace BackupCore
 
         string[] GetDirectoryFiles(string absolutepath);
 
-        void OverwriteOrCreateFile(string absolutepath, byte[] data);
+        void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata fileMetadata = null);
 
         string[] GetSubDirectories(string absolutepath);
 
@@ -30,5 +30,7 @@ namespace BackupCore
         byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength);
 
         void WriteFileRegion(string absolutepath, int byteposition, byte[] data);
+
+        void WriteOutMetadata(string absolutepath, FileMetadata metadata);
     }
 }

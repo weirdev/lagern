@@ -18,9 +18,11 @@ namespace BackupConsole
         string BackupStoreName { get; set; }
         BackupCore.MetadataNode BackupTree { get; set; }
         BackupCore.MetadataNode CurrentNode { get; set; }
+        bool ContinueLoop { get; set; }
         
         public BackupBrowser(string backupstorename, string backuphash)
         {
+            ContinueLoop = true;
             BCore = Program.GetCore();
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
@@ -60,7 +62,7 @@ namespace BackupConsole
 
         public void CommandLoop()
         {
-            while (true)
+            while (ContinueLoop)
             {
                 int hashdisplen = BackupHash.Length <= 6 ? BackupHash.Length : 6;
                 string cachewarning = "";
@@ -73,7 +75,7 @@ namespace BackupConsole
                 Parser.Default.ParseArguments<CDOptions, LSOptions, Program.ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
                     .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
                     .WithParsed<LSOptions>(opts => ListDirectory())
-                    .WithParsed<Program.ExitOptions>(opts => Program.Exit())
+                    .WithParsed<Program.ExitOptions>(opts => ContinueLoop = false)
                     .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
                     .WithParsed<CBOptions>(opts => ChangeBackup(opts))
                     .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupStoreName, BCore));

@@ -99,23 +99,6 @@ namespace BackupCore
             Changes = changes;
         }
 
-        public void WriteOutMetadata(string filepath)
-        {
-            FileSystemInfo fi = new FileInfo(filepath);
-            if ((Attributes & FileAttributes.Directory) == FileAttributes.Directory)
-            {
-                // For some reason cannot assign back to a FileInfo of a directory
-                fi = new DirectoryInfo(filepath);
-            }
-            fi.LastAccessTimeUtc = DateAccessedUTC;
-            fi.LastWriteTimeUtc = DateModifiedUTC;
-            fi.CreationTimeUtc = DateCreatedUTC;
-            if (fi.Attributes != 0)
-            {
-                fi.Attributes = Attributes;
-            }
-        }
-
         /*
         public FileStatus FileDifference(FileMetadata other)
         {

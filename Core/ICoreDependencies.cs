@@ -48,5 +48,11 @@ namespace BackupCore
         IEnumerable<string> GetSubDirectories(string relpath);
 
         Stream GetFileData(string relpath);
+
+        void OverwriteOrCreateFile(string path, byte[] data, FileMetadata fileMetadata=null, bool absolutepath=false);
+
+        void CreateDirectory(string path, bool absolutepath = false);
+
+        void WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false);
     }
 }

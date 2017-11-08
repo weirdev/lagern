@@ -92,6 +92,10 @@ namespace BackupCore
             {
                 relpath = relpath.Substring(1);
             }
+            if (relpath == "")
+            {
+                return this;
+            }
             if (relpath == ".")
             {
                 return this;

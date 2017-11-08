@@ -328,7 +328,14 @@ namespace BackupConsole
             {
                 var bcore = GetCore();
                 string bsname = GetBackupSetName(opts.BSName);
-                bcore.RestoreFileOrDirectory(bsname, opts.Path, opts.RestorePath, opts.BackupHash);
+                string restorepath = opts.Path;
+                bool absolutepath = false;
+                if (opts.RestorePath != null)
+                {
+                    restorepath = opts.RestorePath;
+                    absolutepath = true;
+                }
+                bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath);
             }
             catch (Exception e)
             {

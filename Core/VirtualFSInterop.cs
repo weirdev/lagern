@@ -40,11 +40,14 @@ namespace BackupCore
 
         public string[] GetDirectoryFiles(string absolutepath) => VirtualFS.GetDirectory(absolutepath).Files.Keys.Select(file => Path.Combine(absolutepath, file)).ToArray();
 
-        public void OverwriteOrCreateFile(string absolutepath, byte[] data)
+        public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata fileMetadata = null)
         {
             var datahash = StoreDataGetHash(data);
-            var newmd = MakeNewFileMetadata(absolutepath, datahash);
-            VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = newmd;
+            if (fileMetadata == null)
+            {
+                fileMetadata = MakeNewFileMetadata(absolutepath, datahash);
+            }
+            VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = fileMetadata;
         }
 
         public string[] GetSubDirectories(string absolutepath) => VirtualFS.GetDirectory(absolutepath).Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray();
@@ -99,6 +102,19 @@ namespace BackupCore
             var datahash = HashTools.GetSHA1Hasher().ComputeHash(data);
             DataStore.AddHash(datahash, data);
             return datahash;
+        }
+
+        public void WriteOutMetadata(string absolutepath, FileMetadata metadata)
+        {
+            var node = VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath));
+            if (node.Files.ContainsKey(Path.GetFileName(absolutepath)))
+            {
+                node.Files[Path.GetFileName(absolutepath)] = metadata;
+            }
+            else if(node.Directories.ContainsKey(Path.GetFileName(absolutepath)))
+            {
+                node.Directories[Path.GetFileName(absolutepath)].DirMetadata = metadata;
+            }
         }
     }
 }

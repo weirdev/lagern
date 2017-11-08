@@ -276,5 +276,54 @@ namespace BackupCore
             }
             return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
+
+        public void OverwriteOrCreateFile(string path, byte[] data, FileMetadata fileMetadata = null, bool absolutepath = false)
+        {
+            if (!absolutepath)
+            {
+                path = Path.Combine(BackupPathSrc, path);
+            }
+            try
+            {
+                FSInterop.OverwriteOrCreateFile(path, data, fileMetadata);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        public void CreateDirectory(string path, bool absolutepath = false)
+        {
+            if (!absolutepath)
+            {
+                path = Path.Combine(BackupPathSrc, path);
+            }
+            try
+            {
+                FSInterop.CreateDirectory(path);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        public void WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false)
+        {
+            if (!absolutepath)
+            {
+                path = Path.Combine(BackupPathSrc, path);
+            }
+            try
+            {
+                FSInterop.WriteOutMetadata(path, metadata);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
     }
 }

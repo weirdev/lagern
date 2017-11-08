@@ -21,14 +21,34 @@ namespace BackupCore
 
         public string[] GetDirectoryFiles(string absolutepath) => Directory.GetFiles(absolutepath);
 
-        public void OverwriteOrCreateFile(string absolutepath, byte[] data)
+        public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata fileMetadata = null)
         {
-            using (FileStream fs = new FileStream(absolutepath, FileMode.Create, FileAccess.Write))
+            // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
+            using (FileStream writer = new FileStream(absolutepath, FileMode.OpenOrCreate))
             {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(data);
-                }
+                writer.Write(data, 0, data.Length);
+                // Flush the writer in order to get a correct stream position for truncating
+                writer.Flush();
+                // Set the stream length to the current position in order to truncate leftover data in original file
+                writer.SetLength(writer.Position);
+            }
+            WriteOutMetadata(absolutepath, fileMetadata);
+        }
+
+        public void WriteOutMetadata(string absolutepath, FileMetadata fileMetadata)
+        {
+            FileSystemInfo fi = new FileInfo(absolutepath);
+            if ((fileMetadata.Attributes & FileAttributes.Directory) == FileAttributes.Directory)
+            {
+                // For some reason cannot assign back to a FileInfo of a directory
+                fi = new DirectoryInfo(absolutepath);
+            }
+            fi.LastAccessTimeUtc = fileMetadata.DateAccessedUTC;
+            fi.LastWriteTimeUtc = fileMetadata.DateModifiedUTC;
+            fi.CreationTimeUtc = fileMetadata.DateCreatedUTC;
+            if (fi.Attributes != 0)
+            {
+                fi.Attributes = fileMetadata.Attributes;
             }
         }
 
