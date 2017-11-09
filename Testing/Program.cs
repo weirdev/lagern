@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using CoreTest;
 using System.Diagnostics;
+using CoreTest;
 
 namespace Testing
 {
@@ -16,8 +17,8 @@ namespace Testing
             //BPlusTreeTest bpt_test = new BPlusTreeTest();
             //bpt_test.TestSerializeDeserialize();
 
-            GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
-            BackupRun("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+            //GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+            //BackupRun("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
 
             //BinaryEncodingTest betest = new BinaryEncodingTest();
             //betest.TestDictEncodeDecode();
@@ -26,15 +27,16 @@ namespace Testing
             //BlobStoreTest bstest = new BlobStoreTest();
             //bstest.TestSplitData();
 
-            //CoreTest ctest = new CoreTest();
+            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
+            ctest.TestInitializeNew();
 
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));
 
             //Console.WriteLine(BackupRun("test", @"D:\src", @"D:\dst"));
-            GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+            //GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
             Console.ReadLine();
         }
 

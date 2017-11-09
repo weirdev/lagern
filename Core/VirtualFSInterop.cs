@@ -6,13 +6,13 @@ using System.Linq;
 
 namespace BackupCore
 {
-    class VirtualFSInterop : IFSInterop
+    public class VirtualFSInterop : IFSInterop
     {
 
         public MetadataNode VirtualFS { get; set; }
         private BPlusTree<byte[]> DataStore { get; set; }
 
-        VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
+        public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
         {
             VirtualFS = filesystem;
             DataStore = datastore;
@@ -22,7 +22,7 @@ namespace BackupCore
 
         public bool DirectoryExists(string absolutepath) => VirtualFS.GetDirectory(absolutepath) != null;
 
-        public void CreateDirectory(string absolutepath) => VirtualFS.AddDirectory(absolutepath, MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
+        public void CreateDirectory(string absolutepath) => VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
 
         public byte[] ReadAllFileBytes(string absolutepath) => DataStore.GetRecord(VirtualFS.GetFile(absolutepath).FileHash);
 
@@ -51,13 +51,6 @@ namespace BackupCore
         }
 
         public string[] GetSubDirectories(string absolutepath) => VirtualFS.GetDirectory(absolutepath).Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray();
-
-        private static FileMetadata MakeNewFileMetadata(string name, byte[] hash=null) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Normal, 0, hash);
-
-
-        private static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Directory, 0, null);
 
         public void DeleteFile(string absolutepath) => VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files.Remove(Path.GetFileName(absolutepath));
 
@@ -116,5 +109,15 @@ namespace BackupCore
                 node.Directories[Path.GetFileName(absolutepath)].DirMetadata = metadata;
             }
         }
+
+        // Unlike other public methods of this class, MakeNewFileMetadata and MakeNewDirectoryMetadata
+        // are not part of the IFSInterop interface. They are included as convenience methods for
+        // use when creating a virtual filesystem
+        public static FileMetadata MakeNewFileMetadata(string name, byte[] hash = null) => new FileMetadata(name, new DateTime(),
+                                new DateTime(), new DateTime(), FileAttributes.Normal, 0, hash);
+
+
+        public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),
+                                new DateTime(), new DateTime(), FileAttributes.Directory, 0, null);
     }
 }

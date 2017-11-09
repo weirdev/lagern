@@ -75,7 +75,11 @@ namespace BackupCore
         /// The name of the blob directory for all lagern backups
         /// </summary>
         public static readonly string BlobDirName = "blobdata";
-        
+        /// <summary>
+        /// The name of the file holding the blobstore index
+        /// </summary>
+        public static readonly string BlobStoreIndexFilename = "hashindex";
+
         /// <summary>
         /// The BlobStore in which data will be stored for this instance of Core.
         /// If available, represents BlobStore in the regular destination. Otherwise it is the cache BlobStore.
@@ -114,28 +118,54 @@ namespace BackupCore
 
         public void InitializeNewDstAndCache(string bsname)
         {
-            // Create lagern directory structure at destination if it doesn't already exist
-            (string backupindexdir, string backupblobdatadir, string backupstoredir, string backupblobindexfile) = GetDestinationPaths(BackupDstPath);
-            PrepBackupDstPath(BackupDstPath);
+            InitializeNewDst(bsname);
+            if (CachePath != null)
+            {
+                InitializeNewDst(bsname + Core.CacheSuffix);
+            }
+        }
 
-            if (FSInterop.FileExists(Path.Combine(backupstoredir, bsname)))
+        private void InitializeNewDst(string bsname)
+        {
+            // Create lagern directory structure at destination if it doesn't already exist
+            (BackupIndexDir, BackupBlobDataDir, BackupStoreDir, BackupBlobIndexFile) = GetDestinationPaths(BackupDstPath);
+            PrepBackupDstPath(BackupDstPath);
+            DestinationAvailable = true;
+
+            if (FSInterop.FileExists(Path.Combine(BackupStoreDir, bsname)))
             {
                 throw new Exception("A backup set of the given name already exists at the destination");
             }
-            if (!FSInterop.FileExists(backupblobindexfile))
+            if (!FSInterop.FileExists(BackupBlobIndexFile))
             {
-                FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, backupblobdatadir);
+                FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, BackupBlobDataDir);
                 DefaultBlobs = new BlobStore(blobStoreDependencies);
                 SaveDefaultBlobStoreIndex();
             }
-            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, DefaultBlobs, backupstoredir);
+            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, DefaultBlobs, BackupStoreDir);
             DefaultBackups = new BackupStore(backupStoreDependencies);
             DefaultBackups.SaveBackupSet(new BackupSet(), bsname);
 
-            // Recurse once to initialize cache
             if (CachePath != null)
             {
-                InitializeNewDstAndCache(bsname + Core.CacheSuffix);
+                bsname += Core.CacheSuffix;
+                // Create lagern directory structure at destination if it doesn't already exist
+                (CacheIndexDir, CacheBlobDataDir, CacheBackupStoresDir, CacheBlobIndexFile) = GetDestinationPaths(CachePath);
+                PrepBackupDstPath(CachePath);
+
+                if (FSInterop.FileExists(Path.Combine(CacheBackupStoresDir, bsname)))
+                {
+                    throw new Exception("A backup set of the given name already exists at the destination");
+                }
+                if (!FSInterop.FileExists(CacheBlobIndexFile))
+                {
+                    FSBlobStoreDependencies cblobStoreDependencies = new FSBlobStoreDependencies(FSInterop, CacheBlobDataDir);
+                    CacheBlobs = new BlobStore(cblobStoreDependencies);
+                    SaveCacheBlobStoreIndex();
+                }
+                FSBackupStoreDependencies cbackupStoreDependencies = new FSBackupStoreDependencies(FSInterop, CacheBlobs, CacheBackupStoresDir);
+                CacheBackups = new BackupStore(cbackupStoreDependencies);
+                CacheBackups.SaveBackupSet(new BackupSet(), bsname);
             }
         }
 
@@ -224,7 +254,7 @@ namespace BackupCore
             string id = Path.Combine(dstpath, IndexDirName);
             string bsd = Path.Combine(id, BackupStoreDirName);
             string bdd = Path.Combine(dstpath, BlobDirName);
-            string bif = Path.Combine(id, "hashindex");
+            string bif = Path.Combine(id, BlobStoreIndexFilename);
             return (id, bdd, bsd, bif);
         }
 
