@@ -30,7 +30,9 @@ namespace Testing
             CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
-            ctest.TestInitializeNew();
+            //ctest.TestInitializeNew();
+            //ctest.TestRunBackup();
+            ctest.TestRestore();
 
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));

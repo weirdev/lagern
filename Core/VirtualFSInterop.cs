@@ -31,7 +31,11 @@ namespace BackupCore
             var md = VirtualFS.GetFile(absolutepath);
             if (md == null)
             {
-                throw new FileNotFoundException();
+                md = VirtualFS.GetDirectory(absolutepath).DirMetadata;
+                if (md == null)
+                {
+                    throw new FileNotFoundException();
+                }
             }
             return md;
         }

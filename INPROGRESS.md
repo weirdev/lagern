@@ -3,16 +3,8 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Dependency injection
-	Primairly aimed at abstracting file system operations
-		Make testing easier, code more flexible for strange use cases
-			ie. easy to do everything totally in memory
-	Each class (with injected dependencies) will have a I<ClassName>Dependencies parameter for its constructor
-		Implementing classes have to pass in an object implementing the requisite methods and objects
 Code cleanup
 	TODO's
-Add more unit tests
-	deteting backups and dereferencing
 Better support for large backup sets
 	Optimize B+ tree BlobStore
 		bulk loading of tree
@@ -22,6 +14,8 @@ Better support for large backup sets
 	Reduce number of blob files per directory
 		Currently one file per blob and all files in destination root
 		(Some) operating systems have poor performance with many files in a single directory
+Add more unit tests
+	detecting backups and dereferencing
 Locking for destinations seperated from their caches
 	Prevent deleting (adding?) backups without cache
 		Cache may contain references in its backups to data no longer in destination

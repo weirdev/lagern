@@ -12,7 +12,7 @@ namespace CoreTest
     {
         static System.Security.Cryptography.SHA1 Hasher = HashTools.GetSHA1Hasher();
 
-        private MetadataNode CreateBasicVirtualFS()
+        private static MetadataNode CreateBasicVirtualFS()
         {
             MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src"));
@@ -21,28 +21,28 @@ namespace CoreTest
             return vfsroot;
         }
 
-        private (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) AddStandardVFSFiles(
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore, string srcpath = "c/src")
+        private static (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) AddStandardVFSFiles(
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore)
         {
             BPlusTree<byte[]> verifydatastore = new BPlusTree<byte[]>(10);
             Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
 
             (byte[] hash, byte[] file) = MakeRandomFile(100_000_000); // 100 MB file
-            AddFileToVFS(Path.Combine("c", "src", "big"), hash, file);
+            AddFileToVFS(Path.Combine("src", "big"), hash, file);
 
             (hash, file) = MakeRandomFile(0); // Empty file
-            AddFileToVFS(Path.Combine("c", "src", "empty"), hash, file);
+            AddFileToVFS(Path.Combine("src", "empty"), hash, file);
 
             (hash, file) = MakeRandomFile(1); // 1byte file
-            AddFileToVFS(Path.Combine("c", "src", "1b"), hash, file);
+            AddFileToVFS(Path.Combine("src", "1b"), hash, file);
             
             (hash, file) = MakeRandomFile(2); // 2byte file
-            AddFileToVFS(Path.Combine("c", "src", "2b"), hash, file);
+            AddFileToVFS(Path.Combine("src", "2b"), hash, file);
 
             foreach (var num in Enumerable.Range(0, 200))
             {
                 (hash, file) = MakeRandomFile(55_000); // regular size file
-                AddFileToVFS(Path.Combine("c", "src", String.Format("reg_{0}", num)), hash, file);
+                AddFileToVFS(Path.Combine("src", String.Format("reg_{0}", num)), hash, file);
             }
 
             return (verifydatastore, verifyfilepaths);
@@ -52,8 +52,20 @@ namespace CoreTest
                 verifydatastore.AddHash(filehash, filedata);
                 verifyfilepaths[path] = filehash;
                 vfsdatastore.AddHash(filehash, filedata);
-                vfsroot.AddFile(VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filehash));
+                vfsroot.AddFile(Path.GetDirectoryName(path), VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filehash));
             }
+        }
+
+        private static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles()
+        {
+            MetadataNode vfsroot = CreateBasicVirtualFS();
+            BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
+            (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore);
+            ICoreDependencies dependencies = new FSCoreDependencies(new VirtualFSInterop(vfsroot, vfsdatastore), "src",
+                "dst", "cache");
+            Core core = Core.InitializeNew(dependencies, "test");
+            return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
 
         static (byte[] hash, byte[] file) MakeRandomFile(int size)
@@ -93,6 +105,32 @@ namespace CoreTest
             Core.InitializeNew(dependencies, "test");
             Core.LoadCore(new FSCoreDependencies(new VirtualFSInterop(vfsroot, datastore), "src",
                 "dst", "cache"));
+        }
+
+        [TestMethod]
+        public void TestRunBackup()
+        {
+            var testdata = InitializeNewCoreWithStandardFiles();
+
+            testdata.core.RunBackup("test", "run1");
+        }
+
+        [TestMethod]
+        public void TestGetWTStatus()
+        {
+            var testdata = InitializeNewCoreWithStandardFiles();
+
+            testdata.core.GetWTStatus("test");
+        }
+
+        [TestMethod]
+        public void TestRestore()
+        {
+            var testdata = InitializeNewCoreWithStandardFiles();
+            testdata.core.RunBackup("test", "run1");
+
+            testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
+            Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
         }
         
         [TestMethod]
