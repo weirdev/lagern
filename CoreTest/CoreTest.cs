@@ -81,8 +81,18 @@ namespace CoreTest
             Assert.IsTrue(idx.Files.ContainsKey(FSCoreDependencies.BlobStoreIndexFilename));
             var bss = idx.GetDirectory(FSCoreDependencies.BackupStoreDirName);
             Assert.IsTrue(bss.Files.ContainsKey("test"));
+        }
 
-            Core.LoadCore(dependencies);
+        [TestMethod]
+        public void TestLoadCore_NewlyInitialized()
+        {
+            MetadataNode vfsroot = CreateBasicVirtualFS();
+            BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
+            ICoreDependencies dependencies = new FSCoreDependencies(new VirtualFSInterop(vfsroot, datastore), "src",
+                "dst", "cache");
+            Core.InitializeNew(dependencies, "test");
+            Core.LoadCore(new FSCoreDependencies(new VirtualFSInterop(vfsroot, datastore), "src",
+                "dst", "cache"));
         }
         
         [TestMethod]
