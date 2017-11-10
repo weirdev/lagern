@@ -423,11 +423,12 @@ namespace BackupCore
 
             if (inputstream.Length != 0)
             {
-                int readsize = 8388608;
+                int readsize = 8_388_608;
                 int rollwindowsize = 32;
+                byte[] readin;
+                byte[] shifted = new byte[2];
                 for (int i = 0; i < inputstream.Length; i += readsize) // read the file in larger chunks for efficiency
                 {
-                    byte[] readin;
                     if (i + readsize <= inputstream.Length) // readsize or more bytes left to read
                     {
                         readin = new byte[readsize];
@@ -445,7 +446,6 @@ namespace BackupCore
                         if (newblob.Count > rollwindowsize)
                         {
                             HashTools.ByteDifference(alphachksum, newblob[newblob.Count - rollwindowsize - 1]);
-                            byte[] shifted = new byte[2];
                             shifted[0] = (byte)((newblob[newblob.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
                             shifted[1] = (byte)((newblob[newblob.Count - 1] >> 3) & 0xFF); // 8-5 = 3
                             HashTools.BytesDifference(betachksum, shifted);
@@ -465,8 +465,8 @@ namespace BackupCore
                             }
                             hashblobqueue.Add(new HashBlobPair(sha1blobhasher.ComputeHash(blob), blob));
                             newblob = new List<byte>();
-                            alphachksum = new byte[2];
-                            betachksum = new byte[2];
+                            Array.Clear(alphachksum, 0, 2);
+                            Array.Clear(betachksum, 0, 2);
                         }
                     }
                 }
@@ -492,24 +492,24 @@ namespace BackupCore
         /// </summary>
         /// <param name="blobhash"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public (int, int) GetSizes(byte[] blobhash)
+        public (int allreferences, int uniquereferences) GetSizes(byte[] blobhash)
         {
-            Dictionary<string, object[]> hashfreqsize = new Dictionary<string, object[]>();
+            Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize = new Dictionary<string, (int, BlobLocation)>();
             GetBlobReferenceFrequencies(blobhash, hashfreqsize);
             int allreferences = 0;
             int uniquereferences = 0;
             foreach (var reference in hashfreqsize.Values)
             {
-                allreferences += ((BlobLocation)reference[1]).ByteLength * (int)reference[0];
-                if (((BlobLocation)reference[1]).TotalReferenceCount == (int)reference[0])
+                allreferences += reference.blocation.ByteLength * reference.frequency;
+                if (reference.blocation.TotalReferenceCount == reference.frequency)
                 {
-                    uniquereferences += ((BlobLocation)reference[1]).ByteLength; // TODO: unique referenes 
+                    uniquereferences += reference.blocation.ByteLength; // TODO: unique referenes 
                 }
             }
             return (allreferences, uniquereferences);
         }
 
-        private void GetBlobReferenceFrequencies(byte[] blobhash, Dictionary<string, object[]> hashfreqsize) // TODO: use something better than object[] (currently used because tuples are readonly)
+        private void GetBlobReferenceFrequencies(byte[] blobhash, Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize) // TODO: use something better than object[] (currently used because tuples are readonly)
         {
             GetReferenceFrequenciesNoRecurse(blobhash, hashfreqsize);
             foreach (var reference in GetAllBlobReferences(blobhash, true))
@@ -518,17 +518,17 @@ namespace BackupCore
             }
         }
 
-        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, object[]> hashfreqsize)
+        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
             BlobLocation blocation = GetBlobLocation(blobhash);
             if (hashfreqsize.ContainsKey(hashstring))
             {
-                hashfreqsize[hashstring][0] = (int)hashfreqsize[hashstring][0] + 1;
+                hashfreqsize[hashstring] = (hashfreqsize[hashstring].frequency + 1, hashfreqsize[hashstring].blocation);
             }
             else
             {
-                hashfreqsize.Add(hashstring, new object[] { 1, blocation });
+                hashfreqsize.Add(hashstring, (1, blocation));
             }
         }
 

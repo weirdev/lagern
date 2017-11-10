@@ -28,15 +28,6 @@ namespace BackupCore
         /// <param name="backupsetname"></param>
         /// <param name="src">Backup source directory</param>
         /// <param name="dst">Backup destination directory</param>
-        /// <param name="continueorkill">
-        /// Function that takes an error message as input.
-        /// Meant to be used to optionally halt execution in case of errors.
-        /// Is a safety mechanism so important data is not overwritten if the program
-        /// decides to initialize a new index over an old one.
-        /// TODO: Replace this with a flag like "allowoverwrite=[false]"
-        ///     If false a special error class is thrown when a corrupted index is encountered.
-        ///     The command line program would then handle the functionality of asking to overwrite.
-        /// </param>
 
         public static Core LoadCore(string src, string dst, string cache = null) => LoadCore(new FSCoreDependencies(new DiskFSInterop(), src, dst, cache));
 
@@ -152,7 +143,7 @@ namespace BackupCore
         /// <param name="backupsetname"></param>
         /// <returns>List of mod</returns>
         private MetadataNode GetDeltaMetadataTree(string backupsetname, List<(int trackclass, string pattern)> trackpatterns = null,
-            MetadataNode previousmtree=null) // TODO: Add detailed information about nature of differences with prev backup
+            MetadataNode previousmtree=null)
         {
             if (!Dependencies.DestinationAvailable)
             {
@@ -868,7 +859,7 @@ namespace BackupCore
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public (IEnumerable<(string backuphash, DateTime backuptime, string message)>, bool chache) GetBackups(string backupsetname)
-        {// TODO: does this need to exist here
+        {
             if (!Dependencies.DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
@@ -892,8 +883,7 @@ namespace BackupCore
         public void RemoveBackup(string backupsetname, string backuphashprefix)
         {
             Dependencies.DefaultBackups.RemoveBackup(backupsetname, backuphashprefix);
-            // TODO: remove from cache or require sync?
-            SaveBlobIndices();
+            SyncCache(backupsetname);
         }
 
         /// <summary>

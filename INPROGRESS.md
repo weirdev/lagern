@@ -3,9 +3,8 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Code cleanup
-	TODO's
 Better support for large backup sets
+	Optimize Split data
 	Optimize B+ tree BlobStore
 		bulk loading of tree
 		store some nodes out of memory?
@@ -61,11 +60,10 @@ More flexible "list" command
 	Ranges of n-m backups ago
 		Also by date?
 	Better handling of browsing list of many backups
-.Net Core port
-	Begin with .Net standard port of library code
-		.Net standard library will work with Framework and Code versions of project
-	Make primary instance of project?
-	Test under linux
+Consistency check for MetadataNode
+	When path and FileMetadata specified path should either always or never contain file/dirname
+	GetFile and GetDirectory should use the same strategy
+	Add tests
 Replicate source file tree (as last backed up) in destination
 	BackupLocations point at these files
 	Block in the backup store but not in the replicated tree stored in a seperate folder
