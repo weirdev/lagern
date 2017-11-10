@@ -56,7 +56,7 @@ namespace CoreTest
             }
         }
 
-        private static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+        public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
             MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles()
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();

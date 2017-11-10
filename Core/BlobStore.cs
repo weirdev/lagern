@@ -18,7 +18,7 @@ namespace BackupCore
     {
         private BPlusTree<BlobLocation> TreeIndexStore { get; set; }
 
-        IBlobStoreDependencies Dependencies { get; set; }
+        public IBlobStoreDependencies Dependencies { get; set; }
 
         public BlobStore(IBlobStoreDependencies dependencies)
         {

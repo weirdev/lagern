@@ -5,7 +5,7 @@ using System.IO;
 
 namespace BackupCore
 {
-    class FSBlobStoreDependencies : IBlobStoreDependencies
+    public class FSBlobStoreDependencies : IBlobStoreDependencies
     {
         // NOTE: TransferBlobAndReferences will need to be updated if blob 
         // addressing is changed to be no longer 1 blob per file and 

@@ -4,7 +4,6 @@ For now this will remain the home of the project backlog.
 ====
 
 Better support for large backup sets
-	Optimize Split data
 	Optimize B+ tree BlobStore
 		bulk loading of tree
 		store some nodes out of memory?

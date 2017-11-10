@@ -17,10 +17,16 @@ namespace CoreTest
     public class BlobStoreTest
     {
         public BlobStore BS { get; set; }
+
+        private MetadataNode VirtualFS { get; set; }
+
+        private BPlusTree<byte[]> VFSDataStore { get; set; }
         
         public BlobStoreTest()
         {
-            BS = new BlobStore(null); // keep this entirely in memory
+            VirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
+            VFSDataStore = new BPlusTree<byte[]>(10);
+            BS = new BlobStore(new FSBlobStoreDependencies(new VirtualFSInterop(VirtualFS, VFSDataStore), Path.DirectorySeparatorChar.ToString()));
         }
 
         private TestContext testContextInstance;
@@ -85,11 +91,11 @@ namespace CoreTest
 
             byte[] small_a = new byte[2048];
             RandomData(small_a);
-            byte[] large_b = new byte[20971520];
+            byte[] large_b = new byte[20_971_520];
             RandomData(large_b);
             byte[] small_c = new byte[8];
             RandomData(small_c);
-            byte[] large_d = new byte[41943040];
+            byte[] large_d = new byte[41_943_040];
             RandomData(large_d);
             byte[] small_e = new byte[4096];
             RandomData(small_e);
@@ -157,9 +163,30 @@ namespace CoreTest
                     }
                 }
             }
+            
+            Assert.IsTrue(sizeaddition < 209_715_200);
+        }
 
-            Console.WriteLine(sizeaddition);
-            Assert.IsTrue(sizeaddition < 209715200);
+        [TestMethod]
+        public void TestBlobStoreSerialize()
+        {
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            testdata.core.RunBackup("test", "initialrun");
+            byte[] serialized = testdata.core.Dependencies.DefaultBlobs.serialize();
+
+            // Test that something was serialized
+            Assert.IsTrue(serialized.Length > 0);
+            // Test that some bytes are nonzero
+            Assert.IsFalse(serialized.SequenceEqual(new byte[serialized.Length]));
+        }
+
+        [TestMethod]
+        public void TestBlobStoreDeserialize()
+        {
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            testdata.core.RunBackup("test", "initialrun");
+            byte[] serialized = testdata.core.Dependencies.DefaultBlobs.serialize();
+            var bs = BlobStore.deserialize(serialized, testdata.core.Dependencies.DefaultBlobs.Dependencies);
         }
 
         public void RandomData(byte[] data)
