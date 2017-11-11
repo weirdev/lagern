@@ -578,18 +578,24 @@ namespace BackupCore
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
 
             BlobStore bs = new BlobStore(dependencies);
-            foreach (byte[] binkvp in BinaryEncoding.enum_decode(savedobjects["HashBLocationPairs-v1"]))
+            bs.IndexStore = new BPlusTree<BlobLocation>(DeconstructHashBlocationPairs(savedobjects["HashBLocationPairs-v1"], keysize), 
+                                bs.IndexStore.NodeSize);
+            return bs;
+        }
+
+        private static IEnumerable<KeyValuePair<byte[], BlobLocation>> DeconstructHashBlocationPairs(byte[] hblp, int keysize)
+        {
+            foreach (byte[] binkvp in BinaryEncoding.enum_decode(hblp))
             {
                 byte[] keybytes = new byte[keysize];
                 byte[] backuplocationbytes = new byte[binkvp.Length - keysize];
                 Array.Copy(binkvp, keybytes, keysize);
                 Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
 
-                bs.AddHash(keybytes, BlobLocation.deserialize(backuplocationbytes));
+                yield return new KeyValuePair<byte[], BlobLocation>(keybytes, BlobLocation.deserialize(backuplocationbytes));
             }
-            return bs;
         }
-        
+
         private class BlobReferenceIterator : IBlobReferenceIterator
         {
             public byte[] ParentHash { get; set; }

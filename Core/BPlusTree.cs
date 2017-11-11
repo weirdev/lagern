@@ -46,6 +46,25 @@ namespace BackupCore
             Initialize();
         }
 
+        // Initialize the tree with existing data
+        // Bulk loads data
+        public BPlusTree(IEnumerable<KeyValuePair<byte[], T>> hashValPairs, int nodesize)
+        {
+            NodeSize = nodesize;
+            Initialize();
+            BPlusTreeNode<T> tail = Head;
+            foreach (var hvp in hashValPairs)
+            {
+                Count++;
+                tail.Keys.Add(hvp.Key);
+                tail.Values.Add(hvp.Value);
+                if (tail.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
+                {
+                    tail = SplitLeafNode(tail);
+                }
+            }
+        }
+
         private void Initialize()
         {
             BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, true, NodeSize);
@@ -94,7 +113,10 @@ namespace BackupCore
 
         public void Clear() => Initialize();
 
-        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation, bool replace=false)
+        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation, bool replace = false) => 
+            AddKeyToNode(node, hash, blocation, ref node, replace);
+                
+        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation, ref BPlusTreeNode<T> tail, bool replace = false)
         {
             if (node.IsLeafNode != true)
             {
@@ -117,34 +139,40 @@ namespace BackupCore
                 // Go ahead and add the new key/value then split as normal
                 node.Keys.Insert(position, hash);
                 node.Values.Insert(position, blocation);
-
                 // Is this node full?
                 if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
                 {
-                    if (node.Parent == null) // node=Root is leaf (only node)
-                    {
-                        // Create new left node root
-                        BPlusTreeNode<T> newroot = new BPlusTreeNode<T>(null, false, NodeSize);
-                        Root = newroot;
-                        node.Parent = Root;
-                        Root.Children.Add(node); // Dont add key (Key added below, should always have one more child than key)
-                    }
-                    // Create a new node and add half of this node's keys/ values to it
-                    BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, true, NodeSize, node.Next);
-                    node.Next = newnode;
-                    List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-                    List<T> oldvalues = new List<T>(node.Values);
-                    newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
-                    newnode.Values = new ObservableCollection<T>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
-                    oldkeys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
-                    node.Keys = new ObservableCollection<byte[]>(oldkeys);
-                    oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
-                    node.Values = new ObservableCollection<T>(oldvalues);
-                    // Add the new node to its parent
-                    AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
+                    SplitLeafNode(node);
                 }
+
                 return null;
             }
+        }
+
+        private BPlusTreeNode<T> SplitLeafNode(BPlusTreeNode<T> node)
+        {
+            if (node.Parent == null) // node=Root is leaf (only node)
+            {
+                // Create new left node root
+                BPlusTreeNode<T> newroot = new BPlusTreeNode<T>(null, false, NodeSize);
+                Root = newroot;
+                node.Parent = Root;
+                Root.Children.Add(node); // Dont add key (Key added below, should always have one more child than key)
+            }
+            // Create a new node and add half of this node's keys/ values to it
+            BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, true, NodeSize, node.Next);
+            node.Next = newnode;
+            List<byte[]> oldkeys = new List<byte[]>(node.Keys);
+            List<T> oldvalues = new List<T>(node.Values);
+            newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+            newnode.Values = new ObservableCollection<T>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
+            oldkeys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
+            node.Keys = new ObservableCollection<byte[]>(oldkeys);
+            oldvalues.RemoveRange(node.Values.Count / 2, node.Values.Count - (node.Values.Count / 2));
+            node.Values = new ObservableCollection<T>(oldvalues);
+            // Add the new node to its parent
+            AddKeyToNode(node.Parent, newnode.Keys[0], newnode);
+            return newnode;
         }
 
         private void AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, BPlusTreeNode<T> child)
