@@ -49,9 +49,9 @@ namespace CoreTest
 
             void AddFileToVFS(string path, byte[] filehash, byte[] filedata)
             {
-                verifydatastore.AddHash(filehash, filedata);
+                verifydatastore.AddOrFind(filehash, filedata);
                 verifyfilepaths[path] = filehash;
-                vfsdatastore.AddHash(filehash, filedata);
+                vfsdatastore.AddOrFind(filehash, filedata);
                 vfsroot.AddFile(Path.GetDirectoryName(path), VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filehash));
             }
         }

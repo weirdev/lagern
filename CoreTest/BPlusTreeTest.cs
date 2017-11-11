@@ -35,13 +35,13 @@ namespace CoreTest
             byte[] key5 = new byte[20];
             rng.NextBytes(key5);
 
-            BPTree.AddHash(testkey1, testblob1);
-            BPTree.AddHash(key2, bl2);
-            BPTree.AddHash(key3, bl3);
-            BPTree.AddHash(key4, bl4);
+            BPTree.AddOrFind(testkey1, testblob1);
+            BPTree.AddOrFind(key2, bl2);
+            BPTree.AddOrFind(key3, bl3);
+            BPTree.AddOrFind(key4, bl4);
 
-            BPTree.AddHash(key5, bl4);
-            BPTree.AddHash(testkey1, testblob1);
+            BPTree.AddOrFind(key5, bl4);
+            BPTree.AddOrFind(testkey1, testblob1);
         }
 
         public BPlusTree<BlobLocation> BPTree { get; set; }
@@ -95,9 +95,9 @@ namespace CoreTest
         public void TestAddRemove()
         {
             List<KeyValuePair<byte[], BlobLocation>> treecontents1 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
-            BPTree.RemoveKey(testkey1);
+            BPTree.Remove(testkey1);
             List<KeyValuePair<byte[], BlobLocation>> treecontents2 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
-            BPTree.AddHash(testkey1, testblob1);
+            BPTree.AddOrFind(testkey1, testblob1);
             List<KeyValuePair<byte[], BlobLocation>> treecontents3 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
             Assert.IsFalse(TreeContentsMatch(treecontents1, treecontents2));
             Assert.IsTrue(TreeContentsMatch(treecontents1, treecontents3));

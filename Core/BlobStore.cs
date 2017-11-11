@@ -16,13 +16,13 @@ namespace BackupCore
     /// </summary>
     public class BlobStore
     {
-        private BPlusTree<BlobLocation> TreeIndexStore { get; set; }
+        private BPlusTree<BlobLocation> IndexStore { get; set; }
 
         public IBlobStoreDependencies Dependencies { get; set; }
 
         public BlobStore(IBlobStoreDependencies dependencies)
         {
-            TreeIndexStore = new BPlusTree<BlobLocation>(100);
+            IndexStore = new BPlusTree<BlobLocation>(100);
             Dependencies = dependencies;
         }
 
@@ -158,7 +158,7 @@ namespace BackupCore
                 }
                 if (blocation.TotalReferenceCount == 0)
                 {
-                    TreeIndexStore.RemoveKey(blobhash);
+                    IndexStore.Remove(blobhash);
                 }
             }
         }
@@ -220,7 +220,7 @@ namespace BackupCore
         private (BlobLocation existinglocation, bool datastored)? AddHash(byte[] hash, BlobLocation blocation)
         {
             // Adds a hash and Blob Location to the BlockHashStore
-            BlobLocation existingblocation = TreeIndexStore.AddHash(hash, blocation);
+            BlobLocation existingblocation = IndexStore.AddOrFind(hash, blocation);
             if (existingblocation == null)
             {
                 return null;
@@ -319,7 +319,7 @@ namespace BackupCore
 
         public void RemoveAllBackupSetReferences(string bsname)
         {
-            foreach (KeyValuePair<byte[], BlobLocation> hashblob in TreeIndexStore)
+            foreach (KeyValuePair<byte[], BlobLocation> hashblob in IndexStore)
             {
                 if (hashblob.Value.BSetReferenceCounts.ContainsKey(bsname))
                 {
@@ -346,12 +346,12 @@ namespace BackupCore
 
         public bool ContainsHash(byte[] hash)
         {
-            return TreeIndexStore.GetRecord(hash) != null;
+            return IndexStore.GetRecord(hash) != null;
         }
 
         public bool ContainsHash(string backupset, byte[] hash)
         {
-            BlobLocation blocation = TreeIndexStore.GetRecord(hash);
+            BlobLocation blocation = IndexStore.GetRecord(hash);
             if (blocation != null)
             {
                 return blocation.BSetReferenceCounts.ContainsKey(backupset);
@@ -361,7 +361,7 @@ namespace BackupCore
 
         public BlobLocation GetBlobLocation(byte[] hash)
         {
-            return TreeIndexStore.GetRecord(hash);
+            return IndexStore.GetRecord(hash);
         }
 
         private List<byte[]> GetHashListFromBlob(BlobLocation blocation)
@@ -534,7 +534,7 @@ namespace BackupCore
 
         private IEnumerable<KeyValuePair<byte[], BlobLocation>> GetAllHashesAndBlobLocations(string bsname)
         {
-            foreach (KeyValuePair<byte[], BlobLocation> hashblob in TreeIndexStore)
+            foreach (KeyValuePair<byte[], BlobLocation> hashblob in IndexStore)
             {
                 if (hashblob.Value.BSetReferenceCounts.ContainsKey(bsname))
                 {
@@ -557,7 +557,7 @@ namespace BackupCore
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
 
             List<byte[]> binkeyvals = new List<byte[]>();
-            foreach (KeyValuePair<byte[], BlobLocation> kvp in TreeIndexStore)
+            foreach (KeyValuePair<byte[], BlobLocation> kvp in IndexStore)
             {
                 byte[] keybytes = kvp.Key;
                 byte[] backuplocationbytes = kvp.Value.serialize();

@@ -10,7 +10,7 @@ namespace BackupCore
     {
 
         public MetadataNode VirtualFS { get; set; }
-        private BPlusTree<byte[]> DataStore { get; set; }
+        private IDictionary<byte[], byte[]> DataStore { get; set; }
 
         public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
         {
@@ -24,7 +24,7 @@ namespace BackupCore
 
         public void CreateDirectory(string absolutepath) => VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
 
-        public byte[] ReadAllFileBytes(string absolutepath) => DataStore.GetRecord(VirtualFS.GetFile(absolutepath).FileHash);
+        public byte[] ReadAllFileBytes(string absolutepath) => DataStore[VirtualFS.GetFile(absolutepath).FileHash];
 
         public FileMetadata GetFileMetadata(string absolutepath)
         {
@@ -73,7 +73,7 @@ namespace BackupCore
             if (FileExists(absolutepath))
             {
                 var md = GetFileMetadata(absolutepath);
-                var file = DataStore.GetRecord(md.FileHash); // existing file
+                var file = DataStore[md.FileHash]; // existing file
                 int modlen = file.Length;
                 if (byteposition + data.Length > file.Length)
                 {
@@ -97,7 +97,7 @@ namespace BackupCore
         private byte[] StoreDataGetHash(byte[] data)
         {
             var datahash = HashTools.GetSHA1Hasher().ComputeHash(data);
-            DataStore.AddHash(datahash, data);
+            DataStore.Add(datahash, data);
             return datahash;
         }
 

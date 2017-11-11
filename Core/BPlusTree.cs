@@ -10,7 +10,7 @@ using System.Collections.ObjectModel;
 
 namespace BackupCore
 {
-    public class BPlusTree<T> : IEnumerable<KeyValuePair<byte[], T>> where T : class
+    public class BPlusTree<T> : IDictionary<byte[], T>, ICollection<KeyValuePair<byte[], T>> where T : class
     {
         private BPlusTreeNode<T> Root { get; set; }
 
@@ -20,6 +20,20 @@ namespace BackupCore
         public int NodeSize { get; private set; }
 
         public string NodeStorePath { get; private set; }
+        
+        public ICollection<byte[]> Keys
+        {
+            get => new List<byte[]>(this.Select(kvp => kvp.Key));
+        }
+
+        public ICollection<T> Values
+        {
+            get => new List<T>(this.Select(kvp => kvp.Value));
+        }
+
+        public int Count { get; set; }
+
+        bool ICollection<KeyValuePair<byte[], T>>.IsReadOnly => false;
 
         /// <summary>
         /// Constructor for fully in-memory tree. If saving to disk
@@ -28,9 +42,26 @@ namespace BackupCore
         /// <param name="nodesize"></param>
         public BPlusTree(int nodesize)
         {
-            Initialize();
             NodeSize = nodesize;
+            Initialize();
         }
+
+        private void Initialize()
+        {
+            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, true, NodeSize);
+            Root = root;
+            Head = Root;
+            Count = 0;
+        }
+
+        public void Add(byte[] hash, T value) => AddOrFind(hash, value);
+
+        public void Add(KeyValuePair<byte[], T> keyValuePair) => Add(keyValuePair.Key, keyValuePair.Value);
+
+        public bool ContainsKey(byte[] hash) => GetRecord(hash) != null;
+
+        public bool Contains(KeyValuePair<byte[], T> keyValuePair) => Contains(keyValuePair.Key, keyValuePair.Value);
+        public bool Contains(byte[] hash, T value) => GetRecord(hash) == value;
 
         /// <summary>
         /// Adds a hash and backuplocation to the tree
@@ -38,7 +69,7 @@ namespace BackupCore
         /// <param name="hash"></param>
         /// <param name="blocation"></param>
         /// <returns>T if hash already exists in tree, null otherwise.</returns>
-        public T AddHash(byte[] hash, T blocation)
+        public T AddOrFind(byte[] hash, T blocation)
         {
             // Traverse down the tree
             BPlusTreeNode<T> node = FindLeafNode(hash);
@@ -46,7 +77,24 @@ namespace BackupCore
             return dosave;
         }
 
-        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation)
+        public bool TryGetValue(byte[] hash, out T value)
+        {
+            value = GetRecord(hash);
+            return value != null;
+        }
+
+        public T this[byte[] hash]
+        {
+            get => GetRecord(hash);
+            set
+            {
+                AddKeyToNode(FindLeafNode(hash), hash, value);
+            }
+        }
+
+        public void Clear() => Initialize();
+
+        private T AddKeyToNode(BPlusTreeNode<T> node, byte[] hash, T blocation, bool replace=false)
         {
             if (node.IsLeafNode != true)
             {
@@ -59,11 +107,13 @@ namespace BackupCore
             // Hash already exists in BPlusTree, return value
             if (position < node.Keys.Count && node.Keys[position].SequenceEqual(hash))
             {
+                if (replace) node.Values[position] = blocation;
                 return node.Values[position];
             }
             // Hash not in tree, belongs in position
             else
             {
+                Count++;
                 // Go ahead and add the new key/value then split as normal
                 node.Keys.Insert(position, hash);
                 node.Values.Insert(position, blocation);
@@ -155,7 +205,7 @@ namespace BackupCore
             }
         }
 
-        public void RemoveKey(byte[] hash)
+        public bool Remove(byte[] hash)
         {
             // indexing may be off here
             Stack<int> parentpositions = new Stack<int>();
@@ -167,15 +217,22 @@ namespace BackupCore
                 node = node.Children[position];
                 parentpositions.Push(position);
             }
+            bool found = false;
             // Leaf node reached, remove key and value
             for (int i = 0; i < node.Keys.Count; i++)
             {
                 if (node.Keys[i].SequenceEqual(hash))
                 {
+                    found = true;
+                    Count--;
                     node.Keys.RemoveAt(i);
                     node.Values.RemoveAt(i);
                     break;
                 }
+            }
+            if (!found)
+            {
+                return false;
             }
             if (node.Parent != null && node.Keys.Count < NodeSize / 2) // Not at root && too small
             {
@@ -229,6 +286,18 @@ namespace BackupCore
                     node.Parent.Children[parentpos + 1] = node; // More efficient to add entries to left node, but we will keep the node at parentpos + 1, so update parents reference
                     RemoveInternalNodeEntry(node.Parent, parentpos, parentpositions);
                 }
+            }
+            return true;
+        }
+
+        public bool Remove(KeyValuePair<byte[], T> keyValuePair) => Remove(keyValuePair.Key);
+
+        public void CopyTo(KeyValuePair<byte[], T>[] array, int dstindex)
+        {
+            foreach (var kvp in this)
+            {
+                array[dstindex] = kvp;
+                dstindex++;
             }
         }
 
@@ -314,7 +383,7 @@ namespace BackupCore
                     return node.Values[i];
                 }
             }
-            return default(T);
+            return null;
         }
 
         private BPlusTreeNode<T> FindLeafNode(byte[] hash)
@@ -330,7 +399,6 @@ namespace BackupCore
             return node;
         }
         
-
         private void PrintTree()
         {
             using (StreamWriter file =
@@ -363,7 +431,7 @@ namespace BackupCore
         {
             return GetRecordFromNode(FindLeafNode(hash), hash);
         }
-
+        
         public IEnumerator<KeyValuePair<byte[], T>> GetEnumerator()
         {
             BPlusTreeNode<T> node = Head;
@@ -380,15 +448,6 @@ namespace BackupCore
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
-        }
-
-        private void Initialize()
-        {
-
-            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, true, NodeSize);
-            Root = root;
-
-            Head = Root;
         }
     }
 }
