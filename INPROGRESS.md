@@ -4,16 +4,19 @@ For now this will remain the home of the project backlog.
 ====
 
 Better support for large backup sets
-	Optimize B+ tree BlobStore
-		bulk loading of tree
-		store some nodes out of memory?
-		optimize node size
-		Progress report/bar
 	Reduce number of blob files per directory
 		Currently one file per blob and all files in destination root
 		(Some) operating systems have poor performance with many files in a single directory
+		Dynamic? or a standard fan out
+	Optimize B+ tree BlobStore
+		store some nodes out of memory?
+		optimize node size
+			Make BlobLocations a set size 
+	Test large backups
+		Identify bottlenecks
 Add more unit tests
 	detecting backups and dereferencing
+	Verify more conditions in existing unit tests
 Locking for destinations seperated from their caches
 	Prevent deleting (adding?) backups without cache
 		Cache may contain references in its backups to data no longer in destination
@@ -38,6 +41,7 @@ Locking for destinations seperated from their caches
 	Generic permissions support ie. Linux (POSIX)
 		Handle restoring to different OS/permissions scheme than saved to
 Support deleting entire backup sets (at dest)
+Examine bundling/using a true database as the datastore for blobstore
 Handle common things that could go wrong
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes

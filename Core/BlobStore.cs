@@ -291,7 +291,7 @@ namespace BackupCore
             {
                 if (!shallow)
                 {
-                    WriteBlob(posblocation, blob.Block);
+                    WriteBlob(blob.Hash, blob.Block, posblocation);
                 }
                 IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
                 return posblocation;
@@ -309,7 +309,7 @@ namespace BackupCore
                             && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0, 
                                 backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
                     {
-                        WriteBlob(existingbloc, blob.Block);
+                        WriteBlob(blob.Hash, blob.Block, existingbloc);
                     }
                 }
                 IncrementReferenceCountNoRecurse(backupset, existingbloc, blob.Hash, 1);
@@ -339,9 +339,11 @@ namespace BackupCore
             return new BlobReferenceIterator(this, blobhash, includefiles, bottomup);
         }
 
-        private void WriteBlob(BlobLocation blocation, byte[] blob)
+        private void WriteBlob(byte[] hash, byte[] blob, BlobLocation blobLocation)
         {
-            Dependencies.StoreBlob(blob, blocation.RelativeFilePath, blocation.BytePosition);
+            (string relfilepath, int bytepos) = Dependencies.StoreBlob(hash, blob);
+            blobLocation.RelativeFilePath = relfilepath;
+            blobLocation.BytePosition = bytepos;
         }
 
         public bool ContainsHash(byte[] hash)

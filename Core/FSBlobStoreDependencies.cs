@@ -38,12 +38,38 @@ namespace BackupCore
             }
         }
 
-        public void StoreBlob(byte[] blobdata, string relpath, int byteposition)
+        public (string relativefilepath, int byteposition) StoreBlob(byte[] blobhash, byte[] blobdata)
         {
+            // Save files with names given by their hashes
+            // In order to keep the number of files per directory managable,
+            // the first two bytes of the hash are stripped and used as 
+            // the names of two nested directories into which the file
+            // is placed.
+            // Ex. hash = 3bc6e94a89 => relpath = 3b/c6/e94a89
+            string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
+            string dir1 = hashstring.Substring(0, 2);
+            string dir2 = hashstring.Substring(2, 2);
+            string fname = hashstring.Substring(4);
+
+            string relpath = Path.Combine(dir1, dir2, fname);
+            string dir1path = Path.Combine(BlobSaveDirectory, dir1);
+            string dir2path = Path.Combine(dir1path, dir2);
             string path = Path.Combine(BlobSaveDirectory, relpath);
             try
             {
-                FSInterop.WriteFileRegion(path, byteposition, blobdata);
+                if (!FSInterop.DirectoryExists(dir1path))
+                {
+                    FSInterop.CreateDirectory(dir1path);
+                }
+                if (!FSInterop.DirectoryExists(dir2path))
+                {
+                    FSInterop.CreateDirectory(dir2path);
+                }
+                // NOTE: Right now every file is saved seperately
+                // (byteposition is always 0). In the future a packfile 
+                // may be added, so we continue specifying the byteposition
+                FSInterop.WriteFileRegion(path, 0, blobdata);
+                return (relpath, 0);
             }
             catch (Exception)
             {
