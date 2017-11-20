@@ -135,7 +135,15 @@ namespace BackupCore
             }
         }
 
-        public void AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="bsname"></param>
+        /// <param name="message"></param>
+        /// <param name="metadatatreehash"></param>
+        /// <param name="shallow"></param>
+        /// <returns>The hash of the new backup</returns>
+        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow)
         {
             var bset = LoadBackupSet(bsname);
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
@@ -143,6 +151,7 @@ namespace BackupCore
             byte[] backuphash = Dependencies.Blobs.StoreData(bsname, brbytes, BlobLocation.BlobTypes.BackupRecord);
             bset.Backups.Add((backuphash, shallow));
             SaveBackupSet(bset, bsname);
+            return backuphash;
         }
 
         public void RemoveBackup(string bsname, string backuphashprefix)

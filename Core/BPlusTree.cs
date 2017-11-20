@@ -276,7 +276,7 @@ namespace BackupCore
                     // Update split point above
                     node.Parent.Keys[parentpos - 1] = node.Keys[0];
                 }
-                else if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
+                else if (parentpos < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
                 {
                     // Steal entry from right neighbor
                     node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[0]);
@@ -289,8 +289,6 @@ namespace BackupCore
                 else if (parentpos - 1 >= 0) //  && node.Parent.Children[parentpos - 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
                 {
                     // Merge with left neighbor
-                    // Pull down key from parent (inverse of bubbling up key on a split)
-                    node.Parent.Children[parentpos - 1].Keys.Add(node.Parent.Keys[parentpos - 1]);
                     for (int i=0; i<node.Keys.Count; i++)
                     {
                         node.Parent.Children[parentpos - 1].Keys.Add(node.Keys[i]);
@@ -300,12 +298,10 @@ namespace BackupCore
                     node.Parent.Children[parentpos] = node.Parent.Children[parentpos - 1]; // More efficient to add entries to left node, but we will keep the node at parentpos, so update parents reference
                     RemoveInternalNodeEntry(node.Parent, parentpos - 1, parentpositions);
                 }
-                else // if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                else // if (parentpos < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
                 {
                     // Merge with right neighbor
-                    // Pull down key from parent (inverse of bubbling up key on a split)
-                    node.Keys.Add(node.Parent.Keys[parentpos]);
-                    for (int i = 0; i < node.Keys.Count; i++)
+                    for (int i = 0; i < node.Parent.Children[parentpos + 1].Keys.Count; i++)
                     {
                         node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[i]);
                         node.Values.Add(node.Parent.Children[parentpos + 1].Values[i]);
@@ -359,7 +355,7 @@ namespace BackupCore
                     // Update split point above
                     node.Parent.Keys[parentpos - 1] = node.Keys[0];
                 }
-                else if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
+                else if (parentpos < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
                 {
                     // Steal entry from right neighbor
                     node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[0]);
@@ -382,7 +378,7 @@ namespace BackupCore
                     node.Parent.Children[parentpos] = node.Parent.Children[parentpos - 1]; // More efficient to add entries to left node, but we will keep the node at parentpos, so update parents reference
                     RemoveInternalNodeEntry(node.Parent, parentpos - 1, parentpositions);
                 }
-                else // if (parentpos + 1 < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
+                else // if (parentpos < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
                 {
                     // Merge with right neighbor
                     // Pull down key from parent (inverse of bubbling up key on a split)

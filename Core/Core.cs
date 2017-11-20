@@ -392,7 +392,7 @@ namespace BackupCore
                     if (deltasubdirs[deltaidx] == fssubdirs[fsidx]) // Names match
                     {
                         string dirname = fssubdirs[fsidx];
-                        if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                        if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
                         {
                             deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.Directories[dirname]));
                         }
@@ -413,7 +413,7 @@ namespace BackupCore
                         {
                             Changes = (FileMetadata.FileStatus.New, null)
                         };
-                        if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                        if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
                         {
                             deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), deltanode.AddDirectory(dirmeta)));
                         }
@@ -434,7 +434,7 @@ namespace BackupCore
                         Changes = (FileMetadata.FileStatus.New, null)
                     };
                     MetadataNode newnode = deltanode.AddDirectory(dirmeta);
-                    if (CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
+                    if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
                     {
                         deltamnodequeue.Enqueue((Path.Combine(reldirpath, fssubdirs[fsidx]), newnode));
                     }
@@ -452,7 +452,8 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefix"></param>
-        public void RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, 
+        /// <returns>The hash of the new backup</returns>
+        public byte[] RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, 
             List<(int trackclass, string pattern)> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
             if (!Dependencies.DestinationAvailable)
@@ -557,10 +558,11 @@ namespace BackupCore
 
             byte[] newmtreehash = deltatree.Store(Dependencies.DefaultBlobs, backupsetname);
 
-            Dependencies.DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
+            byte[] backuphash = Dependencies.DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
 
             SyncCache(backupsetname);
             // Index save occurred during synccache
+            return backuphash;
         }
         
         /// <summary>

@@ -12,7 +12,7 @@ namespace CoreTest
     {
         static System.Security.Cryptography.SHA1 Hasher = HashTools.GetSHA1Hasher();
 
-        private static MetadataNode CreateBasicVirtualFS()
+        public static MetadataNode CreateBasicVirtualFS()
         {
             MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src"));
@@ -27,7 +27,7 @@ namespace CoreTest
             BPlusTree<byte[]> verifydatastore = new BPlusTree<byte[]>(10);
             Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
 
-            (byte[] hash, byte[] file) = MakeRandomFile(100_000_000); // 100 MB file
+            (byte[] hash, byte[] file) = MakeRandomFile(10_000_000); // 10 MB file
             AddFileToVFS(Path.Combine("src", "big"), hash, file);
 
             (hash, file) = MakeRandomFile(0); // Empty file
@@ -52,7 +52,8 @@ namespace CoreTest
                 verifydatastore.AddOrFind(filehash, filedata);
                 verifyfilepaths[path] = filehash;
                 vfsdatastore.AddOrFind(filehash, filedata);
-                vfsroot.AddFile(Path.GetDirectoryName(path), VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filehash));
+                vfsroot.AddFile(Path.GetDirectoryName(path), 
+                    VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filedata.Length, filehash));
             }
         }
 
@@ -113,6 +114,8 @@ namespace CoreTest
             var testdata = InitializeNewCoreWithStandardFiles();
 
             testdata.core.RunBackup("test", "run1");
+            testdata.vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
+            testdata.core.RunBackup("test", "run2");
         }
 
         [TestMethod]
@@ -132,7 +135,18 @@ namespace CoreTest
             testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
         }
-        
+
+        [TestMethod]
+        public void TestRemoveBackup()
+        {
+            var testdata = InitializeNewCoreWithStandardFiles();
+            var bh1 = testdata.core.RunBackup("test", "run1");
+            testdata.vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
+            var bh2 = testdata.core.RunBackup("test", "run2");
+            testdata.core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
+            testdata.core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
+        }
+
         [TestMethod]
         public void TestPathMatchesPattern()
         {

@@ -49,7 +49,7 @@ namespace BackupCore
             var datahash = StoreDataGetHash(data);
             if (fileMetadata == null)
             {
-                fileMetadata = MakeNewFileMetadata(absolutepath, datahash);
+                fileMetadata = MakeNewFileMetadata(absolutepath, data.Length, datahash);
             }
             VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = fileMetadata;
         }
@@ -117,8 +117,8 @@ namespace BackupCore
         // Unlike other public methods of this class, MakeNewFileMetadata and MakeNewDirectoryMetadata
         // are not part of the IFSInterop interface. They are included as convenience methods for
         // use when creating a virtual filesystem
-        public static FileMetadata MakeNewFileMetadata(string name, byte[] hash = null) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Normal, 0, hash);
+        public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[] hash = null) => new FileMetadata(name, new DateTime(),
+                                new DateTime(), new DateTime(), FileAttributes.Normal, size, hash);
 
 
         public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),

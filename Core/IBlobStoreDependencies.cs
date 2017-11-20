@@ -9,7 +9,7 @@ namespace BackupCore
         byte[] LoadBlob(string relpath, int byteposition, int bytelength);
 
         void DeleteBlob(string relpath, int byteposition, int bytelength);
-
+        
         (string relativefilepath, int byteposition) StoreBlob(byte[] hash, byte[] blobdata);
     }
 }

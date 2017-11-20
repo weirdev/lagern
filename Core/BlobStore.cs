@@ -303,13 +303,17 @@ namespace BackupCore
                 if (!datastored)
                 {
                     // Data is not already stored
-                    // If we are saving to a cache and the bloblist cache indicates the destination has the data
-                    // Then dont store, Else save
-                    if (!(backupset.EndsWith(Core.CacheSuffix) 
-                            && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0, 
-                                backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
+                    // Dont save if we are writing a bloblistcache
+                    if (!backupset.EndsWith(Core.BlobListCacheSuffix))
                     {
-                        WriteBlob(blob.Hash, blob.Block, existingbloc);
+                        // If we are saving to a cache and the bloblist cache indicates the destination has the data
+                        // Then dont store, Else save
+                        if (!(backupset.EndsWith(Core.CacheSuffix)
+                            && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0,
+                                backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
+                        {
+                            WriteBlob(blob.Hash, blob.Block, existingbloc);
+                        }
                     }
                 }
                 IncrementReferenceCountNoRecurse(backupset, existingbloc, blob.Hash, 1);
