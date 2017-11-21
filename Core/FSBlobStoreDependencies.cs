@@ -57,14 +57,8 @@ namespace BackupCore
             string path = Path.Combine(BlobSaveDirectory, relpath);
             try
             {
-                if (!FSInterop.DirectoryExists(dir1path))
-                {
-                    FSInterop.CreateDirectory(dir1path);
-                }
-                if (!FSInterop.DirectoryExists(dir2path))
-                {
-                    FSInterop.CreateDirectory(dir2path);
-                }
+                FSInterop.CreateDirectoryIfNotExists(dir1path);
+                FSInterop.CreateDirectoryIfNotExists(dir2path);
                 // NOTE: Right now every file is saved seperately
                 // (byteposition is always 0). In the future a packfile 
                 // may be added, so we continue specifying the byteposition

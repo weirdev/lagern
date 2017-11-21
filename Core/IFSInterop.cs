@@ -11,7 +11,7 @@ namespace BackupCore
 
         bool DirectoryExists(string absolutepath);
 
-        void CreateDirectory(string absolutepath);
+        void CreateDirectoryIfNotExists(string absolutepath);
 
         byte[] ReadAllFileBytes(string absolutepath);
 

@@ -14,11 +14,6 @@ namespace BackupCore
         // later blobs may be combined, and blobID will be the ID (filename)
         // of the new combination blob
         public string RelativeFilePath { get; set; }
-        public BlobTypes BlobType { get; set; }
-        /// <summary>
-        /// Is this Blob comprised of several blocks? i.e. Is this block a list of hashes referencing blocks that make up this Blob?
-        /// </summary>
-        public bool IsMultiBlobReference { get; set; }
         public int BytePosition { get; set; }
         public int ByteLength { get; set; }
 
@@ -31,13 +26,11 @@ namespace BackupCore
 
         public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.EndsWith(Core.ShallowSuffix)).Select(kvp => kvp.Value).Sum();
 
-        public BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen) : this(blobtype, ismultiblockref, relpath, bytepos, bytelen, new Dictionary<string, int>()) { }
+        public BlobLocation(string relpath, int bytepos, int bytelen) : this(relpath, bytepos, bytelen, new Dictionary<string, int>()) { }
 
-        private BlobLocation(BlobTypes blobtype, bool ismultiblockref, string relpath, int bytepos, int bytelen, Dictionary<string, int> referencecounts)
+        private BlobLocation(string relpath, int bytepos, int bytelen, Dictionary<string, int> referencecounts)
         {
-            BlobType = blobtype;
             RelativeFilePath = relpath;
-            IsMultiBlobReference = ismultiblockref;
             BytePosition = bytepos;
             ByteLength = bytelen;
             BSetReferenceCounts = referencecounts;
@@ -75,14 +68,13 @@ namespace BackupCore
             // Required
             // BSetReferenceCounts.BackupSets = 
             // BSetReferenceCounts.ReferenceCounts = 
+            // -v6
+            // BlobType removed
+            // IsMultiBlockReference
 
             bldata.Add("RelativeFilePath-v1", Encoding.UTF8.GetBytes(RelativeFilePath));
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
-
-            bldata.Add("BlobType-v2", BitConverter.GetBytes((int)BlobType));
-            
-            bldata.Add("IsMultiBlockReference-v4", BitConverter.GetBytes(IsMultiBlobReference));
 
             bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Keys.Select(set => Encoding.UTF8.GetBytes(set))));
             bldata.Add("BSetReferenceCounts.ReferenceCounts-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Values.Select(rc => BitConverter.GetBytes(rc))));
@@ -96,11 +88,7 @@ namespace BackupCore
             string relfilepath = Encoding.UTF8.GetString(savedobjects["RelativeFilePath-v1"]);
             int byteposition = BitConverter.ToInt32(savedobjects["BytePosition-v1"], 0);
             int bytelength = BitConverter.ToInt32(savedobjects["ByteLength-v1"], 0);
-
-            int blobtypeint = BitConverter.ToInt32(savedobjects["BlobType-v2"], 0);
-
-            bool ismultiblockref = BitConverter.ToBoolean(savedobjects["IsMultiBlockReference-v4"], 0);
-
+            
             var backupsets = BinaryEncoding.enum_decode(savedobjects["BSetReferenceCounts.BackupSets-v5"]).Select(bin => Encoding.UTF8.GetString(bin)).ToList();
             var referencecounts = BinaryEncoding.enum_decode(savedobjects["BSetReferenceCounts.ReferenceCounts-v5"]).Select(bin => BitConverter.ToInt32(bin, 0)).ToList();
             Dictionary<string, int> bsrc = new Dictionary<string, int>();
@@ -109,7 +97,7 @@ namespace BackupCore
                 bsrc[backupsets[i]] = referencecounts[i];
             }
 
-            return new BlobLocation((BlobTypes)blobtypeint, ismultiblockref, relfilepath, byteposition, bytelength, bsrc);
+            return new BlobLocation(relfilepath, byteposition, bytelength, bsrc);
         }
 
         public enum BlobTypes

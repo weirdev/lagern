@@ -11,7 +11,7 @@ namespace BackupCore
 
         public bool FileExists(string absolutepath) => File.Exists(absolutepath);
 
-        public void CreateDirectory(string absolutepath) => Directory.CreateDirectory(absolutepath);
+        public void CreateDirectoryIfNotExists(string absolutepath) => Directory.CreateDirectory(absolutepath);
 
         public byte[] ReadAllFileBytes(string absolutepath) => File.ReadAllBytes(absolutepath);
 
