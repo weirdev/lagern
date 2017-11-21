@@ -521,11 +521,25 @@ namespace BackupCore
                         {
                             throw new Exception("Reached metadata without delta");
                         }
-                        var fstatus = parent.Files[file].Changes.Value.status;
+                        var filemeta = parent.Files[file];
+                        var fstatus = filemeta.Changes.Value.status;
+                        if (fstatus == FileMetadata.FileStatus.Unchanged)
+                        {
+                            Dependencies.DefaultBlobs.IncrementReferenceCount(backupsetname, filemeta.FileHash,
+                                BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
+                        }
+                        if (fstatus == FileMetadata.FileStatus.Deleted)
+                        {
+                            parent.Files.Remove(file);
+                            // Dont dereference file just dont add new reference
+                        }
                         // Exchnage for metadata in Changes
                         if (fstatus == FileMetadata.FileStatus.MetadataChange || fstatus == FileMetadata.FileStatus.DataModified)
                         {
-                            parent.Files[file] = parent.Files[file].Changes.Value.updated;
+                            parent.Files[file] = filemeta.Changes.Value.updated;
+                            // Dont need to save data again but increase reference count
+                            Dependencies.DefaultBlobs.IncrementReferenceCount(backupsetname, filemeta.FileHash, 
+                                BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
                         }
                         // Store file data
                         if (fstatus == FileMetadata.FileStatus.New || fstatus == FileMetadata.FileStatus.DataModified)
@@ -838,7 +852,7 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Backup a file into the given metadatanode
+        /// Backup a file and save its hash and ismultiblock to the given filemetadata
         /// </summary>
         /// <param name="relpath"></param>
         /// <param name="mtree"></param>

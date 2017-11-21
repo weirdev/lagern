@@ -28,22 +28,22 @@ namespace CoreTest
             Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
 
             (byte[] hash, byte[] file) = MakeRandomFile(10_000_000); // 10 MB file
-            //AddFileToVFS(Path.Combine("src", "big"), hash, file);
+            AddFileToVFS(Path.Combine("src", "big"), hash, file);
 
             (hash, file) = MakeRandomFile(0); // Empty file
-            //AddFileToVFS(Path.Combine("src", "empty"), hash, file);
+            AddFileToVFS(Path.Combine("src", "empty"), hash, file);
 
             (hash, file) = MakeRandomFile(1); // 1byte file
             AddFileToVFS(Path.Combine("src", "1b"), hash, file);
             
             (hash, file) = MakeRandomFile(2); // 2byte file
             AddFileToVFS(Path.Combine("src", "2b"), hash, file);
-            /*
+            
             foreach (var num in Enumerable.Range(0, 200))
             {
                 (hash, file) = MakeRandomFile(55_000); // regular size file
                 AddFileToVFS(Path.Combine("src", String.Format("reg_{0}", num)), hash, file);
-            }*/
+            }
 
             return (verifydatastore, verifyfilepaths);
 
