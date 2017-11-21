@@ -371,7 +371,7 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var sizes = bcore.GetBackupSizes(backups[i].backuphash);
+                    var sizes = bcore.GetBackupSizes(bsname, backups[i].backuphash);
                     string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)

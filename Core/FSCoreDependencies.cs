@@ -180,16 +180,16 @@ namespace BackupCore
             // Make sure we have an index folder to write to later
             if (!FSInterop.DirectoryExists(id))
             {
-                FSInterop.CreateDirectory(id);
+                FSInterop.CreateDirectoryIfNotExists(id);
             }
             // Make sure we have a backup list folder to write to later
             if (!FSInterop.DirectoryExists(bsd))
             {
-                FSInterop.CreateDirectory(bsd);
+                FSInterop.CreateDirectoryIfNotExists(bsd);
             }
             if (!FSInterop.DirectoryExists(bdd))
             {
-                FSInterop.CreateDirectory(bdd);
+                FSInterop.CreateDirectoryIfNotExists(bdd);
             }
         }
 
@@ -331,7 +331,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.CreateDirectory(path);
+                FSInterop.CreateDirectoryIfNotExists(path);
             }
             catch (Exception)
             {

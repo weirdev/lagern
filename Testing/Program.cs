@@ -22,15 +22,16 @@ namespace Testing
             //BlobStoreTest bstest = new BlobStoreTest();
             //bstest.TestSplitData();
 
-            //CoreTest.CoreTest ctest = new CoreTest.CoreTest();
+            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
             //ctest.TestInitializeNew();
             //ctest.TestRunBackup();
             //ctest.TestRestore();
+            ctest.TestRemoveBackup();
 
-            BPlusTreeTest bptt = new BPlusTreeTest();
-            bptt.TestAddRemove();
+            //BPlusTreeTest bptt = new BPlusTreeTest();
+            //bptt.TestAddRemove();
 
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));

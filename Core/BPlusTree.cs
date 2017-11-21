@@ -142,7 +142,7 @@ namespace BackupCore
                 // Is this node full?
                 if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
                 {
-                    SplitLeafNode(node);
+                    tail = SplitLeafNode(node);
                 }
 
                 return null;

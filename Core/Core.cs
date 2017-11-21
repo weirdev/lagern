@@ -80,7 +80,8 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, previousbackup.MetadataTreeHash);
+                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, 
+                        previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
                 else
@@ -483,7 +484,8 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, previousbackup.MetadataTreeHash);
+                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, 
+                        previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
                 else
@@ -556,9 +558,9 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            byte[] newmtreehash = deltatree.Store(Dependencies.DefaultBlobs, backupsetname);
+            (byte[] newmtreehash, bool multiblock) = deltatree.Store(Dependencies.DefaultBlobs, backupsetname);
 
-            byte[] backuphash = Dependencies.DefaultBackups.AddBackup(backupsetname, message, newmtreehash, false);
+            byte[] backuphash = Dependencies.DefaultBackups.AddBackup(backupsetname, message, newmtreehash, multiblock, false);
 
             SyncCache(backupsetname);
             // Index save occurred during synccache
@@ -614,11 +616,12 @@ namespace BackupCore
 
             try
             {
-                MetadataNode mtree = MetadataNode.Load(Dependencies.DefaultBlobs, Dependencies.DefaultBackups.GetBackupRecord(backupsetname, backuphashprefix).MetadataTreeHash);
+                var backup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname, backuphashprefix);
+                MetadataNode mtree = MetadataNode.Load(Dependencies.DefaultBlobs, backup.MetadataTreeHash, backup.MetadataTreeMultiBlock);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
-                    byte[] filedata = Dependencies.DefaultBlobs.RetrieveData(filemeta.FileHash);
+                    byte[] filedata = Dependencies.DefaultBlobs.RetrieveData(filemeta.FileHash, filemeta.MultiBlock);
                     // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
                     Dependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
@@ -818,9 +821,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="backuphashstring"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string backuphashstring)
+        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring)
         {
-            return Dependencies.DefaultBlobs.GetSizes(HashTools.HexStringToByteArray(backuphashstring));
+            var br = Dependencies.DefaultBackups.GetBackupRecord(bsname, backuphashstring);
+            return Dependencies.DefaultBlobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode, br.MetadataTreeMultiBlock);
         }
 
         /// <summary>
@@ -847,8 +851,9 @@ namespace BackupCore
                     relpath = relpath.Substring(1);
                 }
                 Stream readerbuffer = Dependencies.GetFileData(relpath);
-                byte[] filehash = Dependencies.DefaultBlobs.StoreData(backupset, readerbuffer, BlobLocation.BlobTypes.FileBlob);
+                (byte[] filehash, bool multiblock) = Dependencies.DefaultBlobs.StoreData(backupset, readerbuffer);
                 fileMetadata.FileHash = filehash;
+                fileMetadata.MultiBlock = multiblock;
             }
             catch (Exception e)
             {
