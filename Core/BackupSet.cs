@@ -14,7 +14,7 @@ namespace BackupCore
 
         public BackupSet()
         {
-            Backups = new List<(byte[], bool)>();
+            Backups = new List<(byte[] hash, bool shallow)>();
         }
 
         private BackupSet(List<(byte[], bool)> backups)
@@ -41,10 +41,10 @@ namespace BackupCore
             Dictionary<string, byte[]> saved_objects = BinaryEncoding.dict_decode(data);
             List<byte[]> backuphashes = BinaryEncoding.enum_decode(saved_objects["backuphashes-v1"]);
             List<bool> shallowflags = new List<bool>(from bb in BinaryEncoding.enum_decode(saved_objects["shallowflags-v1"]) select BitConverter.ToBoolean(bb, 0));
-            List<(byte[], bool)> backups = new List<(byte[], bool)>();
+            List<(byte[] hash, bool shallow)> backups = new List<(byte[], bool)>();
             for (int i = 0; i < backuphashes.Count; i++)
             {
-                backups.Add((backuphashes[i], shallowflags[i]));
+                backups.Add((hash: backuphashes[i], shallow: shallowflags[i]));
             }
             return new BackupSet(backups);
         }

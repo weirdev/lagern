@@ -32,6 +32,11 @@ namespace Testing
 
             //BPlusTreeTest bptt = new BPlusTreeTest();
             //bptt.TestAddRemove();
+            //bptt.TestAddMany();
+            //bptt.TestAddRemoveMany();
+
+            //HashToolsTest htt = new HashToolsTest();
+            //htt.TestByteArrayLessThan();
 
             //MakeManyFiles(1000, 1000000, @"D:\src");
             //Console.WriteLine(TimeSimpleCopy(@"D:\src", @"D:\dst"));

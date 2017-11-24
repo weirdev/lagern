@@ -15,55 +15,7 @@ namespace CoreTest
     {
         public BPlusTreeTest()
         {
-            BPTree = new BPlusTree<BlobLocation>(100);
-
-            testblob1 = new BlobLocation("somewhere1", 0, 40);
-            BlobLocation bl2 = new BlobLocation("somewhere2", 4, 401);
-            BlobLocation bl3 = new BlobLocation("somewhere3", 0, 440);
-            BlobLocation bl4 = new BlobLocation("somewhere4", 300, 74000);
-
-            var rng = new Random();
-
-            testkey1 = new byte[20];
-            rng.NextBytes(testkey1);
-            byte[] key2 = new byte[20];
-            rng.NextBytes(key2);
-            byte[] key3 = new byte[20];
-            rng.NextBytes(key3);
-            byte[] key4 = new byte[20];
-            rng.NextBytes(key4);
-            byte[] key5 = new byte[20];
-            rng.NextBytes(key5);
-
-            BPTree.AddOrFind(testkey1, testblob1);
-            BPTree.AddOrFind(key2, bl2);
-            BPTree.AddOrFind(key3, bl3);
-            BPTree.AddOrFind(key4, bl4);
-
-            BPTree.AddOrFind(key5, bl4);
-            BPTree.AddOrFind(testkey1, testblob1);
-        }
-
-        public BPlusTree<BlobLocation> BPTree { get; set; }
-        public BlobLocation testblob1 { get; set; }
-        public byte[] testkey1 { get; set; }
-
-        private TestContext testContextInstance;
-
-        /// <summary>
-        ///Gets or sets the test context which provides
-        ///information about and functionality for the current test run.
-        ///</summary>
-        public TestContext TestContext
-        {
-            get
-            {
-                return testContextInstance;
-            }
-            set
-            {
-                testContextInstance = value;
-            }
+            
         }
 
         #region Additional test attributes
@@ -92,8 +44,36 @@ namespace CoreTest
         // TODO: Add serialization tests for classes using/inheriting B+ tree
 
         [TestMethod]
-        public void TestAddRemove()
+        public void TestAddRemoveFew()
         {
+            var BPTree = new BPlusTree<BlobLocation>(100);
+
+            var testblob1 = new BlobLocation("somewhere1", 0, 40);
+            BlobLocation bl2 = new BlobLocation("somewhere2", 4, 401);
+            BlobLocation bl3 = new BlobLocation("somewhere3", 0, 440);
+            BlobLocation bl4 = new BlobLocation("somewhere4", 300, 74000);
+
+            var rng = new Random();
+
+            var testkey1 = new byte[20];
+            rng.NextBytes(testkey1);
+            byte[] key2 = new byte[20];
+            rng.NextBytes(key2);
+            byte[] key3 = new byte[20];
+            rng.NextBytes(key3);
+            byte[] key4 = new byte[20];
+            rng.NextBytes(key4);
+            byte[] key5 = new byte[20];
+            rng.NextBytes(key5);
+
+            BPTree.AddOrFind(testkey1, testblob1);
+            BPTree.AddOrFind(key2, bl2);
+            BPTree.AddOrFind(key3, bl3);
+            BPTree.AddOrFind(key4, bl4);
+
+            BPTree.AddOrFind(key5, bl4);
+            BPTree.AddOrFind(testkey1, testblob1);
+
             List<KeyValuePair<byte[], BlobLocation>> treecontents1 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
             BPTree.Remove(testkey1);
             List<KeyValuePair<byte[], BlobLocation>> treecontents2 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
@@ -101,6 +81,61 @@ namespace CoreTest
             List<KeyValuePair<byte[], BlobLocation>> treecontents3 = new List<KeyValuePair<byte[], BlobLocation>>(BPTree);
             Assert.IsFalse(TreeContentsMatch(treecontents1, treecontents2));
             Assert.IsTrue(TreeContentsMatch(treecontents1, treecontents3));
+        }
+
+        [TestMethod]
+        public void TestAddRemoveMany()
+        {
+            var BPTree = new BPlusTree<byte[]>(100);
+            Random random = new Random(80);
+            List<byte[]> keyvals = new List<byte[]>();
+            for (int i = 0; i < 107; i++)
+            {
+                byte[] keyval = new byte[20];
+                random.NextBytes(keyval);
+                BPTree.Add(keyval, keyval);
+                keyvals.Add(keyval);
+            }
+            ValidateTree(BPTree, keyvals);
+
+            for (int i = 0; i < 107; i++)
+            {
+                int remidx = random.Next(keyvals.Count);
+                BPTree.Remove(keyvals[remidx]);
+                keyvals.RemoveAt(remidx);
+                ValidateTree(BPTree, keyvals);
+            }
+        }
+
+        private void ValidateTree(BPlusTree<byte[]> tree, List<byte[]> keyvals)
+        {
+            foreach (var keyval in keyvals)
+            {
+                var val = tree.GetRecord(keyval);
+                Assert.IsTrue(val.SequenceEqual(keyval));
+            }
+        }
+
+        [TestMethod]
+        public void TestAddMany()
+        {
+            var bptree = new BPlusTree<string>(100);
+            for (int i = 0; i < 200; i++)
+            {
+                bptree.Add(BitConverter.GetBytes(i).Reverse().ToArray(), i.ToString());
+            }
+            Assert.IsTrue(bptree.Count == 200);
+            Assert.IsTrue(KVPSequenceEqual(Enumerable.Range(0, 200)
+                .Select(i => new KeyValuePair<byte[], string>(BitConverter.GetBytes(i)
+                .Reverse().ToArray(), i.ToString())), bptree));
+            for (int i = 200; i < 200000; i++)
+            {
+                bptree.Add(BitConverter.GetBytes(i).Reverse().ToArray(), i.ToString());
+            }
+            Assert.IsTrue(bptree.Count == 200000);
+            Assert.IsTrue(KVPSequenceEqual(Enumerable.Range(0, 200000)
+                .Select(i => new KeyValuePair<byte[], string>(BitConverter.GetBytes(i)
+                .Reverse().ToArray(), i.ToString())), bptree));
         }
 
         private bool TreeContentsMatch(List<KeyValuePair<byte[], BlobLocation>> tc1, List<KeyValuePair<byte[], BlobLocation>> tc2)
@@ -119,6 +154,29 @@ namespace CoreTest
                 {
                     return false;
                 }
+            }
+            return true;
+        }
+
+        private bool KVPSequenceEqual<V>(IEnumerable<KeyValuePair<byte[], V>> kvp1, IEnumerable<KeyValuePair<byte[], V>> kvp2)
+        {
+            var enum1 = kvp1.GetEnumerator();
+            var enum2 = kvp2.GetEnumerator();
+            int i = 0;
+            while (enum1.MoveNext())
+            {
+                enum2.MoveNext();
+                if (!enum1.Current.Value.Equals(enum2.Current.Value))
+                {
+                    throw new Exception();
+                    return false;
+                }
+                if (!enum1.Current.Key.SequenceEqual(enum2.Current.Key))
+                {
+                    throw new Exception();
+                    return false;
+                }
+                i++;
             }
             return true;
         }

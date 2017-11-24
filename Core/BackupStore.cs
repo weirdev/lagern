@@ -19,108 +19,108 @@ namespace BackupCore
 
         public void SyncCache(BackupStore cache, string bsname)
         {
-            int srcindex = 0;
+            int cacheindex = 0;
             int dstindex = 0;
-            BackupRecord srcbr = null;
+            BackupRecord cachebr = null;
             BackupRecord dstbr = null;
 
             string cachebsname = bsname + Core.CacheSuffix;
             
-            var bset = LoadBackupSet(bsname);
-            var chachebset = cache.LoadBackupSet(cachebsname);
-            if (chachebset.Backups.Count > 0 && bset.Backups.Count > 0)
+            var dstbset = LoadBackupSet(bsname);
+            var cachebset = cache.LoadBackupSet(cachebsname);
+            if (cachebset.Backups.Count > 0 && dstbset.Backups.Count > 0)
             {
-                while (chachebset.Backups.Count > srcindex && bset.Backups.Count > dstindex)
+                while (cachebset.Backups.Count > cacheindex && dstbset.Backups.Count > dstindex)
                 {
-                    if (!chachebset.Backups[srcindex].hash.SequenceEqual(bset.Backups[dstindex].hash))
+                    if (!cachebset.Backups[cacheindex].hash.SequenceEqual(dstbset.Backups[dstindex].hash))
                     {
-                        if (srcbr == null)
+                        if (cachebr == null)
                         {
-                            srcbr = cache.GetBackupRecord(cachebsname, chachebset.Backups[srcindex].hash);
+                            cachebr = cache.GetBackupRecord(cachebsname, cachebset.Backups[cacheindex].hash);
                         }
                         if (dstbr == null)
                         {
-                            dstbr = cache.GetBackupRecord(cachebsname, bset.Backups[dstindex].hash);
+                            dstbr = GetBackupRecord(bsname, dstbset.Backups[dstindex].hash);
                         }
-                        if (srcbr.BackupTime < dstbr.BackupTime)
+                        if (cachebr.BackupTime < dstbr.BackupTime)
                         {
-                            if (chachebset.Backups[srcindex].shallow)
+                            if (cachebset.Backups[cacheindex].shallow)
                             {
                                 // Remove shallow backups from cache not present in dst
-                                cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash, 
-                                    BlobLocation.BlobTypes.BackupRecord, false, - 1, false);
-                                chachebset.Backups.RemoveAt(srcindex);
+                                cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash, 
+                                    BlobLocation.BlobTypes.BackupRecord, false, -1, false);
+                                cachebset.Backups.RemoveAt(cacheindex);
                             }
                             else
                             {
                                 // Add non shallow backups from cache not present in dst
-                                bset.Backups.Insert(dstindex, (chachebset.Backups[srcindex].hash, false));
-                                cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, chachebset.Backups[srcindex].hash, true);
+                                dstbset.Backups.Insert(dstindex, (cachebset.Backups[cacheindex].hash, false));
+                                cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, cachebset.Backups[cacheindex].hash, true);
 
                                 // After transfer, make the cache backup shallow
                                 // Since no clean way to only get file references and not "parent" references,
                                 // we delete the entire backup data from cache, then add it back shallow
                                 // TODO: Means to iterate through blobs not including files
-                                cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash,
+                                cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
                                     BlobLocation.BlobTypes.BackupRecord, false, -1, true);
-                                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
+                                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
                                 dstindex += 1;
                                 // After insert and increment j still referes to the same backup (dstbr)
-                                srcindex += 1;
+                                cacheindex += 1;
                             }
-                            srcbr = null;
+                            cachebr = null;
                         }
                         else // (srcbr.BackupTime > dstbr.BackupTime)
                         {
                             // Add (as shallow) backups in dst not present in cache
-                            chachebset.Backups.Insert(srcindex, (bset.Backups[dstindex].hash, true));
-                            Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
-                            srcindex += 1;
+                            cachebset.Backups.Insert(cacheindex, (dstbset.Backups[dstindex].hash, true));
+                            Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
+                            cacheindex += 1;
                             dstindex += 1;
                             dstbr = null;
                         }
                     }
                     else
                     {
-                        srcindex += 1;
-                        srcbr = null;
+                        cacheindex += 1;
+                        cachebr = null;
                         dstindex += 1;
                         dstbr = null;
                     }
                 }
             }
             // Handle backups "dangling" after merge
-            while (srcindex < chachebset.Backups.Count)
+            while (cacheindex < cachebset.Backups.Count)
             {
-                if (chachebset.Backups[srcindex].shallow)
+                if (cachebset.Backups[cacheindex].shallow)
                 {
                     // Remove shallow backups from cache not present in dst
-                    cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, chachebset.Backups[srcindex].hash,
+                    cache.Dependencies.Blobs.IncrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
                         BlobLocation.BlobTypes.BackupRecord, false, -1, false);
-                    chachebset.Backups.RemoveAt(srcindex);
+                    cachebset.Backups.RemoveAt(cacheindex);
                 }
                 else
                 {
                     // Add non shallow backups from cache not present in dst
-                    bset.Backups.Add((chachebset.Backups[srcindex].hash, false));
-                    cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, chachebset.Backups[srcindex].hash, true);
+                    dstbset.Backups.Add((cachebset.Backups[cacheindex].hash, false));
+                    cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, bsname, cachebset.Backups[cacheindex].hash, true);
                     dstindex += 1;
                     // After insert and increment j still referes to the same backup (dstbr)
-                    srcindex += 1;
+                    cacheindex += 1;
                 }
-                srcbr = null;
+                cachebr = null;
             }
-            while (dstindex < bset.Backups.Count)
+            while (dstindex < dstbset.Backups.Count)
             {
                 // Add (as shallow) backups in dst not present in cache
-                chachebset.Backups.Add((bset.Backups[dstindex].hash, true));
-                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, bset.Backups[dstindex].hash, false);
-                srcindex += 1;
+                cachebset.Backups.Add((dstbset.Backups[dstindex].hash, true));
+                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
+                cacheindex += 1;
                 dstindex += 1;
                 dstbr = null;
             }
-            cache.SaveBackupSet(chachebset, cachebsname);
-            SaveBackupSet(bset, bsname);
+            cache.SaveBackupSet(cachebset, cachebsname);
+            SaveBackupSet(dstbset, bsname);
             Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
         }
 

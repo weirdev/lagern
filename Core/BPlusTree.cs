@@ -129,7 +129,10 @@ namespace BackupCore
             // Hash already exists in BPlusTree, return value
             if (position < node.Keys.Count && node.Keys[position].SequenceEqual(hash))
             {
-                if (replace) node.Values[position] = blocation;
+                if (replace)
+                {
+                    node.Values[position] = blocation;
+                }
                 return node.Values[position];
             }
             // Hash not in tree, belongs in position
@@ -144,7 +147,6 @@ namespace BackupCore
                 {
                     tail = SplitLeafNode(node);
                 }
-
                 return null;
             }
         }
@@ -272,7 +274,7 @@ namespace BackupCore
                     node.Keys.Insert(0, node.Parent.Children[parentpos - 1].Keys[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
                     node.Values.Insert(0, node.Parent.Children[parentpos - 1].Values[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
                     node.Parent.Children[parentpos - 1].Keys.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
-                    node.Parent.Children[parentpos - 1].Values.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
+                    node.Parent.Children[parentpos - 1].Values.RemoveAt(node.Parent.Children[parentpos - 1].Values.Count - 1);
                     // Update split point above
                     node.Parent.Keys[parentpos - 1] = node.Keys[0];
                 }
@@ -340,6 +342,7 @@ namespace BackupCore
                 if (node.Keys.Count == 0) // Root only has one child
                 {
                     Root = node.Children[0]; // Single child becomes root
+                    Root.Parent = null;
                 }
             }
             else if (node.Keys.Count < NodeSize / 2) // too small ?
@@ -348,22 +351,22 @@ namespace BackupCore
                 if (parentpos - 1 >= 0 && node.Parent.Children[parentpos - 1].Keys.Count > NodeSize / 2) // left neighbor more than half full?
                 {
                     // Steal entry from left neighbor
-                    node.Keys.Insert(0, node.Parent.Children[parentpos - 1].Keys[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
-                    node.Children.Insert(0, node.Parent.Children[parentpos - 1].Children[node.Parent.Children[parentpos - 1].Keys.Count - 1]);
+                    // New node key is the old split point between it and its left sibling
+                    // New split point between siblings is old rightmost key in left sibling
+                    node.Keys.Insert(0, node.Parent.Keys[parentpos - 1]);
+                    node.Children.Insert(0, node.Parent.Children[parentpos - 1].Children[node.Parent.Children[parentpos - 1].Children.Count - 1]);
+                    node.Parent.Keys[parentpos - 1] = node.Parent.Children[parentpos - 1].Keys[node.Parent.Children[parentpos - 1].Keys.Count - 1];
                     node.Parent.Children[parentpos - 1].Keys.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
-                    node.Parent.Children[parentpos - 1].Children.RemoveAt(node.Parent.Children[parentpos - 1].Keys.Count - 1);
-                    // Update split point above
-                    node.Parent.Keys[parentpos - 1] = node.Keys[0];
+                    node.Parent.Children[parentpos - 1].Children.RemoveAt(node.Parent.Children[parentpos - 1].Children.Count - 1);
                 }
                 else if (parentpos < node.Parent.Keys.Count && node.Parent.Children[parentpos + 1].Keys.Count > NodeSize / 2) // right neighbor more than half full?s
                 {
                     // Steal entry from right neighbor
-                    node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[0]);
+                    node.Keys.Add(node.Parent.Keys[parentpos]);
                     node.Children.Add(node.Parent.Children[parentpos + 1].Children[0]);
+                    node.Parent.Keys[parentpos] = node.Parent.Children[parentpos + 1].Keys[0];
                     node.Parent.Children[parentpos + 1].Keys.RemoveAt(0);
                     node.Parent.Children[parentpos + 1].Children.RemoveAt(0);
-                    // Update split point in node above
-                    node.Parent.Keys[parentpos] = node.Parent.Children[parentpos + 1].Keys[0];
                 }
                 else if (parentpos - 1 >= 0) //  && node.Parent.Children[parentpos - 1].Keys.Count == NodeSize / 2) (must be true or invariant already violated)
                 {
@@ -373,6 +376,9 @@ namespace BackupCore
                     for (int i = 0; i < node.Keys.Count; i++)
                     {
                         node.Parent.Children[parentpos - 1].Keys.Add(node.Keys[i]);
+                    }
+                    for (int i = 0; i < node.Children.Count; i++)
+                    {
                         node.Parent.Children[parentpos - 1].Children.Add(node.Children[i]);
                     }
                     node.Parent.Children[parentpos] = node.Parent.Children[parentpos - 1]; // More efficient to add entries to left node, but we will keep the node at parentpos, so update parents reference
@@ -383,12 +389,15 @@ namespace BackupCore
                     // Merge with right neighbor
                     // Pull down key from parent (inverse of bubbling up key on a split)
                     node.Keys.Add(node.Parent.Keys[parentpos]);
-                    for (int i = 0; i < node.Keys.Count; i++)
+                    for (int i = 0; i < node.Parent.Children[parentpos + 1].Keys.Count; i++)
                     {
                         node.Keys.Add(node.Parent.Children[parentpos + 1].Keys[i]);
+                    }
+                    for (int i = 0; i < node.Parent.Children[parentpos + 1].Children.Count; i++)
+                    {
                         node.Children.Add(node.Parent.Children[parentpos + 1].Children[i]);
                     }
-                    node.Parent.Children[parentpos] = node.Parent.Children[parentpos + 1]; // More efficient to add entries to left node, but we will keep the node at parentpos + 1, so update parents reference
+                    node.Parent.Children[parentpos + 1] = node; // More efficient to add entries to left node, but we will keep the node at parentpos + 1, so update parents reference
                     RemoveInternalNodeEntry(node.Parent, parentpos, parentpositions);
                 }
             }

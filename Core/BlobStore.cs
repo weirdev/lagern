@@ -98,8 +98,12 @@ namespace BackupCore
             cacheblobs.RemoveAllBackupSetReferences(bloblistcachebsname);
             foreach (KeyValuePair<byte[], BlobLocation> hashblob in GetAllHashesAndBlobLocations(backupsetname))
             {
-                var bloc = new BlobLocation("", 0, hashblob.Value.ByteLength);
-                bloc.BSetReferenceCounts[bloblistcachebsname] = 1;
+                string hashstring = HashTools.ByteArrayToHexViaLookup32(hashblob.Key);
+                string dir1 = hashstring.Substring(0, 2);
+                string dir2 = hashstring.Substring(2, 2);
+                string fname = hashstring.Substring(4);
+                string relpath = Path.Combine(dir1, dir2, fname);
+                var bloc = new BlobLocation(relpath, 0, hashblob.Value.ByteLength);
                 cacheblobs.AddBlob(bloblistcachebsname, new HashBlobPair(hashblob.Key, null), false, true);
             }
         }
@@ -124,10 +128,12 @@ namespace BackupCore
             IncrementReferenceCountNoRecurse(backupsetname, blobhash, amount); // must delete parent last so parent can be loaded/used in GetAllBlobReferences()
         }
 
-        private void IncrementReferenceCountNoRecurse(string backupset, byte[] blobhash, int amount) => IncrementReferenceCountNoRecurse(backupset, GetBlobLocation(blobhash), blobhash, amount);
+        private void IncrementReferenceCountNoRecurse(string backupset, byte[] blobhash, int amount) => 
+            IncrementReferenceCountNoRecurse(backupset, GetBlobLocation(blobhash), blobhash, amount);
 
         private void IncrementReferenceCountNoRecurse(string backupset, BlobLocation blocation, byte[] blobhash, int amount)
         {
+            bool originallyshallow = blocation.TotalNonShallowReferenceCount == 0;
             if (blocation.BSetReferenceCounts.ContainsKey(backupset))
             {
                 blocation.BSetReferenceCounts[backupset] += amount;
@@ -136,7 +142,6 @@ namespace BackupCore
             {
                 blocation.BSetReferenceCounts[backupset] = amount;
             }
-
             if (blocation.BSetReferenceCounts[backupset] == 0)
             {
                 blocation.BSetReferenceCounts.Remove(backupset);
@@ -145,21 +150,23 @@ namespace BackupCore
             {
                 throw new Exception("Negative reference count in blobstore");
             }
-
             if (blocation.TotalNonShallowReferenceCount == 0)
             {
-                try
+                if (!originallyshallow)
                 {
-                    Dependencies.DeleteBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+                    try
+                    {
+                        Dependencies.DeleteBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+                    }
+                    catch (Exception)
+                    {
+                        throw new Exception("Error deleting unreferenced file.");
+                    }
                 }
-                catch (Exception)
-                {
-                    throw new Exception("Error deleting unreferenced file.");
-                }
-                if (blocation.TotalReferenceCount == 0)
-                {
-                    IndexStore.Remove(blobhash);
-                }
+            }
+            if (blocation.TotalReferenceCount == 0)
+            {
+                IndexStore.Remove(blobhash);
             }
         }
 
@@ -266,8 +273,11 @@ namespace BackupCore
 
         private BlobLocation AddBlob(string backupset, HashBlobPair blob, bool isMultiblobReference, bool shallow=false)
         {
-            string relpath = HashTools.ByteArrayToHexViaLookup32(blob.Hash);
-
+            string hashstring = HashTools.ByteArrayToHexViaLookup32(blob.Hash);
+            string dir1 = hashstring.Substring(0, 2);
+            string dir2 = hashstring.Substring(2, 2);
+            string fname = hashstring.Substring(4);
+            string relpath = Path.Combine(dir1, dir2, fname);
             // We navigate down 
 
             // Where we will put the blob data if we dont already have it stored
@@ -516,7 +526,7 @@ namespace BackupCore
         }
 
         private void GetBlobReferenceFrequencies(byte[] blobhash, BlobLocation.BlobTypes blobtype, 
-            bool multiblock, Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize) // TODO: use something better than object[] (currently used because tuples are readonly)
+            bool multiblock, Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize) 
         {
             GetReferenceFrequenciesNoRecurse(blobhash, hashfreqsize);
             foreach (var reference in GetAllBlobReferences(blobhash, blobtype, multiblock, true))
@@ -525,7 +535,8 @@ namespace BackupCore
             }
         }
 
-        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize)
+        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, 
+            (int frequency, BlobLocation blocation)> hashfreqsize)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
             BlobLocation blocation = GetBlobLocation(blobhash);
@@ -700,7 +711,8 @@ namespace BackupCore
                                 }
                                 if (!skipchild)
                                 {
-                                    childiterator = new BlobReferenceIterator(Blobs, fref.hash, BlobLocation.BlobTypes.FileBlob, fref.multiblock, IncludeFiles, BottomUp);
+                                    childiterator = new BlobReferenceIterator(Blobs, fref.hash, BlobLocation.BlobTypes.FileBlob, 
+                                        fref.multiblock, IncludeFiles, BottomUp);
                                     foreach (var frefref in childiterator)
                                     {
                                         skipchild = false;

@@ -22,26 +22,26 @@ namespace CoreTest
         }
 
         private static (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) AddStandardVFSFiles(
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore)
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore, int? randomseed=null)
         {
             BPlusTree<byte[]> verifydatastore = new BPlusTree<byte[]>(10);
             Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
-
-            (byte[] hash, byte[] file) = MakeRandomFile(10_000_000); // 10 MB file
+            
+            (byte[] hash, byte[] file) = MakeRandomFile(10_000_000, randomseed); // 10 MB file
             AddFileToVFS(Path.Combine("src", "big"), hash, file);
 
             (hash, file) = MakeRandomFile(0); // Empty file
             AddFileToVFS(Path.Combine("src", "empty"), hash, file);
 
-            (hash, file) = MakeRandomFile(1); // 1byte file
+            (hash, file) = MakeRandomFile(1, randomseed - 1); // 1byte file
             AddFileToVFS(Path.Combine("src", "1b"), hash, file);
             
-            (hash, file) = MakeRandomFile(2); // 2byte file
+            (hash, file) = MakeRandomFile(2, randomseed - 2); // 2byte file
             AddFileToVFS(Path.Combine("src", "2b"), hash, file);
             
-            foreach (var num in Enumerable.Range(0, 200))
+            foreach (var num in Enumerable.Range(0, 100))
             {
-                (hash, file) = MakeRandomFile(55_000); // regular size file
+                (hash, file) = MakeRandomFile(55_000, randomseed + num); // regular size file
                 AddFileToVFS(Path.Combine("src", String.Format("reg_{0}", num)), hash, file);
             }
 
@@ -58,21 +58,29 @@ namespace CoreTest
         }
 
         public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles()
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int? randomseed=null)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
-            (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore);
+            (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
             ICoreDependencies dependencies = new FSCoreDependencies(new VirtualFSInterop(vfsroot, vfsdatastore), "src",
                 "dst", "cache");
             Core core = Core.InitializeNew(dependencies, "test");
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
 
-        static (byte[] hash, byte[] file) MakeRandomFile(int size)
+        static (byte[] hash, byte[] file) MakeRandomFile(int size, int? seed=null)
         {
             byte[] data = new byte[size];
-            Random rng = new Random();
+            Random rng;
+            if (seed==null)
+            {
+                rng = new Random();
+            }
+            else
+            {
+                rng = new Random(seed.Value);
+            }
             rng.NextBytes(data);
             return (Hasher.ComputeHash(data), data);
         }

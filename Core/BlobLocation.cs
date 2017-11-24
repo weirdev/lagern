@@ -96,7 +96,6 @@ namespace BackupCore
             {
                 bsrc[backupsets[i]] = referencecounts[i];
             }
-
             return new BlobLocation(relfilepath, byteposition, bytelength, bsrc);
         }
 
