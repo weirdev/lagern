@@ -28,7 +28,9 @@ namespace Testing
             //ctest.TestInitializeNew();
             //ctest.TestRunBackup();
             //ctest.TestRestore();
-            ctest.TestRemoveBackup();
+            //ctest.TestRemoveBackup();
+            ctest.TestInitializeNew();
+            ctest.TestLoadCore_NewlyInitialized();
 
             //BPlusTreeTest bptt = new BPlusTreeTest();
             //bptt.TestAddRemove();
@@ -48,7 +50,7 @@ namespace Testing
 
         static double BackupRun(string bsname, string src, string dst)
         {
-            var backupper = BackupCore.Core.LoadCore(src, dst); // Dont count initial setup in time
+            var backupper = BackupCore.Core.LoadDiskCore(src, dst); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
@@ -65,7 +67,7 @@ namespace Testing
 
         static void GetStatus(string bsname, string src, string dst)
         {
-            var core = BackupCore.Core.LoadCore(src, dst);
+            var core = BackupCore.Core.LoadDiskCore(src, dst);
             foreach (var item in core.GetWTStatus(bsname))
             {
                 Console.WriteLine(string.Format("{0}:\t{1}", item.path, item.change));

@@ -172,7 +172,7 @@ namespace CoreTest
         {
             var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
             testdata.core.RunBackup("test", "initialrun");
-            byte[] serialized = testdata.core.Dependencies.DefaultBlobs.serialize();
+            byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
 
             // Test that something was serialized
             Assert.IsTrue(serialized.Length > 0);
@@ -185,8 +185,8 @@ namespace CoreTest
         {
             var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
             testdata.core.RunBackup("test", "initialrun");
-            byte[] serialized = testdata.core.Dependencies.DefaultBlobs.serialize();
-            var bs = BlobStore.deserialize(serialized, testdata.core.Dependencies.DefaultBlobs.Dependencies);
+            byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
+            var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies.Blobs.Dependencies);
         }
 
         public void RandomData(byte[] data)

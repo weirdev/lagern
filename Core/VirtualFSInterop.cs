@@ -8,7 +8,6 @@ namespace BackupCore
 {
     public class VirtualFSInterop : IFSInterop
     {
-
         public MetadataNode VirtualFS { get; set; }
         private IDictionary<byte[], byte[]> DataStore { get; set; }
 

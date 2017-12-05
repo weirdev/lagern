@@ -3,17 +3,20 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Add more unit tests
-	detecting backups and dereferencing
-	Verify more conditions in existing unit tests
-Better support for large backup sets
-	Test large backups
-		Identify bottlenecks
-	Optimize B+ tree BlobStore
-		store some nodes out of memory?
-		optimize node size
-			Make BlobLocations a set size?
 Locking for destinations seperated from their caches
+	Move applicable CoreDependencies functionality into CoreScrDependencies, CoreDstDependencies
+		CoreDependencies will now have DefaultDstDependencies, ChacheDependencies and SrcDependencies
+			Add a "default root" path option to IFSInterop, configured on initialization
+				aka FS interop will handle relative paths
+		Src likely computer filesystem (or virtualfs for testing)
+		Dst may be different (aka AWS, backblaze)
+		Cache dependencies must be explicitly specified, but will be object implementing ICoreDstDependencies
+			Likely the same underlying IFSInterop as Src (aka both on local filesystem)
+	...Remove specieal initialization option for Core using string src, dst, and cache paths
+	...LagernConsole will now explicitly initialize FSCoreDependencies
+	...LagernConsole: for commands needing settings access; 1. if core initialized use core.dependencies; 2. if core not initialized create new FSCoreDependencies instance
+
+	...ie. Console will now be tied to FSCoreDependencies...
 	Prevent deleting (adding?) backups without cache
 		Cache may contain references in its backups to data no longer in destination
 	Browsing and restoring from destination without cache still allowed
@@ -24,6 +27,17 @@ Locking for destinations seperated from their caches
 			Cache may have bad references
 			Have some kind of safe way of attempting to integrate cache
 				Otherwise need to clear and reinitialize cache
+Better support for large backup sets
+	Test large backups
+		Identify bottlenecks
+	Optimize B+ tree BlobStore
+		store some nodes out of memory?
+		optimize node size
+			Make BlobLocations a set size?
+Enforce using C# nullable reference types
+	(once feature is part of standard C# release or available as a package)
+Add more unit tests
+	Verify more conditions in existing unit tests
 "Enhanced data"
 	NTFS Permissions support
 		Ability to escalate this application's own permissions

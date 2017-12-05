@@ -168,12 +168,10 @@ namespace CoreTest
                 enum2.MoveNext();
                 if (!enum1.Current.Value.Equals(enum2.Current.Value))
                 {
-                    throw new Exception();
                     return false;
                 }
                 if (!enum1.Current.Key.SequenceEqual(enum2.Current.Key))
                 {
-                    throw new Exception();
                     return false;
                 }
                 i++;

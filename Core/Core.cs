@@ -14,13 +14,44 @@ namespace BackupCore
     // Calling a public method that modifies blobs or backups automatically triggers an index save
     public class Core
     {
-        public ICoreDependencies Dependencies { get; set; }
+        /// <summary>
+        /// True if the regular backup destination is available.
+        /// If the destination is not available we attempt to use the cache.
+        /// </summary>
+        public bool DestinationAvailable { get; set; }
 
+        public ICoreSrcDependencies SrcDependencies { get; set; }
+        public ICoreDstDependencies DefaultDstDependencies { get; set; }
+        public ICoreDstDependencies CacheDependencies { get; set; }
+        
         public static readonly string CacheSuffix = "~cache";
         
         public static readonly string ShallowSuffix = "~shallow";
 
         public static readonly string BlobListCacheSuffix = "~bloblistcache" + ShallowSuffix;
+                        
+        public Core(ICoreSrcDependencies src, ICoreDstDependencies dst, ICoreDstDependencies cache = null)
+        {
+            SrcDependencies = src;
+            if (dst == null)
+            {
+                DestinationAvailable = false;
+                if (cache != null)
+                {
+                    DefaultDstDependencies = cache;
+                }
+                else
+                {
+                    throw new Exception("Cannot dst and cache are null, cannot initialize");
+                }
+            }
+            else
+            {
+                DestinationAvailable = true;
+                DefaultDstDependencies = dst;
+            }
+            CacheDependencies = cache;
+        }
         
         /// <summary>
         /// Initializes a new lagern Core. Core surfaces all public methods for use by programs implementing this library.
@@ -28,32 +59,42 @@ namespace BackupCore
         /// <param name="backupsetname"></param>
         /// <param name="src">Backup source directory</param>
         /// <param name="dst">Backup destination directory</param>
-
-        public static Core LoadCore(string src, string dst, string cache = null) => LoadCore(new FSCoreDependencies(new DiskFSInterop(), src, dst, cache));
-
-        public static Core LoadCore(ICoreDependencies dependencies)
+        public static Core LoadDiskCore(string src, string dst, string cache = null)
         {
-            dependencies.LoadDstAndCache();
-            return new Core(dependencies);
+            FSCoreSrcDependencies srcdep = new FSCoreSrcDependencies(src, new DiskFSInterop());
+            FSCoreDstDependencies dstdep;
+            try
+            {
+                dstdep = FSCoreDstDependencies.Load(dst, new DiskFSInterop());
+            }
+            catch (Exception)
+            {
+                dstdep = null;
+            }
+            FSCoreDstDependencies cachedep = null;
+            if (cache != null)
+            {
+                cachedep = FSCoreDstDependencies.Load(cache, new DiskFSInterop());
+            }
+            return new Core(srcdep, dstdep, cachedep);
         }
 
-        private Core(ICoreDependencies dependencies)
+        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null)
         {
-            Dependencies = dependencies;
-        }
-
-        public static Core InitializeNew(string bsname, string src, string dst, string cache = null) => InitializeNew(new FSCoreDependencies(new DiskFSInterop(), src, dst, cache), bsname);
-
-        public static Core InitializeNew(ICoreDependencies dependencies, string bsname)
-        {
-            dependencies.InitializeNewDstAndCache(bsname);
-            return new Core(dependencies);
+            FSCoreSrcDependencies srcdep = new FSCoreSrcDependencies(src, new DiskFSInterop());
+            FSCoreDstDependencies dstdep = FSCoreDstDependencies.InitializeNew(bsname, dst, new DiskFSInterop());
+            FSCoreDstDependencies cachedep = null;
+            if (cache != null)
+            {
+                cachedep = FSCoreDstDependencies.InitializeNew(bsname, cache, new DiskFSInterop());
+            }
+            return new Core(srcdep, dstdep, cachedep);
         }
 
         public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
             List<(int trackclass, string pattern)> trackpatterns = null, string prev_backup_hash_prefix = null)
         {
-            if (!Dependencies.DestinationAvailable)
+            if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
             }
@@ -65,13 +106,13 @@ namespace BackupCore
                 BackupRecord previousbackup;
                 try
                 {
-                    previousbackup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                    previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
                 }
                 catch
                 {
                     try
                     {
-                        previousbackup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname);
+                        previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname);
                     }
                     catch
                     {
@@ -80,7 +121,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, 
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
                         previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
@@ -146,7 +187,7 @@ namespace BackupCore
         private MetadataNode GetDeltaMetadataTree(string backupsetname, List<(int trackclass, string pattern)> trackpatterns = null,
             MetadataNode previousmtree=null)
         {
-            if (!Dependencies.DestinationAvailable)
+            if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
             }
@@ -157,7 +198,7 @@ namespace BackupCore
             {
                 // We always assume the matching of deltatree root to fs backup root is valid
                 // So make the name equal, and set status to metadatachange if they were different
-                FileMetadata dirmetadata = Dependencies.GetFileMetadata("");
+                FileMetadata dirmetadata = SrcDependencies.GetFileMetadata("");
                 if (deltamtree.DirMetadata.FileName != dirmetadata.FileName)
                 {
                     deltamtree.DirMetadata.Changes = (FileMetadata.FileStatus.MetadataChange, dirmetadata);
@@ -166,7 +207,7 @@ namespace BackupCore
             }
             else
             {
-                deltamtree = new MetadataNode(Dependencies.GetFileMetadata(""), null);
+                deltamtree = new MetadataNode(SrcDependencies.GetFileMetadata(""), null);
                 deltamnodequeue.Enqueue((Path.DirectorySeparatorChar.ToString(), deltamtree));
             }
             while (deltamnodequeue.Count > 0)
@@ -174,7 +215,7 @@ namespace BackupCore
                 (string reldirpath, MetadataNode deltanode) = deltamnodequeue.Dequeue();
 
                 // First handle the directory changes (new/deleted already set so either MetadataChnaged or Unchanged)
-                FileMetadata curnode = Dependencies.GetFileMetadata(reldirpath);
+                FileMetadata curnode = SrcDependencies.GetFileMetadata(reldirpath);
                 if (deltanode.DirMetadata.Changes == null) // Is unset?
                 {
                     FileMetadata.FileStatus status = curnode.DirectoryDifference(deltanode.DirMetadata);
@@ -192,7 +233,7 @@ namespace BackupCore
                 List<string> fsfiles = null;
                 try
                 {
-                    fsfiles = new List<string>(Dependencies.GetDirectoryFiles(reldirpath));
+                    fsfiles = new List<string>(SrcDependencies.GetDirectoryFiles(reldirpath));
                 }
                 catch (UnauthorizedAccessException e)
                 {
@@ -225,7 +266,7 @@ namespace BackupCore
                         try // We (may) read the file's metadata here so wrap errors
                         {
                             FileMetadata deltafm = deltanode.Files[filename];
-                            FileMetadata curfm = Dependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                            FileMetadata curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
                             switch (trackclass)
                             {
                                 case 0:
@@ -306,7 +347,7 @@ namespace BackupCore
                                 case 0: // dont add if untracked
                                     break;
                                 default:
-                                    FileMetadata curfm = Dependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                    FileMetadata curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
                                     curfm.Changes = (FileMetadata.FileStatus.New, null);
                                     deltanode.AddFile(curfm);
                                     break;
@@ -348,7 +389,7 @@ namespace BackupCore
                             case 0: // dont add if untracked
                                 break;
                             default:
-                                FileMetadata curfm = Dependencies.GetFileMetadata(Path.Combine(reldirpath, fsfiles[fsidx]));
+                                FileMetadata curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fsfiles[fsidx]));
                                 curfm.Changes = (FileMetadata.FileStatus.New, null);
                                 deltanode.AddFile(curfm);
                                 break;
@@ -365,7 +406,7 @@ namespace BackupCore
                 try
                 {
                     // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(Dependencies.GetSubDirectories(reldirpath));
+                    fssubdirs = new List<string>(SrcDependencies.GetSubDirectories(reldirpath));
                 }
                 catch (UnauthorizedAccessException e)
                 {
@@ -457,7 +498,7 @@ namespace BackupCore
         public byte[] RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, 
             List<(int trackclass, string pattern)> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
-            if (!Dependencies.DestinationAvailable)
+            if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
             }
@@ -469,13 +510,13 @@ namespace BackupCore
                 BackupRecord previousbackup;
                 try
                 {
-                    previousbackup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                    previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
                 }
                 catch
                 {
                     try
                     {
-                        previousbackup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname);
+                        previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname);
                     }
                     catch
                     {
@@ -484,7 +525,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(Dependencies.DefaultBlobs, 
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
                         previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
@@ -525,7 +566,7 @@ namespace BackupCore
                         var fstatus = filemeta.Changes.Value.status;
                         if (fstatus == FileMetadata.FileStatus.Unchanged)
                         {
-                            Dependencies.DefaultBlobs.IncrementReferenceCount(backupsetname, filemeta.FileHash,
+                            DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash,
                                 BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
                         }
                         if (fstatus == FileMetadata.FileStatus.Deleted)
@@ -538,7 +579,7 @@ namespace BackupCore
                         {
                             parent.Files[file] = filemeta.Changes.Value.updated;
                             // Dont need to save data again but increase reference count
-                            Dependencies.DefaultBlobs.IncrementReferenceCount(backupsetname, filemeta.FileHash, 
+                            DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash, 
                                 BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
                         }
                         // Store file data
@@ -572,9 +613,9 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            (byte[] newmtreehash, bool multiblock) = deltatree.Store(Dependencies.DefaultBlobs, backupsetname);
+            (byte[] newmtreehash, bool multiblock) = deltatree.Store(DefaultDstDependencies.Blobs, backupsetname);
 
-            byte[] backuphash = Dependencies.DefaultBackups.AddBackup(backupsetname, message, newmtreehash, multiblock, false);
+            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, multiblock, false);
 
             SyncCache(backupsetname);
             // Index save occurred during synccache
@@ -590,10 +631,10 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             try
             {
-                Dependencies.SaveDefaultBlobStoreIndex();
-                if (Dependencies.CacheBlobs != null && Dependencies.DestinationAvailable)
+                DefaultDstDependencies.SaveBlobStoreIndex();
+                if (CacheDependencies != null && DestinationAvailable)
                 {
-                    Dependencies.SaveCacheBlobStoreIndex();
+                    CacheDependencies.SaveBlobStoreIndex();
                 }
             }
             catch (Exception e)
@@ -604,11 +645,11 @@ namespace BackupCore
         
         public void SyncCache(string backupsetname)
         {
-            if (Dependencies.CacheBackups != null)
+            if (CacheDependencies != null)
             {
-                if (Dependencies.DestinationAvailable)
+                if (DestinationAvailable)
                 {
-                    Dependencies.DefaultBackups.SyncCache(Dependencies.CacheBackups, backupsetname);
+                    DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname);
                 }
             }
             SaveBlobIndices();
@@ -623,28 +664,28 @@ namespace BackupCore
         /// <param name="backupindex"></param>
         public void RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, string backuphashprefix = null, bool absoluterestorepath=false)
         {
-            if (!Dependencies.DestinationAvailable)
+            if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
             }
 
             try
             {
-                var backup = Dependencies.DefaultBackups.GetBackupRecord(backupsetname, backuphashprefix);
-                MetadataNode mtree = MetadataNode.Load(Dependencies.DefaultBlobs, backup.MetadataTreeHash, backup.MetadataTreeMultiBlock);
+                var backup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, backuphashprefix);
+                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies.Blobs, backup.MetadataTreeHash, backup.MetadataTreeMultiBlock);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
-                    byte[] filedata = Dependencies.DefaultBlobs.RetrieveData(filemeta.FileHash, filemeta.MultiBlock);
+                    byte[] filedata = DefaultDstDependencies.Blobs.RetrieveData(filemeta.FileHash, filemeta.MultiBlock);
                     // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
-                    Dependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
+                    SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
                 {
                     MetadataNode dir = mtree.GetDirectory(relfilepath);
                     if (dir != null)
                     {
-                        Dependencies.CreateDirectory(restorepath, absoluterestorepath);
+                        SrcDependencies.CreateDirectory(restorepath, absoluterestorepath);
                         foreach (var childfile in dir.Files.Values)
                         {
                             RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childfile.FileName), Path.Combine(restorepath, childfile.FileName), backuphashprefix, absoluterestorepath);
@@ -653,7 +694,7 @@ namespace BackupCore
                         {
                             RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childdir), Path.Combine(restorepath, childdir), backuphashprefix, absoluterestorepath);
                         }
-                        Dependencies.WriteOutMetadata(restorepath, dir.DirMetadata, absoluterestorepath); // Set metadata after finished changing contents (postorder)
+                        SrcDependencies.WriteOutMetadata(restorepath, dir.DirMetadata, absoluterestorepath); // Set metadata after finished changing contents (postorder)
                     }
                     else
                     {
@@ -663,7 +704,7 @@ namespace BackupCore
             }
             catch (Exception)
             {
-                if (!Dependencies.DestinationAvailable)
+                if (!DestinationAvailable)
                 {
                     Console.WriteLine("Error restoring file or directory." +
                         "Try restoring again with backup drive present");
@@ -837,8 +878,8 @@ namespace BackupCore
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
         public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring)
         {
-            var br = Dependencies.DefaultBackups.GetBackupRecord(bsname, backuphashstring);
-            return Dependencies.DefaultBlobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode, br.MetadataTreeMultiBlock);
+            var br = DefaultDstDependencies.Backups.GetBackupRecord(bsname, backuphashstring);
+            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode, br.MetadataTreeMultiBlock);
         }
 
         /// <summary>
@@ -848,7 +889,7 @@ namespace BackupCore
         /// <param name="mtree"></param>
         private void BackupDirectory(string relpath, MetadataNode mtree)
         {
-            mtree.AddDirectory(Path.GetDirectoryName(relpath), Dependencies.GetFileMetadata(relpath));
+            mtree.AddDirectory(Path.GetDirectoryName(relpath), SrcDependencies.GetFileMetadata(relpath));
         }
 
         /// <summary>
@@ -864,8 +905,8 @@ namespace BackupCore
                 {
                     relpath = relpath.Substring(1);
                 }
-                Stream readerbuffer = Dependencies.GetFileData(relpath);
-                (byte[] filehash, bool multiblock) = Dependencies.DefaultBlobs.StoreData(backupset, readerbuffer);
+                Stream readerbuffer = SrcDependencies.GetFileData(relpath);
+                (byte[] filehash, bool multiblock) = DefaultDstDependencies.Blobs.StoreData(backupset, readerbuffer);
                 fileMetadata.FileHash = filehash;
                 fileMetadata.MultiBlock = multiblock;
             }
@@ -881,19 +922,19 @@ namespace BackupCore
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public (IEnumerable<(string backuphash, DateTime backuptime, string message)>, bool chache) GetBackups(string backupsetname)
         {
-            if (!Dependencies.DestinationAvailable)
+            if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
             }
 
             List<(string, DateTime, string)> backups = new List<(string, DateTime, string)>();
-            foreach (var backup in Dependencies.DefaultBackups.LoadBackupSet(backupsetname).Backups)
+            foreach (var backup in DefaultDstDependencies.Backups.LoadBackupSet(backupsetname).Backups)
             {
-                var br = Dependencies.DefaultBackups.GetBackupRecord(backupsetname, backup.hash);
+                var br = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, backup.hash);
                 backups.Add((HashTools.ByteArrayToHexViaLookup32(backup.hash).ToLower(),
                     br.BackupTime, br.BackupMessage));
             }
-            return (backups, !Dependencies.DestinationAvailable);
+            return (backups, !DestinationAvailable);
         }
 
         /// <summary>
@@ -903,7 +944,7 @@ namespace BackupCore
         /// <param name="backuphashprefix"></param>
         public void RemoveBackup(string backupsetname, string backuphashprefix)
         {
-            Dependencies.DefaultBackups.RemoveBackup(backupsetname, backuphashprefix);
+            DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix);
             SyncCache(backupsetname);
         }
 
@@ -914,15 +955,24 @@ namespace BackupCore
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
         public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles)
         {
-            BackupSet backupSet = Dependencies.DefaultBackups.LoadBackupSet(backupsetname);
+            BackupSet backupSet = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
             // Transfer backup set
-            dstCore.Dependencies.DefaultBackups.SaveBackupSet(backupSet, backupsetname);
+            dstCore.DefaultDstDependencies.Backups.SaveBackupSet(backupSet, backupsetname);
             // Transfer backing data
             foreach (var backup in backupSet.Backups)
             {
-                Dependencies.DefaultBlobs.TransferBackup(dstCore.Dependencies.DefaultBlobs, backupsetname, backup.hash, includefiles & !backup.shallow);
+                DefaultDstDependencies.Blobs.TransferBackup(dstCore.DefaultDstDependencies.Blobs, backupsetname, backup.hash, includefiles & !backup.shallow);
             }
-            dstCore.Dependencies.SaveDefaultBlobStoreIndex();
+            dstCore.DefaultDstDependencies.SaveBlobStoreIndex();
         }
+        
+    }
+    
+    public enum BackupSetting
+    {
+        dest,
+        cache,
+        name,
+        cache_used
     }
 }

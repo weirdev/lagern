@@ -13,8 +13,9 @@ namespace BackupConsole
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
 
-        public static readonly string LagernSettingsFilename = ".lagern";
-        public static readonly string TrackClassFilename = ".lagerntrack";
+        public static readonly string LagernDirectory = ".lagern";
+        public static readonly string LagernSettingsFile = Path.Combine(LagernDirectory, ".settings");
+        public static readonly string TrackClassFile = Path.Combine(LagernDirectory, ".track");
         
         public static void Main(string[] args)
         {
@@ -82,14 +83,14 @@ namespace BackupConsole
         class ShowOptions
         {
             [Value(0, Required = false, HelpText = "The setting to show")]
-            public BackupSettings? Setting { get; set; }
+            public BackupCore.BackupSetting? Setting { get; set; }
         }
 
         [Verb("set", HelpText = "Set a lagern setting")]
         class SetOptions
         {
             [Value(0, Required = true, HelpText = "The setting to set")]
-            public BackupSettings Setting { get; set; }
+            public BackupCore.BackupSetting Setting { get; set; }
 
             [Value(0, Required = true, HelpText = "The value to give setting")]
             public string Value { get; set; }
@@ -99,7 +100,7 @@ namespace BackupConsole
         class ClearOptions
         {
             [Value(0, Required = true, HelpText = "The setting to clear")]
-            public string Setting { get; set; }
+            public BackupCore.BackupSetting Setting { get; set; }
         }
 
         [Verb("status", HelpText = "Show the working tree status")]
@@ -213,14 +214,7 @@ namespace BackupConsole
         {
             try
             {
-                using (File.Create(Path.Combine(cwd, LagernSettingsFilename))) { }
-                WriteSetting(BackupSettings.dest, opts.Destination);
-                WriteSetting(BackupSettings.name, opts.BSName);
-                if (opts.Cache != null)
-                {
-                    WriteSetting(BackupSettings.cache, opts.Cache);
-                }
-                BackupCore.Core.InitializeNew(opts.BSName, cwd, opts.Destination, opts.Cache);
+                BackupCore.Core.InitializeNewDiskCore(opts.BSName, cwd, opts.Destination, opts.Cache);
             }
             catch (Exception e)
             {
@@ -232,7 +226,7 @@ namespace BackupConsole
         {
             if (opts.Setting != null)
             {
-                var settingval = ReadSetting(opts.Setting.Value);
+                var settingval = ReadSetting(GetCore(), opts.Setting.Value);
                 if (settingval != null)
                 {
                     Console.WriteLine(settingval);
@@ -240,7 +234,8 @@ namespace BackupConsole
             }
             else
             {
-                var settings = ReadSettings();
+                var core = GetCore();
+                var settings = core.SrcDependencies.ReadSettings();
                 if (settings != null)
                 {
                     foreach (var setval in settings)
@@ -253,7 +248,7 @@ namespace BackupConsole
 
         private static void SetSetting(SetOptions opts)
         {
-            WriteSetting(opts.Setting, opts.Value);
+            WriteSetting(GetCore(), opts.Setting, opts.Value);
         }
 
         private static void Status(StatusOptions opts)
@@ -267,7 +262,7 @@ namespace BackupConsole
                 List<(int, string)> trackclasses;
                 try
                 {
-                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFilename));
+                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {
@@ -294,7 +289,7 @@ namespace BackupConsole
                 List<(int, string)> trackclasses;
                 try
                 {
-                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFilename));
+                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {
@@ -423,7 +418,7 @@ namespace BackupConsole
         {
             if (bsname == null)
             {
-                bsname = ReadSetting(BackupSettings.name);
+                bsname = ReadSetting(GetCore(), BackupCore.BackupSetting.name);
                 if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
@@ -436,8 +431,14 @@ namespace BackupConsole
 
         public static BackupCore.Core GetCore()
         {
-            string destination = ReadSetting(BackupSettings.dest);
-            string cache = ReadSetting(BackupSettings.cache);
+            var srcdep = new BackupCore.FSCoreSrcDependencies(cwd, new BackupCore.DiskFSInterop());
+            string destination;
+            string cache;
+            using (var fs = new FileStream(Path.Combine(cwd, LagernSettingsFile), FileMode.Open))
+            {
+                destination = BackupCore.SettingsFileTools.ReadSetting(fs, BackupCore.BackupSetting.dest);
+                cache = BackupCore.SettingsFileTools.ReadSetting(fs, BackupCore.BackupSetting.cache);
+            }
             if (destination == null)
             {
                 destination = GetBUDestinationDir();
@@ -445,7 +446,7 @@ namespace BackupConsole
                 {
                     try
                     {
-                        return BackupCore.Core.LoadCore(null, destination, null);
+                        return BackupCore.Core.LoadDiskCore(null, destination, null);
                     }
                     catch
                     {
@@ -463,7 +464,7 @@ namespace BackupConsole
             {
                 try
                 {
-                    return BackupCore.Core.LoadCore(cwd, destination, cache);
+                    return BackupCore.Core.LoadDiskCore(cwd, destination, cache);
                 }
                 catch
                 {
@@ -483,47 +484,17 @@ namespace BackupConsole
         {
             string backupsetname = GetBackupSetName(opts.BSName);
             var bcore = GetCore();
-            bcore.TransferBackupSet(backupsetname, BackupCore.Core.InitializeNew(backupsetname, null, opts.Destination), true);
+            bcore.TransferBackupSet(backupsetname, BackupCore.Core.InitializeNewDiskCore(backupsetname, null, opts.Destination), true);
         }
 
-        public static string ReadSetting(BackupSettings key)
-        {
-            var settings = ReadSettings();
-            if (settings != null)
-            {
-                if (settings.ContainsKey(key))
-                {
-                    return settings[key];
-                }
-            }
-            return null;
-        }
-        
-        private static void WriteSetting(BackupSettings key, string value)
-        {
-            var settings = ReadSettings();
-            if (settings == null)
-            {
-                settings = new Dictionary<BackupSettings, string>();
-            }
-            settings[key] = value;
-            WriteSettings(settings);
-        }
+        public static string ReadSetting(BackupCore.Core core, BackupCore.BackupSetting key) => core.SrcDependencies.ReadSetting(key);
+
+        private static void WriteSetting(BackupCore.Core core, BackupCore.BackupSetting key, string value) => core.SrcDependencies.WriteSetting(key, value);
 
         private static void ClearSetting(ClearOptions opts)
         {
-            var settings = ReadSettings();
-            if (settings != null)
-            {
-                if (Enum.TryParse(opts.Setting, out BackupSettings setting))
-                {
-                    if (settings.ContainsKey(setting))
-                    {
-                        settings.Remove(setting);
-                        WriteSettings(settings);
-                    }
-                }
-            }
+            BackupCore.Core core = GetCore();
+            core.SrcDependencies.ClearSetting(opts.Setting);
         }
 
         private static string GetBUSourceDir()
@@ -531,7 +502,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (File.Exists(Path.Combine(dir, LagernSettingsFilename)))
+                if (File.Exists(Path.Combine(dir, LagernSettingsFile)))
                 {
                     return dir;
                 }
@@ -545,7 +516,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (Directory.Exists(Path.Combine(dir, BackupCore.FSCoreDependencies.IndexDirName)))
+                if (Directory.Exists(Path.Combine(dir, BackupCore.FSCoreDstDependencies.IndexDirName)))
                 {
                     return dir;
                 }
@@ -555,61 +526,7 @@ namespace BackupConsole
         }
 
         public static void Exit() => Environment.Exit(0);
-
-        private static Dictionary<BackupSettings, string> ReadSettings()
-        {
-            try
-            {
-                Dictionary<BackupSettings, string> settings = new Dictionary<BackupSettings, string>();
-                string src = GetBUSourceDir();
-                if (src != null)
-                {
-                    using (FileStream fs = new FileStream(Path.Combine(src, LagernSettingsFilename), FileMode.Open))
-                    {
-                        using (StreamReader reader = new StreamReader(fs))
-                        {
-                            string line;
-                            while ((line = reader.ReadLine()) != null)
-                            {
-                                string[] kv = line.Split(' ');
-                                if (Enum.TryParse(kv[0], out BackupSettings key))
-                                {
-                                    settings[key] = kv[1];
-                                }
-                            }
-                        }
-                    }
-                    return settings;
-                }
-                return null;
-            }
-            catch (FileNotFoundException)
-            {
-                return null;
-            }
-        }
-
-        private static void WriteSettings(Dictionary<BackupSettings, string> settings)
-        {
-            using (FileStream fs = new FileStream(Path.Combine(GetBUSourceDir(), LagernSettingsFilename), FileMode.Create))
-            {
-                using (StreamWriter writer = new StreamWriter(fs))
-                {
-                    foreach (var kv in settings)
-                    {
-                        writer.WriteLine(kv.Key.ToString() + " " + kv.Value);
-                    }
-                }
-            }
-        }
-
-        public enum BackupSettings
-        {
-            dest,
-            cache,
-            name
-        }
-
+        
         public static string[] ReadArgs()
         {
             string command = Console.ReadLine();

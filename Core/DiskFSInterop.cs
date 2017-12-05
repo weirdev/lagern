@@ -5,7 +5,7 @@ using System.IO;
 
 namespace BackupCore
 {
-    class DiskFSInterop : IFSInterop
+    public class DiskFSInterop : IFSInterop
     {
         public bool DirectoryExists(string absolutepath) => Directory.Exists(absolutepath);
 
