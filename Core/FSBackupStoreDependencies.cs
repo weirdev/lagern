@@ -23,14 +23,7 @@ namespace BackupCore
         public byte[] LoadBackupSetData(string backupsetname)
         {
             var backuplistfile = Path.Combine(DiskStorePath, backupsetname);
-            try
-            {
-                return FSInterop.ReadAllFileBytes(backuplistfile);
-            }
-            catch
-            {
-                return null;
-            }
+            return FSInterop.ReadAllFileBytes(backuplistfile);
         }
 
         public void StoreBackupSetData(string backupsetname, byte[] bsdata)

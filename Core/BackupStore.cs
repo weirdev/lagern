@@ -158,9 +158,14 @@ namespace BackupCore
             return backuphash;
         }
 
-        public void RemoveBackup(string bsname, string backuphashprefix)
+        public void RemoveBackup(string bsname, string backuphashprefix, bool dst_wo_cache, bool force_delete = false)
         {
             var bset = LoadBackupSet(bsname);
+            if (bset.CacheUsed && dst_wo_cache && !force_delete)
+            {
+                throw new Core.BackupRemoveException("Deleting a backup from a backup destination that uses a cache, " +
+                    "without that cache present may cause errors when merging cache.");
+            }
             var match = HashByPrefix(bsname, backuphashprefix);
             // TODO: Better error messages depending on return value of HashByPrefix()
             // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
@@ -284,22 +289,14 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Attempts to load a BackupSet from a file.
-        /// If loading fails creates a new backupset.
+        /// Loads a BackupSet from a file.
         /// </summary>
         /// <param name="backuplistfile"></param>
         /// <param name="blobs"></param>
         /// <returns>A previously stored BackupStore object</returns>
         public BackupSet LoadBackupSet(string bsname)
         {
-            try
-            {
-                return BackupSet.deserialize(Dependencies.LoadBackupSetData(bsname));
-            }
-            catch
-            {
-                return new BackupSet();
-            }
+            return BackupSet.deserialize(Dependencies.LoadBackupSetData(bsname));
         }
 
         /// <summary>

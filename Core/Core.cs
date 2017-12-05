@@ -82,11 +82,11 @@ namespace BackupCore
         public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null)
         {
             FSCoreSrcDependencies srcdep = new FSCoreSrcDependencies(src, new DiskFSInterop());
-            FSCoreDstDependencies dstdep = FSCoreDstDependencies.InitializeNew(bsname, dst, new DiskFSInterop());
+            FSCoreDstDependencies dstdep = FSCoreDstDependencies.InitializeNew(bsname, dst, new DiskFSInterop(), cache!=null);
             FSCoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = FSCoreDstDependencies.InitializeNew(bsname, cache, new DiskFSInterop());
+                cachedep = FSCoreDstDependencies.InitializeNew(bsname, cache, new DiskFSInterop(), false);
             }
             return new Core(srcdep, dstdep, cachedep);
         }
@@ -942,9 +942,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="backuphashprefix"></param>
-        public void RemoveBackup(string backupsetname, string backuphashprefix)
+        public void RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false)
         {
-            DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix);
+            SyncCache(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
+            DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix, DestinationAvailable && CacheDependencies==null, forcedelete);
             SyncCache(backupsetname);
         }
 
@@ -965,7 +966,11 @@ namespace BackupCore
             }
             dstCore.DefaultDstDependencies.SaveBlobStoreIndex();
         }
-        
+
+        public class BackupRemoveException : Exception
+        {
+            public BackupRemoveException(string message) : base(message) { }
+        }
     }
     
     public enum BackupSetting

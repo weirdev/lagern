@@ -137,6 +137,9 @@ namespace BackupConsole
 
             [Option('b', "backup", Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
             public string BackupHash { get; set; }
+
+            [Option('f', "force", Required = false, Default = false, HelpText = "Force deleting backup from destination when destination inaccessible")]
+            public bool Force { get; set; }
         }
 
         [Verb("restore", HelpText = "Restore a file or directory")]
@@ -309,7 +312,14 @@ namespace BackupConsole
             { 
                 var bcore = GetCore();
                 string bsname = GetBackupSetName(opts.BSName);
-                bcore.RemoveBackup(bsname, opts.BackupHash);
+                try
+                {
+                    bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force);
+                }
+                catch (BackupCore.Core.BackupRemoveException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
             catch (Exception e)
             {

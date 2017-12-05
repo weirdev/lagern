@@ -12,14 +12,18 @@ namespace BackupCore
         // Backup is shallow if only metadata is stored for that backup
         public List<(byte[] hash, bool shallow)> Backups { get; private set; }
 
-        public BackupSet()
+        public bool CacheUsed { get; set; }
+
+        public BackupSet(bool cacheused)
         {
             Backups = new List<(byte[] hash, bool shallow)>();
+            CacheUsed = cacheused;
         }
 
-        private BackupSet(List<(byte[], bool)> backups)
+        private BackupSet(List<(byte[], bool)> backups, bool cacheused)
         {
             Backups = backups;
+            CacheUsed = cacheused;
         }        
 
         public byte[] serialize()
@@ -27,12 +31,18 @@ namespace BackupCore
             // -"-v1"
             // backuphashes = enum_encode([Backups.backuphash,...])
             // shallowflags = enum_encode([BitConverter.GetBytes(Bakups.shallow),...])
+            // -"-v2"
+            // cacheused = BitConverter.GetBytes(CacheUsed)
             byte[] backuphashes = BinaryEncoding.enum_encode(from backup in Backups select backup.hash);
             byte[] shallowflags = BinaryEncoding.enum_encode(from backup in Backups select BitConverter.GetBytes(backup.shallow));
+
+            byte[] cacheused = BitConverter.GetBytes(CacheUsed);
+
             return BinaryEncoding.dict_encode(new Dictionary<string, byte[]>
             {
                 { "backuphashes-v1", backuphashes },
-                { "shallowflags-v1", shallowflags }
+                { "shallowflags-v1", shallowflags },
+                { "cacheused-v2", cacheused }
             });
         }
 
@@ -46,7 +56,8 @@ namespace BackupCore
             {
                 backups.Add((hash: backuphashes[i], shallow: shallowflags[i]));
             }
-            return new BackupSet(backups);
+            bool cacheused = BitConverter.ToBoolean(saved_objects["cacheused-v2"], 0);
+            return new BackupSet(backups, cacheused);
         }
     }
 }

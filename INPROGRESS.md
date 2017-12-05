@@ -3,30 +3,9 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Locking for destinations seperated from their caches
-	Move applicable CoreDependencies functionality into CoreScrDependencies, CoreDstDependencies
-		CoreDependencies will now have DefaultDstDependencies, ChacheDependencies and SrcDependencies
-			Add a "default root" path option to IFSInterop, configured on initialization
-				aka FS interop will handle relative paths
-		Src likely computer filesystem (or virtualfs for testing)
-		Dst may be different (aka AWS, backblaze)
-		Cache dependencies must be explicitly specified, but will be object implementing ICoreDstDependencies
-			Likely the same underlying IFSInterop as Src (aka both on local filesystem)
-	...Remove specieal initialization option for Core using string src, dst, and cache paths
-	...LagernConsole will now explicitly initialize FSCoreDependencies
-	...LagernConsole: for commands needing settings access; 1. if core initialized use core.dependencies; 2. if core not initialized create new FSCoreDependencies instance
-
-	...ie. Console will now be tied to FSCoreDependencies...
-	Prevent deleting (adding?) backups without cache
-		Cache may contain references in its backups to data no longer in destination
-	Browsing and restoring from destination without cache still allowed
-	Not true locking but display warnings
-		Require "force" parameter to be passed to continue
-	Only lock/warn once
-		After warned operation performed at dst
-			Cache may have bad references
-			Have some kind of safe way of attempting to integrate cache
-				Otherwise need to clear and reinitialize cache
+Backblaze support
+Add a "default root" path option to IFSInterop, configured on initialization
+	aka FS interop will handle relative paths
 Better support for large backup sets
 	Test large backups
 		Identify bottlenecks

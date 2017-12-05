@@ -19,8 +19,9 @@ namespace Testing
             //betest.TestDictEncodeDecode();
             //betest.TestEnumEncodeDecode();
 
-            //BlobStoreTest bstest = new BlobStoreTest();
+            BlobStoreTest bstest = new BlobStoreTest();
             //bstest.TestSplitData();
+            bstest.TestBlobStoreDeserialize();
 
             CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
@@ -29,8 +30,8 @@ namespace Testing
             //ctest.TestRunBackup();
             //ctest.TestRestore();
             //ctest.TestRemoveBackup();
-            ctest.TestInitializeNew();
-            ctest.TestLoadCore_NewlyInitialized();
+            //ctest.TestInitializeNew();
+            //ctest.TestLoadCore_NewlyInitialized();
 
             //BPlusTreeTest bptt = new BPlusTreeTest();
             //bptt.TestAddRemove();

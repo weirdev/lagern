@@ -67,7 +67,7 @@ namespace BackupCore
             FSInterop = fsinterop;
         }
 
-        public static FSCoreDstDependencies InitializeNew(string bsname, string dst, IFSInterop fsinterop)
+        public static FSCoreDstDependencies InitializeNew(string bsname, string dst, IFSInterop fsinterop, bool cacheused)
         {
             FSCoreDstDependencies ddeps = new FSCoreDstDependencies(dst, fsinterop);
             // Create lagern directory structure at destination if it doesn't already exist
@@ -86,11 +86,11 @@ namespace BackupCore
             }
             FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(ddeps.FSInterop, ddeps.Blobs, ddeps.BackupStoreDir);
             ddeps.Backups = new BackupStore(backupStoreDependencies);
-            ddeps.Backups.SaveBackupSet(new BackupSet(), bsname);
+            ddeps.Backups.SaveBackupSet(new BackupSet(cacheused), bsname);
             return ddeps;
         }
 
-        public static FSCoreDstDependencies Load(string dst, IFSInterop fsinterop)
+        public static FSCoreDstDependencies Load(string dst, IFSInterop fsinterop, bool cacheused = false)
         {
             FSCoreDstDependencies ddeps = new FSCoreDstDependencies(dst, fsinterop);
             (ddeps.BackupIndexDir, ddeps.BackupBlobDataDir, ddeps.BackupStoreDir, ddeps.BackupBlobIndexFile) = GetDestinationPaths(ddeps.BackupDstPath);
