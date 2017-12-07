@@ -20,7 +20,7 @@ namespace BackupCore
             FSInterop = fsinterop;
         }
 
-        public void DeleteBlob(string relpath, int byteposition, int bytelength)
+        public void DeleteBlob(byte[] hash, string relpath, int byteposition, int bytelength)
         {
             FSInterop.DeleteFile(Path.Combine(BlobSaveDirectory, relpath));
         }

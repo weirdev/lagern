@@ -6,6 +6,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Flurl.Http" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\CoreTest\CoreTest.csproj" />
     <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>

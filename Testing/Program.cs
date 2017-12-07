@@ -2,6 +2,7 @@
 using System.IO;
 using CoreTest;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Testing
 {
@@ -19,11 +20,11 @@ namespace Testing
             //betest.TestDictEncodeDecode();
             //betest.TestEnumEncodeDecode();
 
-            BlobStoreTest bstest = new BlobStoreTest();
+            //BlobStoreTest bstest = new BlobStoreTest();
             //bstest.TestSplitData();
-            bstest.TestBlobStoreDeserialize();
+            //bstest.TestBlobStoreDeserialize();
 
-            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
+            //CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
             //ctest.TestInitializeNew();
@@ -46,6 +47,19 @@ namespace Testing
 
             //Console.WriteLine(BackupRun("test", @"D:\src", @"D:\dst"));
             //GetStatus("test", @"C:\Users\Wesley\Desktop\test\src", @"C:\Users\Wesley\Desktop\test\dst");
+
+            //var bbi = new BackupCore.BackblazeInterop();
+            //(var hash, var data) = MakeRandomFile(30);
+            //Console.WriteLine(bbi.FileExists("hashindex").Result);
+            //Console.WriteLine(bbi.DownloadFile("hashindex").Result.Length);
+            //Console.ReadLine();
+            
+            BackupCore.FSCoreSrcDependencies srcdeps = new BackupCore.FSCoreSrcDependencies(@"C:\Users\Wesley\Desktop\test\src", new BackupCore.DiskFSInterop());
+            BackupCore.BackblazeCoreDstDependencies bbdestdeps = BackupCore.BackblazeCoreDstDependencies.Load(new BackupCore.BackblazeInterop(), false);
+            BackupCore.Core core = new BackupCore.Core(srcdeps, bbdestdeps);
+            core.RunBackup("test", "try");
+            Console.ReadLine();
+            Console.WriteLine(core.GetBackups("test").backups.First().message);
             Console.ReadLine();
         }
 
@@ -91,16 +105,23 @@ namespace Testing
         {
             for (int i = 0; i < count; i++)
             {
-                MakeRandomFile(Path.Combine(dst, (i + startnum).ToString()), size);
+                SaveRandomFile(Path.Combine(dst, (i + startnum).ToString()), size);
             }
         }
 
-        static void MakeRandomFile(string path, int size)
+        static void SaveRandomFile(string path, int size)
+        {
+            (_, byte[] data) = MakeRandomFile(size);
+            File.WriteAllBytes(path, data);
+        }
+
+        static (byte[] hash, byte[] data) MakeRandomFile(int size)
         {
             byte[] data = new byte[size];
             Random rng = new Random();
             rng.NextBytes(data);
-            File.WriteAllBytes(path, data);
+            byte[] hash = BackupCore.HashTools.GetSHA1Hasher().ComputeHash(data);
+            return (hash, data);
         }
     }
 }

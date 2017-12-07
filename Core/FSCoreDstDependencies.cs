@@ -90,11 +90,11 @@ namespace BackupCore
             return ddeps;
         }
 
-        public static FSCoreDstDependencies Load(string dst, IFSInterop fsinterop, bool cacheused = false)
+        public static FSCoreDstDependencies Load(string dst, IFSInterop fsinterop)
         {
             FSCoreDstDependencies ddeps = new FSCoreDstDependencies(dst, fsinterop);
             (ddeps.BackupIndexDir, ddeps.BackupBlobDataDir, ddeps.BackupStoreDir, ddeps.BackupBlobIndexFile) = GetDestinationPaths(ddeps.BackupDstPath);
-            (ddeps.Blobs, ddeps.Backups) = ddeps.LoadIndex(ddeps.BackupBlobDataDir, ddeps.BackupBlobIndexFile, ddeps.BackupStoreDir);
+            (ddeps.Blobs, ddeps.Backups) = ddeps.LoadIndex();
             return ddeps;
         }
 
@@ -125,18 +125,12 @@ namespace BackupCore
         /// <summary>
         /// Loads a lagern index.
         /// </summary>
-        /// <param name="blobdatadir"></param>
-        /// <param name="blobindexfile"></param>
-        /// <param name="backupstoresdir"></param>
-        /// <param name="iscahce"></param>
-        /// <param name="continueorkill"></param>
         /// <returns></returns>
-        private (BlobStore blobs, BackupStore backups) LoadIndex(string blobdatadir, string blobindexfile,
-            string backupstoresdir)
+        private (BlobStore blobs, BackupStore backups) LoadIndex()
         {
-            FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, blobdatadir);
-            BlobStore blobs = BlobStore.deserialize(FSInterop.ReadAllFileBytes(blobindexfile), blobStoreDependencies);
-            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, blobs, backupstoresdir);
+            FSBlobStoreDependencies blobStoreDependencies = new FSBlobStoreDependencies(FSInterop, BackupBlobDataDir);
+            BlobStore blobs = BlobStore.deserialize(FSInterop.ReadAllFileBytes(BackupBlobIndexFile), blobStoreDependencies);
+            FSBackupStoreDependencies backupStoreDependencies = new FSBackupStoreDependencies(FSInterop, blobs, BackupStoreDir);
             BackupStore backups = new BackupStore(backupStoreDependencies);
             return (blobs, backups);
         }
@@ -175,7 +169,7 @@ namespace BackupCore
         {
             using (var fs = GetSettingsFileStream())
             {
-                SettingsFileTools.WriteSetting(fs, key, value);
+                 WriteSettingsFileStream(SettingsFileTools.WriteSetting(fs, key, value));
             }
         }
 
@@ -188,5 +182,7 @@ namespace BackupCore
         }
 
         private Stream GetSettingsFileStream() => new FileStream(DstSettingsFile, FileMode.Open);
+
+        private void WriteSettingsFileStream(byte[] data) => FSInterop.OverwriteOrCreateFile(DstSettingsFile, data);
     }
 }

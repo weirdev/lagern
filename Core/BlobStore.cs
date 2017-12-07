@@ -156,7 +156,7 @@ namespace BackupCore
                 {
                     try
                     {
-                        Dependencies.DeleteBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+                        Dependencies.DeleteBlob(blobhash, blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
                     }
                     catch (Exception)
                     {
