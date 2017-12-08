@@ -64,7 +64,7 @@ namespace CoreTest
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
             (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
             var vfsi = new VirtualFSInterop(vfsroot, vfsdatastore);
-            ICoreSrcDependencies srcdeps = new FSCoreSrcDependencies("src", vfsi);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi, "dst", "cache");
             ICoreDstDependencies dstdeps = FSCoreDstDependencies.InitializeNew("test", "dst", vfsi, true);
             ICoreDstDependencies cachedeps = FSCoreDstDependencies.InitializeNew("test~cache", "cache", vfsi, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
@@ -93,7 +93,7 @@ namespace CoreTest
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
             var vfsi = new VirtualFSInterop(vfsroot, datastore);
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.Initialize("test", "src", vfsi);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi);
             ICoreDstDependencies dstdeps = FSCoreDstDependencies.InitializeNew("test", "dst", vfsi, true);
             ICoreDstDependencies cachedeps = FSCoreDstDependencies.InitializeNew("test", "cache", vfsi, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
@@ -105,13 +105,13 @@ namespace CoreTest
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
             var vfsi = new VirtualFSInterop(vfsroot, datastore);
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.Initialize("test", "src", vfsi);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi, "dst", "cache");
             ICoreDstDependencies dstdeps = FSCoreDstDependencies.InitializeNew("test", "dst", vfsi, true);
             ICoreDstDependencies cachedeps = FSCoreDstDependencies.InitializeNew("test", "cache", vfsi, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
 
             vfsi = new VirtualFSInterop(vfsroot, datastore);
-            srcdeps = new FSCoreSrcDependencies("src", vfsi);
+            srcdeps = FSCoreSrcDependencies.Load("src", vfsi);
             dstdeps = FSCoreDstDependencies.Load("dst", vfsi);
             cachedeps = FSCoreDstDependencies.Load("cache", vfsi);
             core = new Core(srcdeps, dstdeps, cachedeps);

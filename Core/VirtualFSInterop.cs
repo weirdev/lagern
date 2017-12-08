@@ -57,7 +57,7 @@ namespace BackupCore
             var datahash = StoreDataGetHash(data);
             if (fileMetadata == null)
             {
-                fileMetadata = MakeNewFileMetadata(absolutepath, data.Length, datahash);
+                fileMetadata = MakeNewFileMetadata(Path.GetFileName(absolutepath), data.Length, datahash);
             }
             VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = fileMetadata;
         }

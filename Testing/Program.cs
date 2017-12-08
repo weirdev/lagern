@@ -24,13 +24,13 @@ namespace Testing
             //bstest.TestSplitData();
             //bstest.TestBlobStoreDeserialize();
 
-            //CoreTest.CoreTest ctest = new CoreTest.CoreTest();
+            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
             //ctest.TestInitializeNew();
             //ctest.TestRunBackup();
             //ctest.TestRestore();
-            //ctest.TestRemoveBackup();
+            ctest.TestRemoveBackup();
             //ctest.TestInitializeNew();
             //ctest.TestLoadCore_NewlyInitialized();
 
@@ -54,13 +54,14 @@ namespace Testing
             //Console.WriteLine(bbi.DownloadFile("hashindex").Result.Length);
             //Console.ReadLine();
             
-            BackupCore.FSCoreSrcDependencies srcdeps = new BackupCore.FSCoreSrcDependencies(@"C:\Users\Wesley\Desktop\test\src", new BackupCore.DiskFSInterop());
-            BackupCore.BackblazeCoreDstDependencies bbdestdeps = BackupCore.BackblazeCoreDstDependencies.Load(new BackupCore.BackblazeInterop(), false);
+            /*
+            BackupCore.FSCoreSrcDependencies srcdeps = BackupCore.FSCoreSrcDependencies.Load(@"C:\Users\Wesley\Desktop\test\src", new BackupCore.DiskFSInterop());
+            BackupCore.BackblazeCoreDstDependencies bbdestdeps = BackupCore.BackblazeCoreDstDependencies.Load(new BackupCore.BackblazeInterop("BBConnection.json"), false);
             BackupCore.Core core = new BackupCore.Core(srcdeps, bbdestdeps);
             core.RunBackup("test", "try");
             Console.ReadLine();
             Console.WriteLine(core.GetBackups("test").backups.First().message);
-            Console.ReadLine();
+            Console.ReadLine(); */
         }
 
         static double BackupRun(string bsname, string src, string dst)

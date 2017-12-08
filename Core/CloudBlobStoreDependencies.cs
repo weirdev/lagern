@@ -4,29 +4,29 @@ using System.Text;
 
 namespace BackupCore
 {
-    class BackblazeBlobStoreDependencies : IBlobStoreDependencies
+    class CloudBlobStoreDependencies : IBlobStoreDependencies
     {
-        private BackblazeInterop BBInterop { get; set; }
+        private ICloudInterop CloudInterop { get; set; }
 
-        public BackblazeBlobStoreDependencies(BackblazeInterop bbinterop)
+        public CloudBlobStoreDependencies(ICloudInterop cloudinterop)
         {
-            BBInterop = bbinterop;
+            CloudInterop = cloudinterop;
         }
 
         public void DeleteBlob(byte[] hash, string relpath, int byteposition, int bytelength)
         {
-            BBInterop.DeleteFile(HashTools.ByteArrayToHexViaLookup32(hash), relpath);
+            CloudInterop.DeleteFileAsync(HashTools.ByteArrayToHexViaLookup32(hash), relpath);
         }
 
         public byte[] LoadBlob(string relpath, int byteposition, int bytelength)
         {
-            return BBInterop.DownloadFile(relpath, true).Result;
+            return CloudInterop.DownloadFileAsync(relpath, true).Result;
         }
 
         public (string relativefilepath, int byteposition) StoreBlob(byte[] hash, byte[] blobdata)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(hash);
-            string fileid = BBInterop.UploadFileAsync(hashstring, blobdata).Result;
+            string fileid = CloudInterop.UploadFileAsync(hashstring, hash, blobdata).Result;
             return (fileid, 0);
         }
     }

@@ -32,7 +32,10 @@ namespace BackupCore
                 // Set the stream length to the current position in order to truncate leftover data in original file
                 writer.SetLength(writer.Position);
             }
-            WriteOutMetadata(absolutepath, fileMetadata);
+            if (fileMetadata != null)
+            {
+                WriteOutMetadata(absolutepath, fileMetadata);
+            }
         }
 
         public void WriteOutMetadata(string absolutepath, FileMetadata fileMetadata)

@@ -10,8 +10,10 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class BackblazeInterop
+    public class BackblazeInterop : ICloudInterop
     {
+        private string ConnectionSettingsFile { get; set; }
+
         private string AccountID { get; set; }
         private string ApplicationKey { get; set; }
         private string BucketId { get; set; }
@@ -26,8 +28,9 @@ namespace BackupCore
             BucketName = bucketname;
         }
 
-        public BackblazeInterop()
+        public BackblazeInterop(string connectionsettingsfile)
         {
+            ConnectionSettingsFile = connectionsettingsfile;
             BBConnectionSettings connectionsettings = LoadBBConnectionSettings();
             AccountID = connectionsettings.accountId;
             ApplicationKey = connectionsettings.ApplicationKey;
@@ -82,7 +85,7 @@ namespace BackupCore
             return uploadresp.fileId;
         }
 
-        public async Task<byte[]> DownloadFile(string fileNameOrId, bool fileid = false)
+        public async Task<byte[]> DownloadFileAsync(string fileNameOrId, bool fileid = false)
         {
             AuthorizationResponse authresp = await AuthorizeAccount();
             HttpResponseMessage downloadresp;
@@ -107,19 +110,7 @@ namespace BackupCore
             return await downloadresp.Content.ReadAsByteArrayAsync();
         }
 
-        public async Task<byte[]> DownloadFile(string fileid, string fileName)
-        {
-            AuthorizationResponse authresp = await AuthorizeAccount();
-
-            var downloadresp = await authresp.downloadUrl
-                .AppendPathSegment("/b2api/v1/b2_download_file_by_id")
-                .WithHeaders(new { Authorization = authresp.authorizationToken })
-                .PostJsonAsync(new { fileId = fileid });
-
-            return await downloadresp.Content.ReadAsByteArrayAsync();
-        }
-
-        public async void DeleteFile(string filename, string fileid)
+        public async void DeleteFileAsync(string filename, string fileid)
         {
             AuthorizationResponse authresp = await AuthorizeAccount();
 
@@ -133,7 +124,7 @@ namespace BackupCore
                 });
         }
 
-        public async Task<bool> FileExists(string file)
+        public async Task<bool> FileExistsAsync(string file)
         {
             AuthorizationResponse authresp = await AuthorizeAccount();
 
@@ -154,7 +145,7 @@ namespace BackupCore
         private BBConnectionSettings LoadBBConnectionSettings()
         {
             string connectionsettings;
-            using (var sr = new StreamReader("BBConnection.json"))
+            using (var sr = new StreamReader(ConnectionSettingsFile))
             {
                 connectionsettings = sr.ReadToEnd();
             }

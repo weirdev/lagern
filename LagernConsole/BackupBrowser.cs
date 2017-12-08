@@ -23,7 +23,7 @@ namespace BackupConsole
         public BackupBrowser(string backupstorename, string backuphash)
         {
             ContinueLoop = true;
-            BCore = Program.GetCore();
+            BCore = Program.LoadCore();
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {

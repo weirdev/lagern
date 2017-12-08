@@ -4,7 +4,9 @@ For now this will remain the home of the project backlog.
 ====
 
 Backblaze support
-Add a "default root" path option to IFSInterop, configured on initialization
+	From command line
+Data integrity and encryption support
+Add a "default root" path option to IFSInterop, configured on initialization?
 	aka FS interop will handle relative paths
 Better support for large backup sets
 	Test large backups
@@ -13,6 +15,8 @@ Better support for large backup sets
 		store some nodes out of memory?
 		optimize node size
 			Make BlobLocations a set size?
+Replace custom settings file format with Json
+	Rework how readsetting, etc are called
 Enforce using C# nullable reference types
 	(once feature is part of standard C# release or available as a package)
 Add more unit tests
@@ -30,7 +34,6 @@ Add more unit tests
 	Generic permissions support ie. Linux (POSIX)
 		Handle restoring to different OS/permissions scheme than saved to
 Support deleting entire backup sets (at dest)
-Examine bundling/using a true database as the datastore for blobstore
 Handle common things that could go wrong
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes

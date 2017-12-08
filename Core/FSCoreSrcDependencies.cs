@@ -17,14 +17,19 @@ namespace BackupCore
 
         private IFSInterop FSInterop { get; set; }
 
-        public FSCoreSrcDependencies(string src, IFSInterop fsinterop)
+        private FSCoreSrcDependencies(string src, IFSInterop fsinterop)
         {
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
         }
 
-        public static FSCoreSrcDependencies Initialize(string bsname, string src, IFSInterop fsinterop, string dst = null, string cache = null)
+        public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop)
+        {
+            return new FSCoreSrcDependencies(src, fsinterop);
+        }
+
+        public static FSCoreSrcDependencies InitializeNew(string bsname, string src, IFSInterop fsinterop, string dst = null, string cache = null)
         {
             var srcdep = new FSCoreSrcDependencies(src, fsinterop);
             srcdep.CreateDirectory(SettingsDirectoryName);

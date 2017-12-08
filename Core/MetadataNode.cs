@@ -25,7 +25,7 @@ namespace BackupCore
         public FileMetadata DirMetadata { get; set; }
 
         public Dictionary<string, MetadataNode> Directories { get; set; }
-        public Dictionary<string, FileMetadata> Files { get; set; }
+        public Dictionary<string, FileMetadata> Files { get; private set; }
 
         public string Path
         {

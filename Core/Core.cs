@@ -61,7 +61,7 @@ namespace BackupCore
         /// <param name="dst">Backup destination directory</param>
         public static Core LoadDiskCore(string src, string dst, string cache = null)
         {
-            FSCoreSrcDependencies srcdep = new FSCoreSrcDependencies(src, new DiskFSInterop());
+            FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.Load(src, new DiskFSInterop());
             FSCoreDstDependencies dstdep;
             try
             {
@@ -81,12 +81,12 @@ namespace BackupCore
 
         public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null)
         {
-            FSCoreSrcDependencies srcdep = new FSCoreSrcDependencies(src, new DiskFSInterop());
+            FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache);
             FSCoreDstDependencies dstdep = FSCoreDstDependencies.InitializeNew(bsname, dst, new DiskFSInterop(), cache!=null);
             FSCoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = FSCoreDstDependencies.InitializeNew(bsname, cache, new DiskFSInterop(), false);
+                cachedep = FSCoreDstDependencies.InitializeNew(bsname + CacheSuffix, cache, new DiskFSInterop(), false);
             }
             return new Core(srcdep, dstdep, cachedep);
         }
@@ -615,10 +615,12 @@ namespace BackupCore
 
             (byte[] newmtreehash, bool multiblock) = deltatree.Store(DefaultDstDependencies.Blobs, backupsetname);
 
-            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, multiblock, false);
+            var defaultbset = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
+            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, multiblock, false, defaultbset);
 
-            SyncCache(backupsetname);
-            // Index save occurred during synccache
+            SyncCache(backupsetname, defaultbset);
+            // BackupSet save occurred with cache sync
+            SaveBlobIndices();
             return backuphash;
         }
         
@@ -643,16 +645,15 @@ namespace BackupCore
             }
         }
         
-        public void SyncCache(string backupsetname)
+        public void SyncCache(string backupsetname, BackupSet dstbset=null)
         {
             if (CacheDependencies != null)
             {
                 if (DestinationAvailable)
                 {
-                    DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname);
+                    DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname, dstbset);
                 }
             }
-            SaveBlobIndices();
         }
 
         // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
@@ -947,6 +948,7 @@ namespace BackupCore
             SyncCache(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
             DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix, DestinationAvailable && CacheDependencies==null, forcedelete);
             SyncCache(backupsetname);
+            SaveBlobIndices();
         }
 
         /// <summary>
@@ -978,6 +980,6 @@ namespace BackupCore
         dest,
         cache,
         name,
-        cache_used
+        cloud_config
     }
 }

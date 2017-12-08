@@ -17,7 +17,7 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public void SyncCache(BackupStore cache, string bsname)
+        public void SyncCache(BackupStore cache, string bsname, BackupSet dstbset=null, BackupSet cachebset=null)
         {
             int cacheindex = 0;
             int dstindex = 0;
@@ -25,9 +25,15 @@ namespace BackupCore
             BackupRecord dstbr = null;
 
             string cachebsname = bsname + Core.CacheSuffix;
-            
-            var dstbset = LoadBackupSet(bsname);
-            var cachebset = cache.LoadBackupSet(cachebsname);
+
+            if (dstbset == null)
+            {
+                dstbset = LoadBackupSet(bsname);
+            }
+            if (cachebset == null)
+            {
+                cachebset = cache.LoadBackupSet(cachebsname);
+            }
             if (cachebset.Backups.Count > 0 && dstbset.Backups.Count > 0)
             {
                 while (cachebset.Backups.Count > cacheindex && dstbset.Backups.Count > dstindex)
@@ -119,9 +125,9 @@ namespace BackupCore
                 dstindex += 1;
                 dstbr = null;
             }
-            cache.SaveBackupSet(cachebset, cachebsname);
-            SaveBackupSet(dstbset, bsname);
             Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
+            SaveBackupSet(dstbset, bsname);
+            cache.SaveBackupSet(cachebset, cachebsname);
         }
 
 
@@ -147,14 +153,16 @@ namespace BackupCore
         /// <param name="metadatatreehash"></param>
         /// <param name="shallow"></param>
         /// <returns>The hash of the new backup</returns>
-        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool treemultiblock, bool shallow)
+        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool treemultiblock, bool shallow, BackupSet bset=null)
         {
-            var bset = LoadBackupSet(bsname);
+            if (bset == null)
+            {
+                bset = LoadBackupSet(bsname);
+            }
             BackupRecord newbackup = new BackupRecord(message, metadatatreehash, treemultiblock);
             byte[] brbytes = newbackup.serialize();
             (byte[] backuphash, bool multiblock) = Dependencies.Blobs.StoreData(bsname, brbytes);
             bset.Backups.Add((backuphash, shallow));
-            SaveBackupSet(bset, bsname);
             return backuphash;
         }
 
