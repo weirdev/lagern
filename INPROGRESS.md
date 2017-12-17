@@ -5,13 +5,13 @@ For now this will remain the home of the project backlog.
 
 Backblaze support
 	Make api calls fault tolerant
-		Limit retries
-		Specific handling based on backblaze error code
-		Currently getting 503 errors when making many calls
-		Handle other errors
-		Bubble up errors reasonably
+		Single queue for pending transmissions?
+		Ability to stall main thread from queuing more uploads?
+			Need to limit number of file blocks loaded into memory?
+				Dont worry about this for now but definitely test at some point
+				SemaphoreSlim class to limit number of files being uploaded at a time?
 	If receive Retry-After header, use specified time
-		otherwise exponential backoff starting with 1 second delay
+		Currently not bothering
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
 Project structure change
 	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies

@@ -19,10 +19,15 @@ namespace BackupCore
         private string ApplicationKey { get; set; }
         private string BucketId { get; set; }
         private string BucketName { get; set; }
+        
+        private AuthorizationResponse AuthResp = null;
+        private GetUploadUrlResponse UploadUrlResp = null;
 
-        private static readonly int MinDelayMS = 125;
-        private int DelayMS { get; set; } = 125;
-        private static readonly int MaxDelayMS = 32_000;
+        private static readonly int MinDelayMS = 32;
+        private int DelayMS { get; set; } = 32;
+        private static readonly int MaxDelayMS = 16_000;
+
+        private static readonly int Retries = 7;
 
         public BackblazeInterop(string accountid, string applicationkey,
             string bucketid, string bucketname)
@@ -41,6 +46,7 @@ namespace BackupCore
             ApplicationKey = connectionsettings.ApplicationKey;
             BucketId = connectionsettings.bucketId;
             BucketName = connectionsettings.bucketName;
+            AuthResp = AuthorizeAccount().Result;
         }
 
         /// <summary>
@@ -61,7 +67,7 @@ namespace BackupCore
             DelayMS = Min(DelayMS * 2, MaxDelayMS);
         }
 
-        private async Task<AuthorizationResponse> AuthorizeAccount()
+        private async Task<AuthorizationResponse> AuthorizeAccount(int attempts = 0)
         {
             Delay();
             try
@@ -80,7 +86,11 @@ namespace BackupCore
             catch (FlurlHttpException)
             {
                 FailedTransmission();
-                return await AuthorizeAccount();
+                if (attempts < Retries)
+                {
+                    return await AuthorizeAccount(attempts + 1);
+                }
+                throw;
             }
         }
 
@@ -95,41 +105,58 @@ namespace BackupCore
         /// <returns>fileId</returns>
         public async Task<string> UploadFileAsync(string file, byte[] hash, byte[] data)
         {
-            AuthorizationResponse authresp = await AuthorizeAccount();
-
-            (string uploadurl, string authtoken) = await GetUploadUrl();
-            async Task<(string url, string authtoken)> GetUploadUrl()
+            async Task<GetUploadUrlResponse> GetUploadUrl(int attempts=0)
             {
+                if (AuthResp == null)
+                {
+                    AuthResp = await AuthorizeAccount();
+                }
                 Delay();
                 try
                 {
-                    var urlresp = await authresp.apiUrl
+                    var urlresp = await AuthResp.apiUrl
                     .AppendPathSegment("/b2api/v1/b2_get_upload_url")
-                    .WithHeaders(new { Authorization = authresp.authorizationToken })
+                    .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                     .PostJsonAsync(new { bucketId = BucketId })
-                    .ReceiveJson<GetUrlResponse>();
+                    .ReceiveJson<GetUploadUrlResponse>();
                     SuccessfulTransmission();
-                    return (urlresp.uploadUrl, urlresp.authorizationToken);
+                    return urlresp;
                 }
-                catch (FlurlHttpException)
+                catch (FlurlHttpException ex)
                 {
-                    FailedTransmission();
-                    return await GetUploadUrl();
+                    if (ex.Call.HttpStatus != null && ex.Call.HttpStatus == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        AuthResp = null;
+                    }
+                    else
+                    {
+                        // Other classes of errors may be congestion related so we increase the delay
+                        FailedTransmission();
+                    }
+                    if (attempts < Retries)
+                    {
+                        return await GetUploadUrl(attempts + 1);
+                    }
+                    throw;
                 }
             }
 
             string fileid = await UploadData();
-            async Task<string> UploadData()
+            async Task<string> UploadData(int attempts = 0)
             {
+                if (UploadUrlResp == null)
+                {
+                    UploadUrlResp = await GetUploadUrl();
+                }
                 Delay();
                 try
                 {
                     var filecontent = new ByteArrayContent(data);
                     filecontent.Headers.Add("Content-Type", "application/octet-stream");
-                    var uploadresp = await uploadurl
+                    var uploadresp = await UploadUrlResp.uploadUrl
                         .WithHeaders(new
                         {
-                            Authorization = authtoken,
+                            Authorization = UploadUrlResp.authorizationToken,
                             X_Bz_File_Name = file,
                             Content_Length = data.Length,
                             X_Bz_Content_Sha1 = HashTools.ByteArrayToHexViaLookup32(hash)
@@ -139,10 +166,23 @@ namespace BackupCore
                     SuccessfulTransmission();
                     return uploadresp.fileId;
                 }
-                catch (FlurlHttpException)
+                catch (FlurlHttpException ex)
                 {
-                    FailedTransmission();
-                    return await UploadData();
+                    if (ex.Call.HttpStatus != null && ex.Call.HttpStatus == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        UploadUrlResp = null;
+                    }
+                    else
+                    {
+                        // Other classes of errors may be congestion related so we increase the delay
+                        FailedTransmission();
+                    }
+
+                    if (attempts < Retries)
+                    {
+                        return await UploadData(attempts + 1);
+                    }
+                    throw;
                 }
             }
             return fileid;
@@ -150,57 +190,73 @@ namespace BackupCore
 
         public async Task<byte[]> DownloadFileAsync(string fileNameOrId, bool fileid = false)
         {
-            AuthorizationResponse authresp = await AuthorizeAccount();
-
             byte[] downloaddata = await Download();
-            async Task<byte[]> Download()
+            async Task<byte[]> Download(int attempts = 0)
             {
+                if (AuthResp == null)
+                {
+                    AuthResp = await AuthorizeAccount();
+                }
                 Delay();
                 try
                 {
                     HttpResponseMessage downloadresp;
                     if (fileid)
                     {
-                        downloadresp = await authresp.downloadUrl
+                        downloadresp = await AuthResp.downloadUrl
                             .AppendPathSegment("/b2api/v1/b2_download_file_by_id")
-                            .WithHeaders(new { Authorization = authresp.authorizationToken })
+                            .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                             .PostJsonAsync(new { fileId = fileNameOrId });
                     }
                     else
                     {
-                        downloadresp = await authresp.downloadUrl
+                        downloadresp = await AuthResp.downloadUrl
                             .AppendPathSegment("file")
                             .AppendPathSegment(BucketName)
                             .AppendPathSegment(fileNameOrId)
-                            .WithHeaders(new { Authorization = authresp.authorizationToken })
+                            .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                             .GetAsync();
                     }
                     var data = await downloadresp.Content.ReadAsByteArrayAsync();
                     SuccessfulTransmission();
                     return data;
                 }
-                catch (FlurlHttpException)
+                catch (FlurlHttpException ex)
                 {
-                    FailedTransmission();
-                    return await Download();
+                    if (ex.Call.HttpStatus != null && ex.Call.HttpStatus == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        AuthResp = null;
+                    }
+                    else
+                    {
+                        // Other classes of errors may be congestion related so we increase the delay
+                        FailedTransmission();
+                    }
+                    if (attempts < Retries)
+                    {
+                        return await Download(attempts + 1);
+                    }
+                    throw;
                 }
             }
             return downloaddata;
         }
 
-        public async void DeleteFileAsync(string filename, string fileid)
+        public void DeleteFileAsync(string filename, string fileid)
         {
-            AuthorizationResponse authresp = await AuthorizeAccount();
-
             Delete();
-            async void Delete()
+            async void Delete(int attempts = 0)
             {
+                if (AuthResp == null)
+                {
+                    AuthResp = await AuthorizeAccount();
+                }
                 Delay();
                 try
                 {
-                    var deleteresp = await authresp.apiUrl
+                    var deleteresp = await AuthResp.apiUrl
                         .AppendPathSegment("/b2api/v1/b2_delete_file_version")
-                        .WithHeaders(new { Authorization = authresp.authorizationToken })
+                        .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                         .PostJsonAsync(new
                         {
                             fileId = fileid,
@@ -208,27 +264,41 @@ namespace BackupCore
                         });
                     SuccessfulTransmission();
                 }
-                catch (FlurlHttpException)
+                catch (FlurlHttpException ex)
                 {
-                    FailedTransmission();
-                    Delete();
+                    if (ex.Call.HttpStatus != null && ex.Call.HttpStatus == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        AuthResp = null;
+                    }
+                    else
+                    {
+                        // Other classes of errors may be congestion related so we increase the delay
+                        FailedTransmission();
+                    }
+                    if (attempts < Retries)
+                    {
+                        Delete(attempts + 1);
+                    }
+                    throw;
                 }
             }
         }
 
         public async Task<bool> FileExistsAsync(string file)
         {
-            AuthorizationResponse authresp = await AuthorizeAccount();
-
             bool exists = await Exists();
-            async Task<bool> Exists()
+            async Task<bool> Exists(int attempts = 0)
             {
+                if (AuthResp == null)
+                {
+                    AuthResp = await AuthorizeAccount();
+                }
                 Delay();
                 try
                 {
-                    var filesresp = await authresp.apiUrl
+                    var filesresp = await AuthResp.apiUrl
                         .AppendPathSegment("/b2api/v1/b2_list_file_names")
-                        .WithHeaders(new { Authorization = authresp.authorizationToken })
+                        .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                         .PostJsonAsync(new
                         {
                             bucketId = BucketId,
@@ -239,10 +309,22 @@ namespace BackupCore
                     SuccessfulTransmission();
                     return filesresp.files.Length > 0 && filesresp.files[0].fileName == file;
                 }
-                catch (FlurlHttpException)
+                catch (FlurlHttpException ex)
                 {
-                    FailedTransmission();
-                    return await Exists();
+                    if (ex.Call.HttpStatus != null && ex.Call.HttpStatus == System.Net.HttpStatusCode.Unauthorized)
+                    {
+                        AuthResp = null;
+                    }
+                    else
+                    {
+                        // Other classes of errors may be congestion related so we increase the delay
+                        FailedTransmission();
+                    }
+                    if (attempts < Retries)
+                    {
+                        return await Exists(attempts + 1);
+                    }
+                    throw;
                 }
             }
             return exists;
@@ -300,7 +382,7 @@ namespace BackupCore
             public string downloadUrl { get; set; }
         }
 
-        private class GetUrlResponse
+        private class GetUploadUrlResponse
         {
             public string bucketId { get; set; }
             public string uploadUrl { get; set; }
