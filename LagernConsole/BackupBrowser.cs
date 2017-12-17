@@ -24,6 +24,10 @@ namespace BackupConsole
         {
             ContinueLoop = true;
             BCore = Program.LoadCore();
+            if (!BCore.DestinationAvailable)
+            {
+                backupset += BackupCore.Core.CacheSuffix;
+            }
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
