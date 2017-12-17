@@ -3,21 +3,25 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Backblaze support
-	Make api calls fault tolerant
-		Single queue for pending transmissions?
-		Ability to stall main thread from queuing more uploads?
-			Need to limit number of file blocks loaded into memory?
-				Dont worry about this for now but definitely test at some point
-				SemaphoreSlim class to limit number of files being uploaded at a time?
-	If receive Retry-After header, use specified time
-		Currently not bothering
-	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
+Data integrity and encryption support
+	Channel codes for backupset and blobstore files
+	Channel codes for hashlist blobs
+	Channel codes for blobs?
+		Make optional?
+		blob hash would have to be calculated from (blobdata + redundant bits) so entire file can easily be hash checked when using online services
 Project structure change
 	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies
 	Remove Core and split its API between new classes BackupSource and BackupDestination as approperiate
 		BackupSource may have list of destinations it backs up to
-Data integrity and encryption support
+Backblaze support
+	Single queue for pending transmissions?
+	Ability to stall main thread from queuing more uploads?
+		Need to limit number of file blocks loaded into memory?
+			Dont worry about this for now but definitely test at some point
+			SemaphoreSlim class to limit number of files being uploaded at a time?
+	If receive Retry-After header, use specified time
+		Currently not bothering
+	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
 Add a "default root" path option to IFSInterop, configured on initialization?
 	aka FS interop will handle relative paths
 Better support for large backup sets

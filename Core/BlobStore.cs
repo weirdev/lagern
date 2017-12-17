@@ -76,19 +76,19 @@ namespace BackupCore
             {
                 var blobhashes = GetHashListFromBlob(blobbl);
 
-                MemoryStream file = new MemoryStream();
+                MemoryStream outstream = new MemoryStream();
                 foreach (var hash in blobhashes)
                 {
                     BlobLocation blobloc = GetBlobLocation(hash);
-                    file.Write(LoadBlob(blobloc), 0, blobloc.ByteLength);
+                    outstream.Write(LoadBlob(blobloc, hash), 0, blobloc.ByteLength);
                 }
-                byte[] filedata = file.ToArray();
-                file.Close();
+                byte[] filedata = outstream.ToArray();
+                outstream.Close();
                 return filedata;
             }
             else // file is single blob
             {
-                return LoadBlob(blobbl);
+                return LoadBlob(blobbl, filehash);
             }
         }
         
@@ -112,10 +112,20 @@ namespace BackupCore
         /// Loads the data from a blob, no special handling of multiblob references etc.
         /// </summary>
         /// <param name="blocation"></param>
+        /// <param name="hash">Null for no verification</param>
         /// <returns></returns>
-        private byte[] LoadBlob(BlobLocation blocation)
+        private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
         {
-            return Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+            byte[] data = Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+            if (hash == null || HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
+            {
+                return data;
+            }
+            else if (retries > 0)
+            {
+                return LoadBlob(blocation, hash, retries - 1);
+            }
+            throw new Exception("Blob data did not match hash.");
         }
 
         public void IncrementReferenceCount(string backupsetname, byte[] blobhash, BlobLocation.BlobTypes blobtype,
@@ -212,7 +222,7 @@ namespace BackupCore
             else
             {
                 BlobLocation bloc = GetBlobLocation(blobhash);
-                dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc)));
+                dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc, blobhash)));
             }
             return existsindst;
         }
@@ -387,13 +397,13 @@ namespace BackupCore
         {
             try
             {
-                byte[] hashlistblob = LoadBlob(blocation);
+                byte[] hashlistblob = LoadBlob(blocation, null);
                 List<byte[]> blobhashes = new List<byte[]>();
                 for (int i = 0; i < hashlistblob.Length / 20; i++)
                 {
-                    byte[] hash = new byte[20];
-                    Array.Copy(hashlistblob, i * 20, hash, 0, 20);
-                    blobhashes.Add(hash);
+                    byte[] childhash = new byte[20];
+                    Array.Copy(hashlistblob, i * 20, childhash, 0, 20);
+                    blobhashes.Add(childhash);
                 }
                 return blobhashes;
             }
