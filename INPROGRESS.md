@@ -4,7 +4,19 @@ For now this will remain the home of the project backlog.
 ====
 
 Backblaze support
-	From command line
+	Make api calls fault tolerant
+		Limit retries
+		Specific handling based on backblaze error code
+		Currently getting 503 errors when making many calls
+		Handle other errors
+		Bubble up errors reasonably
+	If receive Retry-After header, use specified time
+		otherwise exponential backoff starting with 1 second delay
+	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
+Project structure change
+	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies
+	Remove Core and split its API between new classes BackupSource and BackupDestination as approperiate
+		BackupSource may have list of destinations it backs up to
 Data integrity and encryption support
 Add a "default root" path option to IFSInterop, configured on initialization?
 	aka FS interop will handle relative paths

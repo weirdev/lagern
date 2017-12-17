@@ -228,7 +228,7 @@ namespace BackupConsole
                 Core core;
                 if (opts.Destination.Trim().ToLower() == "backblaze")
                 {
-                    ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache);
+                    ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile);
                     ICoreDstDependencies dstdep = CloudCoreDstDependencies.InitializeNew(opts.BSName, new BackblazeInterop(opts.CloudConfigFile), opts.Cache!=null);
                     ICoreDstDependencies cachedep = null;
                     if (opts.Cache != null)
