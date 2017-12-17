@@ -15,26 +15,26 @@ namespace BackupConsole
         
         BackupCore.Core BCore { get; set; }
         string BackupHash { get; set; }
-        string BackupStoreName { get; set; }
+        string BackupSet { get; set; }
         BackupCore.MetadataNode BackupTree { get; set; }
         BackupCore.MetadataNode CurrentNode { get; set; }
         bool ContinueLoop { get; set; }
         
-        public BackupBrowser(string backupstorename, string backuphash)
+        public BackupBrowser(string backupset, string backuphash)
         {
             ContinueLoop = true;
             BCore = Program.LoadCore();
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupstorename);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupset);
             }
             else
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupstorename, backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupset, backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.hash;
-            BackupStoreName = backupstorename;
+            BackupSet = backupset;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.record;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies.Blobs, backuprecord.MetadataTreeHash, backuprecord.MetadataTreeMultiBlock);
             CurrentNode = BackupTree;
@@ -72,13 +72,20 @@ namespace BackupConsole
                 }
                 Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
                 string[] args = Program.ReadArgs();
-                Parser.Default.ParseArguments<CDOptions, LSOptions, Program.ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
-                    .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
-                    .WithParsed<LSOptions>(opts => ListDirectory())
-                    .WithParsed<Program.ExitOptions>(opts => ContinueLoop = false)
-                    .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
-                    .WithParsed<CBOptions>(opts => ChangeBackup(opts))
-                    .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupStoreName, BCore));
+                try
+                {
+                    Parser.Default.ParseArguments<CDOptions, LSOptions, Program.ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
+                        .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
+                        .WithParsed<LSOptions>(opts => ListDirectory())
+                        .WithParsed<Program.ExitOptions>(opts => ContinueLoop = false)
+                        .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
+                        .WithParsed<CBOptions>(opts => ChangeBackup(opts))
+                        .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupSet, BCore));
+                }
+                catch (ChangeBackupException ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
         }
 
@@ -147,15 +154,24 @@ namespace BackupConsole
             CurrentNode = dir;
         }
 
+        private class ChangeBackupException : Exception
+        {
+            public ChangeBackupException(string message) : base(message) { }
+        }
+
         private void ChangeBackup(CBOptions opts)
         {
             string curpath = CurrentNode.Path;
             string backuphash = opts.Backup;
             if (opts.Backup == null)
             {
+                if (opts.Offset == 0)
+                {
+                    throw new ChangeBackupException("Must set either or both backup or offset.");
+                }
                 backuphash = BackupHash;
             }
-            var targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backuphash, opts.Offset);
+            var targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(BackupSet, backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies.Blobs, backuprecord.MetadataTreeHash, backuprecord.MetadataTreeMultiBlock);
