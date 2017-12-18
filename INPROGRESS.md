@@ -3,12 +3,18 @@ For now this will remain the home of the project backlog.
 
 ====
 
+Fix for uploading hash lists
+	The hash used to store them is not the hash of their contents
+	Backblaze verifies uploads with a hash (a feature we currently use and want to continue to support)
+	Other services may do so as well, and may not be optional
+	Needed if we want to verify on write
 Data integrity and encryption support
 	Channel codes for backupset and blobstore files
 	Channel codes for hashlist blobs
 	Channel codes for blobs?
 		Make optional?
 		blob hash would have to be calculated from (blobdata + redundant bits) so entire file can easily be hash checked when using online services
+	Verify on write?
 Project structure change
 	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies
 	Remove Core and split its API between new classes BackupSource and BackupDestination as approperiate

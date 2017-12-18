@@ -188,21 +188,16 @@ namespace BackupCore
         private void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, 
             BlobLocation.BlobTypes blobtype, bool includefiles)
         {
-            if (!TransferBlobNoReferences(dst, dstbackupset, blobhash, includefiles))
-            {
-                TransferFromBlobReferenceIterator(dst, dstbackupset, 
-                    GetAllBlobReferences(blobhash, blobtype, includefiles, false), includefiles);
-            }
+            TransferBlobNoReferences(dst, dstbackupset, blobhash, includefiles);
+            TransferFromBlobReferenceIterator(dst, dstbackupset, 
+                GetAllBlobReferences(blobhash, blobtype, includefiles, false), includefiles);
         }
 
         private void TransferFromBlobReferenceIterator(BlobStore dst, string backupset, IBlobReferenceIterator references, bool includefiles)
         {
             foreach (var reference in references)
             {
-                if (TransferBlobNoReferences(dst, backupset, reference, includefiles))
-                {
-                    references.SkipChild();
-                }
+                TransferBlobNoReferences(dst, backupset, reference, includefiles);
             }
         }
 
@@ -212,7 +207,7 @@ namespace BackupCore
         /// <param name="dst"></param>
         /// <param name="blobhash"></param>
         /// <returns>True Blob exists in destination</returns>
-        private bool TransferBlobNoReferences(BlobStore dst, string dstbackupset, byte[] blobhash, bool includefiles)
+        private void TransferBlobNoReferences(BlobStore dst, string dstbackupset, byte[] blobhash, bool includefiles)
         {
             bool existsindst = dst.ContainsHash(blobhash);
             if (existsindst)
@@ -224,7 +219,6 @@ namespace BackupCore
                 BlobLocation bloc = GetBlobLocation(blobhash);
                 dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc, blobhash)));
             }
-            return existsindst;
         }
 
         /// <summary>
