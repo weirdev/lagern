@@ -98,11 +98,7 @@ namespace BackupCore
             cacheblobs.RemoveAllBackupSetReferences(bloblistcachebsname);
             foreach (KeyValuePair<byte[], BlobLocation> hashblob in GetAllHashesAndBlobLocations(backupsetname))
             {
-                string hashstring = HashTools.ByteArrayToHexViaLookup32(hashblob.Key);
-                string dir1 = hashstring.Substring(0, 2);
-                string dir2 = hashstring.Substring(2, 2);
-                string fname = hashstring.Substring(4);
-                string relpath = Path.Combine(dir1, dir2, fname);
+                string relpath = "";
                 var bloc = new BlobLocation(relpath, 0, hashblob.Value.ByteLength);
                 cacheblobs.AddBlob(bloblistcachebsname, new HashBlobPair(hashblob.Key, null), false, true);
             }
@@ -277,11 +273,7 @@ namespace BackupCore
 
         private BlobLocation AddBlob(string backupset, HashBlobPair blob, bool isMultiblobReference, bool shallow=false)
         {
-            string hashstring = HashTools.ByteArrayToHexViaLookup32(blob.Hash);
-            string dir1 = hashstring.Substring(0, 2);
-            string dir2 = hashstring.Substring(2, 2);
-            string fname = hashstring.Substring(4);
-            string relpath = Path.Combine(dir1, dir2, fname);
+            string relpath = "";
             // We navigate down 
 
             // Where we will put the blob data if we dont already have it stored
@@ -307,7 +299,7 @@ namespace BackupCore
             {
                 if (!shallow)
                 {
-                    WriteBlob(blob.Hash, blob.Block, posblocation);
+                    (posblocation.RelativeFilePath, posblocation.BytePosition) = WriteBlob(blob.Hash, blob.Block);
                 }
                 IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
                 return posblocation;
@@ -328,7 +320,7 @@ namespace BackupCore
                             && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0,
                                 backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
                         {
-                            WriteBlob(blob.Hash, blob.Block, existingbloc);
+                            (existingbloc.RelativeFilePath, existingbloc.BytePosition) = WriteBlob(blob.Hash, blob.Block);
                         }
                     }
                 }
@@ -360,11 +352,9 @@ namespace BackupCore
             return new BlobReferenceIterator(this, blobhash, blobtype, multiblock, includefiles, bottomup);
         }
 
-        private void WriteBlob(byte[] hash, byte[] blob, BlobLocation blobLocation)
+        private (string relfilepath, int bytepos) WriteBlob(byte[] hash, byte[] blob)
         {
-            (string relfilepath, int bytepos) = Dependencies.StoreBlob(hash, blob);
-            blobLocation.RelativeFilePath = relfilepath;
-            blobLocation.BytePosition = bytepos;
+            return Dependencies.StoreBlob(hash, blob);
         }
 
         public bool ContainsHash(byte[] hash)
