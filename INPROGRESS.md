@@ -16,9 +16,13 @@ Data integrity and encryption support
 		blob hash would have to be calculated from (blobdata + redundant bits) so entire file can easily be hash checked when using online services
 	Verify on write?
 Project structure change
+	Better API compliance
+		Public api only in Core
 	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies
 	Remove Core and split its API between new classes BackupSource and BackupDestination as approperiate
 		BackupSource may have list of destinations it backs up to
+Delete HashBlobPair class?
+	Replace with tuples
 Backblaze support
 	Single queue for pending transmissions?
 	Ability to stall main thread from queuing more uploads?

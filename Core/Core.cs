@@ -122,7 +122,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
-                        previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
+                        previousbackup.MetadataTreeHash);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
                 else
@@ -526,7 +526,7 @@ namespace BackupCore
                 if (previousbackup != null)
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
-                        previousbackup.MetadataTreeHash, previousbackup.MetadataTreeMultiBlock);
+                        previousbackup.MetadataTreeHash);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
                 else
@@ -567,7 +567,7 @@ namespace BackupCore
                         if (fstatus == FileMetadata.FileStatus.Unchanged)
                         {
                             DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash,
-                                BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
+                                BlobLocation.BlobTypes.FileBlob, 1, true);
                         }
                         if (fstatus == FileMetadata.FileStatus.Deleted)
                         {
@@ -580,7 +580,7 @@ namespace BackupCore
                             parent.Files[file] = filemeta.Changes.Value.updated;
                             // Dont need to save data again but increase reference count
                             DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash, 
-                                BlobLocation.BlobTypes.FileBlob, filemeta.MultiBlock, 1, true);
+                                BlobLocation.BlobTypes.FileBlob, 1, true);
                         }
                         // Store file data
                         if (fstatus == FileMetadata.FileStatus.New || fstatus == FileMetadata.FileStatus.DataModified)
@@ -613,10 +613,10 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            (byte[] newmtreehash, bool multiblock) = deltatree.Store(DefaultDstDependencies.Blobs, backupsetname);
+            byte[] newmtreehash = deltatree.Store(DefaultDstDependencies.Blobs, backupsetname);
 
             var defaultbset = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
-            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, multiblock, false, defaultbset);
+            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, false, defaultbset);
 
             SyncCache(backupsetname, defaultbset);
             // BackupSet save occurred with cache sync
@@ -673,11 +673,11 @@ namespace BackupCore
             try
             {
                 var backup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, backuphashprefix);
-                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies.Blobs, backup.MetadataTreeHash, backup.MetadataTreeMultiBlock);
+                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies.Blobs, backup.MetadataTreeHash);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
-                    byte[] filedata = DefaultDstDependencies.Blobs.RetrieveData(filemeta.FileHash, filemeta.MultiBlock);
+                    byte[] filedata = DefaultDstDependencies.Blobs.RetrieveData(filemeta.FileHash);
                     // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
                     SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
@@ -880,7 +880,7 @@ namespace BackupCore
         public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring)
         {
             var br = DefaultDstDependencies.Backups.GetBackupRecord(bsname, backuphashstring);
-            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode, br.MetadataTreeMultiBlock);
+            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode);
         }
 
         /// <summary>
@@ -907,9 +907,8 @@ namespace BackupCore
                     relpath = relpath.Substring(1);
                 }
                 Stream readerbuffer = SrcDependencies.GetFileData(relpath);
-                (byte[] filehash, bool multiblock) = DefaultDstDependencies.Blobs.StoreData(backupset, readerbuffer);
+                byte[] filehash = DefaultDstDependencies.Blobs.StoreData(backupset, readerbuffer);
                 fileMetadata.FileHash = filehash;
-                fileMetadata.MultiBlock = multiblock;
             }
             catch (Exception e)
             {

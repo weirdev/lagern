@@ -216,9 +216,9 @@ namespace BackupCore
         /// </summary>
         /// <param name="blobs"></param>
         /// <returns></returns>
-        public (byte[] hash, bool multiblock) Store(BlobStore blobs, string backupset)
+        public byte[] Store(BlobStore blobs, string backupset)
         {
-            List<(byte[] hash, bool multiblock)> dirhashes = new List<(byte[] hash, bool multiblock)>();
+            List<byte[]> dirhashes = new List<byte[]>();
             foreach (MetadataNode dir in Directories.Values)
             {
                 dirhashes.Add(dir.Store(blobs, backupset));
@@ -232,24 +232,22 @@ namespace BackupCore
             // Directories = enum_encode([dirrefs,...])
             // "-v3"
             // DirectoriesMultiblock = enum_encode([BitConverter.GetBytes(multiblock),...])
+            // -v4
+            // removed DirectoriesMultiblock
             mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
             mtdata.Add("Files-v1", BinaryEncoding.enum_encode(Files.Values.AsEnumerable()
                                                               .Select(fm => fm.serialize())));
 
-            mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes.Select(fh => fh.hash)));
-
-            mtdata.Add("DirectoriesMultiblock-v3", 
-                BinaryEncoding.enum_encode(dirhashes.Select(fh => BitConverter.GetBytes(fh.multiblock))));
-
-
+            mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
+            
             return blobs.StoreData(backupset, BinaryEncoding.dict_encode(mtdata));
         }
 
-        public static MetadataNode Load(BlobStore blobs, byte[] hash, bool multiblock, MetadataNode parent = null)
+        public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)
         {
             var curmn = new MetadataNode();
 
-            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash, multiblock));
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash));
             FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
             curmn.DirMetadata = dirmetadata;
             Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
@@ -261,11 +259,9 @@ namespace BackupCore
             curmn.Files = files;
             Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
             var dirs = BinaryEncoding.enum_decode(savedobjects["Directories-v2"]);
-            var multib = BinaryEncoding.enum_decode(savedobjects["DirectoriesMultiblock-v3"])
-                .Select(mb => BitConverter.ToBoolean(mb, 0)).ToList();
             for (int i = 0; i < dirs.Count; i++)
             {
-                MetadataNode newmn = Load(blobs, dirs[i], multib[i], curmn);
+                MetadataNode newmn = Load(blobs, dirs[i], curmn);
                 directories.Add(newmn.DirMetadata.FileName, newmn);
             }
             curmn.Parent = parent;
@@ -293,25 +289,23 @@ namespace BackupCore
             }
         }
 
-        public static IEnumerable<(byte[] hash, bool multiblock)> GetImmediateChildNodeReferencesWithoutLoad(byte[] data)
+        public static IEnumerable<byte[]> GetImmediateChildNodeReferencesWithoutLoad(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             var dirs = BinaryEncoding.enum_decode(savedobjects["Directories-v2"]);
-            var multib = BinaryEncoding.enum_decode(savedobjects["DirectoriesMultiblock-v3"])
-                .Select(mb => BitConverter.ToBoolean(mb, 0)).ToList();
             for (int i = 0; i < dirs.Count; i++)
             {
-                yield return (dirs[i], multib[i]);
+                yield return dirs[i];
             }
         }
 
-        public static IEnumerable<(byte[] hash, bool multiblock)> GetImmediateFileReferencesWithoutLoad(byte[] data)
+        public static IEnumerable<byte[]> GetImmediateFileReferencesWithoutLoad(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             foreach (var filemdata in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
             {
                 FileMetadata fm = FileMetadata.deserialize(filemdata);
-                yield return (fm.FileHash, fm.MultiBlock);
+                yield return fm.FileHash;
             }
         }
     }

@@ -126,10 +126,10 @@ namespace BackupCore
         // are not part of the IFSInterop interface. They are included as convenience methods for
         // use when creating a virtual filesystem
         public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[] hash = null) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Normal, size, hash, false);
+                                new DateTime(), new DateTime(), FileAttributes.Normal, size, hash);
 
 
         public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Directory, 0, null, false);
+                                new DateTime(), new DateTime(), FileAttributes.Directory, 0, null);
     }
 }

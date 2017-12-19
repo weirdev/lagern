@@ -22,25 +22,21 @@ namespace BackupCore
         
         public byte[] MetadataTreeHash { get; set; }
 
-        public bool MetadataTreeMultiBlock { get; set; }
-
-        public BackupRecord(string message, byte[] treehash, bool treemultiblock)
+        public BackupRecord(string message, byte[] treehash)
         {
             BackupTime = DateTime.UtcNow;
             BackupMessage = message;
             MetadataTreeHash = treehash;
             UUID = new byte[16];
             UUIDGenerator.NextBytes(UUID);
-            MetadataTreeMultiBlock = treemultiblock;
         }
 
-        private BackupRecord(DateTime backuptime, string message, byte[] treehash, bool treemultiblock, byte[] uuid)
+        private BackupRecord(DateTime backuptime, string message, byte[] treehash, byte[] uuid)
         {
             BackupTime = backuptime;
             BackupMessage = message;
             MetadataTreeHash = treehash;
             UUID = uuid;
-            MetadataTreeMultiBlock = treemultiblock;
         }
 
         public byte[] serialize()
@@ -62,16 +58,16 @@ namespace BackupCore
 
             // -v4
             // MetadataTreeMultiBlock = BitConverter.GetBytes(bool)
-            
-            
+            // -v5
+            // removed MetadataTreeMultiBlock
+
+
             brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
             brdata.Add("BackupMessage-v1", Encoding.UTF8.GetBytes(BackupMessage));
 
             brdata.Add("MetadataTreeHash-v2", MetadataTreeHash);
 
             brdata.Add("UUID-v3", UUID);
-
-            brdata.Add("MetadataTreeMultiBlock-v4", BitConverter.GetBytes(MetadataTreeMultiBlock));
 
             return BinaryEncoding.dict_encode(brdata);
         }
@@ -102,10 +98,8 @@ namespace BackupCore
                 uuid = new byte[16];
                 UUIDGenerator.NextBytes(uuid);
             }
-
-            bool treemultiblock = BitConverter.ToBoolean(savedobjects["MetadataTreeMultiBlock-v4"], 0);
-            
-            return new BackupRecord(backuptime, backupmessage, metadatatreehash, treemultiblock, uuid);
+                        
+            return new BackupRecord(backuptime, backupmessage, metadatatreehash, uuid);
         }
     }
 }

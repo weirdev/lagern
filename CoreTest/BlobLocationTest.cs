@@ -62,7 +62,7 @@ namespace CoreTest
         [TestMethod]
         public void TestSerializeDeserialize()
         {
-            BlobLocation old = new BlobLocation("somewhere1", 0, 40);
+            BlobLocation old = new BlobLocation("somewhere1", 0, 40, true);
             BlobLocation deser = BlobLocation.deserialize(old.serialize());
             Assert.AreEqual(old, deser);
         }

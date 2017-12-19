@@ -45,8 +45,6 @@ namespace BackupCore
         
         public byte[] FileHash { get; set; }
 
-        public bool MultiBlock { get; set; } = false;
-
         public (FileStatus status, FileMetadata updated)? Changes { get; set; } = null;
 
         /// <summary>
@@ -60,7 +58,7 @@ namespace BackupCore
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
             DateTime datecreated, FileAttributes attributes, long filesize, byte[] filehash,
-            bool multiblock, (FileStatus, FileMetadata)? changes=null)
+            (FileStatus, FileMetadata)? changes=null)
         {
             FileName = filename;
             DateAccessedUTC = dateaccessed;
@@ -70,7 +68,6 @@ namespace BackupCore
             DateCreatedUTC = datecreated;
             FileHash = filehash;
             Changes = changes;
-            MultiBlock = multiblock;
         }
 
         /// <summary>
@@ -161,6 +158,8 @@ namespace BackupCore
 
             // -v4
             // MultiBlock = BitConverter.GetBytes(bool)
+            // -v5
+            // removed MultiBlock
 
             fmdata.Add("FileName-v1", Encoding.UTF8.GetBytes(FileName));
             fmdata.Add("DateAccessedUTC-v1", BitConverter.GetBytes(NumDateAccessedUTC));
@@ -177,9 +176,7 @@ namespace BackupCore
             {
                 fmdata.Add("FileHash-v3", new byte[0]);
             }
-
-            fmdata.Add("MultiBlock-v4", BitConverter.GetBytes(MultiBlock));
-
+            
             return BinaryEncoding.dict_encode(fmdata);
         }
 
@@ -199,17 +196,14 @@ namespace BackupCore
             }
             
             byte[] filehash = savedobjects["FileHash-v3"];
-
-            bool multiblock = BitConverter.ToBoolean(savedobjects["MultiBlock-v4"], 0);
-
+            
             return new FileMetadata(filename,
                 new DateTime(numdateaccessed),
                 new DateTime(numdatemodified),
                 new DateTime(numdatecreated),
                 attributes,
                 filesize,
-                filehash, 
-                multiblock);
+                filehash);
         }
         
         public enum FileStatus { Unchanged, New, DataModified, MetadataChange, Deleted }
