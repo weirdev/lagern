@@ -3,10 +3,7 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Hash lists in bloblocations not in blob data
 Data integrity and encryption support
-	Verify contents when retrieving from blobstore
-		Channel codes for hashlist blobs
 	Channel codes for backupset and blobstore files
 	Channel codes for blobs?
 		Make optional?

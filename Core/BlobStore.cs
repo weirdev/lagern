@@ -99,7 +99,7 @@ namespace BackupCore
         private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
         {
             byte[] data = Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
-            if (hash == null || HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
+            if (HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
             {
                 return data;
             }
@@ -199,7 +199,10 @@ namespace BackupCore
             else
             {
                 BlobLocation bloc = GetBlobLocation(blobhash);
-                dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc, blobhash)));
+                if (bloc.BlockHashes == null)
+                {
+                    dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc, blobhash)));
+                }
             }
         }
 
