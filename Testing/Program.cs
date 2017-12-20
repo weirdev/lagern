@@ -20,17 +20,17 @@ namespace Testing
             //betest.TestDictEncodeDecode();
             //betest.TestEnumEncodeDecode();
 
-            //BlobStoreTest bstest = new BlobStoreTest();
+            BlobStoreTest bstest = new BlobStoreTest();
             //bstest.TestSplitData();
-            //bstest.TestBlobStoreDeserialize();
+            bstest.TestBlobStoreDeserialize();
 
-            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
+            //CoreTest.CoreTest ctest = new CoreTest.CoreTest();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
             //ctest.TestInitializeNew();
             //ctest.TestRunBackup();
             //ctest.TestRestore();
-            ctest.TestRemoveBackup();
+            //ctest.TestRemoveBackup();
             //ctest.TestInitializeNew();
             //ctest.TestLoadCore_NewlyInitialized();
 

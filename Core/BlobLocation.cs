@@ -16,7 +16,7 @@ namespace BackupCore
         public string RelativeFilePath { get; set; }
         public int BytePosition { get; set; }
         public int ByteLength { get; set; }
-        public bool IsMultiBlockReference { get; set; }
+        public List<byte[]> BlockHashes { get; set; }
 
         /// <summary>
         /// Maps backupset nmaes to their reference counts
@@ -27,15 +27,17 @@ namespace BackupCore
 
         public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.EndsWith(Core.ShallowSuffix)).Select(kvp => kvp.Value).Sum();
 
-        public BlobLocation(string relpath, int bytepos, int bytelen, bool multiblock) : this(relpath, bytepos, bytelen, multiblock, new Dictionary<string, int>()) { }
+        public BlobLocation(string relpath, int bytepos, int bytelen) : this(relpath, bytepos, bytelen, null, new Dictionary<string, int>()) { }
 
-        private BlobLocation(string relpath, int bytepos, int bytelen, bool multiblock, Dictionary<string, int> referencecounts)
+        public BlobLocation(List<byte[]> childhashes = null) : this("", 0, 0, childhashes, new Dictionary<string, int>()) { }
+
+        private BlobLocation(string relpath, int bytepos, int bytelen, List<byte[]> blockhashes, Dictionary<string, int> referencecounts)
         {
             RelativeFilePath = relpath;
             BytePosition = bytepos;
             ByteLength = bytelen;
             BSetReferenceCounts = referencecounts;
-            IsMultiBlockReference = multiblock;
+            BlockHashes = blockhashes;
         }
 
         public override bool Equals(object obj)
@@ -46,7 +48,8 @@ namespace BackupCore
             }
 
             return RelativeFilePath == ((BlobLocation)obj).RelativeFilePath && BytePosition == ((BlobLocation)obj).BytePosition && 
-                ByteLength == ((BlobLocation)obj).ByteLength && ((BlobLocation)obj).IsMultiBlockReference == IsMultiBlockReference;
+                ByteLength == ((BlobLocation)obj).ByteLength && ((((BlobLocation)obj).BlockHashes == null && BlockHashes == null)
+                || ((BlobLocation)obj).BlockHashes.SequenceEqual(BlockHashes));
         }
 
         public override int GetHashCode() => (BytePosition.ToString() + RelativeFilePath.ToString() + ByteLength.ToString()).GetHashCode();
@@ -75,6 +78,9 @@ namespace BackupCore
             // IsMultiBlockReference removed
             // -v7
             // IsMultiBlockReference readded
+            // -v8
+            // BlockHashes = enum_encode
+
 
             bldata.Add("RelativeFilePath-v1", Encoding.UTF8.GetBytes(RelativeFilePath));
             bldata.Add("BytePosition-v1", BitConverter.GetBytes(BytePosition));
@@ -83,7 +89,11 @@ namespace BackupCore
             bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Keys.Select(set => Encoding.UTF8.GetBytes(set))));
             bldata.Add("BSetReferenceCounts.ReferenceCounts-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Values.Select(rc => BitConverter.GetBytes(rc))));
 
-            bldata.Add("IsMultiBlockReference-v6", BitConverter.GetBytes(IsMultiBlockReference));
+            bldata.Add("IsMultiBlockReference-v7", BitConverter.GetBytes(BlockHashes != null));
+            if (BlockHashes != null)
+            {
+                bldata.Add("BlockHashes-v8", BinaryEncoding.enum_encode(BlockHashes));
+            }
 
             return BinaryEncoding.dict_encode(bldata);
         }
@@ -102,8 +112,13 @@ namespace BackupCore
             {
                 bsrc[backupsets[i]] = referencecounts[i];
             }
-            var multiblock = BitConverter.ToBoolean(savedobjects["IsMultiBlockReference-v6"], 0);
-            return new BlobLocation(relfilepath, byteposition, bytelength, multiblock, bsrc);
+            var multiblock = BitConverter.ToBoolean(savedobjects["IsMultiBlockReference-v7"], 0);
+            List<byte[]> childhashes = null;
+            if (multiblock)
+            {
+                childhashes = BinaryEncoding.enum_decode(savedobjects["BlockHashes-v8"]).ToList();
+            }
+            return new BlobLocation(relfilepath, byteposition, bytelength, childhashes, bsrc);
         }
 
         public enum BlobTypes

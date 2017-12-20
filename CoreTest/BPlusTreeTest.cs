@@ -48,10 +48,10 @@ namespace CoreTest
         {
             var BPTree = new BPlusTree<BlobLocation>(100);
 
-            var testblob1 = new BlobLocation("somewhere1", 0, 40, true);
-            BlobLocation bl2 = new BlobLocation("somewhere2", 4, 401, false);
-            BlobLocation bl3 = new BlobLocation("somewhere3", 0, 440, true);
-            BlobLocation bl4 = new BlobLocation("somewhere4", 300, 74000, false);
+            var testblob1 = new BlobLocation("somewhere1", 0, 40);
+            BlobLocation bl2 = new BlobLocation("somewhere2", 4, 401);
+            BlobLocation bl3 = new BlobLocation(new byte[][] { new byte[] { 1, 2 }, new byte[] { 1, 0 } }.ToList());
+            BlobLocation bl4 = new BlobLocation();
 
             var rng = new Random();
 

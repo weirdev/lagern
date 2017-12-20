@@ -53,13 +53,8 @@ namespace BackupCore
             }
             if (blobshashes.Count > 1)
             {
-                // Multiple blobs so create hashlist blob to reference them all together
-                byte[] hashlist = new byte[blobshashes.Count * blobshashes[0].Length];
-                for (int i = 0; i < blobshashes.Count; i++)
-                {
-                    Array.Copy(blobshashes[i], 0, hashlist, i * blobshashes[i].Length, blobshashes[i].Length);
-                }
-                AddMultiBlobReferenceBlob(backupset, filehash, hashlist);
+                // Multiple blobs so create hashlist reference to reference them all together
+                AddMultiBlobReferenceBlob(backupset, filehash, blobshashes);
             }
             return filehash;
         }
@@ -67,12 +62,10 @@ namespace BackupCore
         public byte[] RetrieveData(byte[] filehash)
         {
             BlobLocation blobbl = GetBlobLocation(filehash);
-            if (blobbl.IsMultiBlockReference) // File is comprised of multiple blobs
+            if (blobbl.BlockHashes != null) // File is comprised of multiple blobs
             {
-                var blobhashes = GetHashListFromBlob(blobbl);
-
                 MemoryStream outstream = new MemoryStream();
-                foreach (var hash in blobhashes)
+                foreach (var hash in blobbl.BlockHashes)
                 {
                     BlobLocation blobloc = GetBlobLocation(hash);
                     outstream.Write(LoadBlob(blobloc, hash), 0, blobloc.ByteLength);
@@ -93,9 +86,7 @@ namespace BackupCore
             cacheblobs.RemoveAllBackupSetReferences(bloblistcachebsname);
             foreach (KeyValuePair<byte[], BlobLocation> hashblob in GetAllHashesAndBlobLocations(backupsetname))
             {
-                string relpath = "";
-                var bloc = new BlobLocation(relpath, 0, hashblob.Value.ByteLength, hashblob.Value.IsMultiBlockReference);
-                cacheblobs.AddBlob(bloblistcachebsname, new HashBlobPair(hashblob.Key, null), false, true);
+                cacheblobs.AddBlob(bloblistcachebsname, new HashBlobPair(hashblob.Key, null), hashblob.Value.BlockHashes, true);
             }
         }
 
@@ -240,23 +231,29 @@ namespace BackupCore
         /// <returns>The BlobLocation the blob is saved to.</returns>
         private BlobLocation AddBlob(string backupset, HashBlobPair blob)
         {
-            return AddBlob(backupset, blob, false);
+            return AddBlob(backupset, blob, null);
         }
 
-        private BlobLocation AddBlob(string backupset, HashBlobPair blob, bool isMultiblobReference, bool shallow=false)
+        private BlobLocation AddBlob(string backupset, HashBlobPair blob, List<byte[]> blockreferences, bool shallow=false)
         {
-            string relpath = "";
             // We navigate down 
 
             // Where we will put the blob data if we dont already have it stored
             BlobLocation posblocation;
             if (shallow)
             {
-                posblocation = new BlobLocation(relpath, 0, 0, isMultiblobReference);
+                posblocation = new BlobLocation(blockreferences);
             }
             else
             {
-                posblocation = new BlobLocation(relpath, 0, blob.Block.Length, isMultiblobReference);
+                if (blockreferences == null)
+                {
+                    posblocation = new BlobLocation("", 0, blob.Block.Length);
+                }
+                else
+                {
+                    posblocation = new BlobLocation(blockreferences);
+                }
             }
              
 
@@ -271,7 +268,10 @@ namespace BackupCore
             {
                 if (!shallow)
                 {
-                    (posblocation.RelativeFilePath, posblocation.BytePosition) = WriteBlob(blob.Hash, blob.Block, posblocation.IsMultiBlockReference);
+                    if (blockreferences == null)
+                    {
+                        (posblocation.RelativeFilePath, posblocation.BytePosition) = WriteBlob(blob.Hash, blob.Block);
+                    }
                 }
                 IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
                 return posblocation;
@@ -280,19 +280,22 @@ namespace BackupCore
             {
                 (BlobLocation existingbloc, bool datastored) = existingblocstored.Value;
                 // Is the data not already stored in the blobstore (are all references shallow thus far)?
-                if (!datastored)
+                if (existingbloc.BlockHashes == null)
                 {
-                    // Data is not already stored
-                    // Dont save if we are writing a bloblistcache
-                    if (!backupset.EndsWith(Core.BlobListCacheSuffix))
+                    if (!datastored)
                     {
-                        // If we are saving to a cache and the bloblist cache indicates the destination has the data
-                        // Then dont store, Else save
-                        if (!(backupset.EndsWith(Core.CacheSuffix)
-                            && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0,
-                                backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
+                        // Data is not already stored
+                        // Dont save if we are writing a bloblistcache
+                        if (!backupset.EndsWith(Core.BlobListCacheSuffix))
                         {
-                            (existingbloc.RelativeFilePath, existingbloc.BytePosition) = WriteBlob(blob.Hash, blob.Block, existingbloc.IsMultiBlockReference);
+                            // If we are saving to a cache and the bloblist cache indicates the destination has the data
+                            // Then dont store, Else save
+                            if (!(backupset.EndsWith(Core.CacheSuffix)
+                                && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0,
+                                    backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
+                            {
+                                (existingbloc.RelativeFilePath, existingbloc.BytePosition) = WriteBlob(blob.Hash, blob.Block);
+                            }
                         }
                     }
                 }
@@ -312,10 +315,10 @@ namespace BackupCore
             }
         }
 
-        private void AddMultiBlobReferenceBlob(string backupset, byte[] hash, byte[] hashlist)
+        private void AddMultiBlobReferenceBlob(string backupset, byte[] hash, List<byte[]> hashlist)
         {
-            HashBlobPair referenceblob = new HashBlobPair(hash, hashlist);
-            AddBlob(backupset, referenceblob, true);
+            HashBlobPair referenceblob = new HashBlobPair(hash, null);
+            AddBlob(backupset, referenceblob, hashlist);
         }
 
         public IBlobReferenceIterator GetAllBlobReferences(byte[] blobhash, BlobLocation.BlobTypes blobtype,
@@ -324,7 +327,7 @@ namespace BackupCore
             return new BlobReferenceIterator(this, blobhash, blobtype, includefiles, bottomup);
         }
 
-        private (string relfilepath, int bytepos) WriteBlob(byte[] hash, byte[] blob, bool multiblock)
+        private (string relfilepath, int bytepos) WriteBlob(byte[] hash, byte[] blob)
         {
             return Dependencies.StoreBlob(hash, blob);
         }
@@ -347,27 +350,6 @@ namespace BackupCore
         public BlobLocation GetBlobLocation(byte[] hash)
         {
             return IndexStore.GetRecord(hash);
-        }
-
-        private List<byte[]> GetHashListFromBlob(BlobLocation blocation)
-        {
-            try
-            {
-                byte[] hashlistblob = LoadBlob(blocation, null);
-                List<byte[]> blobhashes = new List<byte[]>();
-                for (int i = 0; i < hashlistblob.Length / 20; i++)
-                {
-                    byte[] childhash = new byte[20];
-                    Array.Copy(hashlistblob, i * 20, childhash, 0, 20);
-                    blobhashes.Add(childhash);
-                }
-                return blobhashes;
-            }
-            catch (Exception)
-            {
-                Console.WriteLine("Failed to read hashlist blob");
-                throw;
-            }
         }
 
         /// <summary>
@@ -717,9 +699,9 @@ namespace BackupCore
                     default:
                         throw new Exception("Unhandled blobtype on dereference");
                 }
-                if (blocation.IsMultiBlockReference)
+                if (blocation.BlockHashes != null)
                 {
-                    foreach (var hash in Blobs.GetHashListFromBlob(blocation))
+                    foreach (var hash in blocation.BlockHashes)
                     {
                         skipchild = false;
                         yield return hash;

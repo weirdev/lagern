@@ -164,7 +164,7 @@ namespace BackupCore
                 }
                 else
                 {
-                    rawobjects.Add(key, null);
+                    rawobjects.Add(key, new byte[0]);
                     if (savedheaderbodynext.Count >= 3)
                     {
                         next = savedheaderbodynext[2];

@@ -3,18 +3,17 @@ For now this will remain the home of the project backlog.
 
 ====
 
-Fix for uploading hash lists
-	The hash used to store them is not the hash of their contents
-	Backblaze verifies uploads with a hash (a feature we currently use and want to continue to support)
-	Other services may do so as well, and may not be optional
-	Needed if we want to verify on write
+Hash lists in bloblocations not in blob data
 Data integrity and encryption support
+	Verify contents when retrieving from blobstore
+		Channel codes for hashlist blobs
 	Channel codes for backupset and blobstore files
-	Channel codes for hashlist blobs
 	Channel codes for blobs?
 		Make optional?
 		blob hash would have to be calculated from (blobdata + redundant bits) so entire file can easily be hash checked when using online services
 	Verify on write?
+		Backing up
+		Restoring
 Project structure change
 	Better API compliance
 		Public api only in Core
