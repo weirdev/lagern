@@ -8,6 +8,12 @@ namespace BackupCore
 {
     public class FSCoreSrcDependencies : ICoreSrcDependencies
     {
+        public static readonly string SettingsDirectoryName = ".lagern";
+
+        public static readonly string SettingsFilename = ".settings";
+
+        public static readonly string AesKeyFilename = ".keyfile";
+
         /// <summary>
         /// The directory who's contents will be backed up.
         /// </summary>
@@ -15,13 +21,18 @@ namespace BackupCore
         
         private string SrcSettingsFile { get; set; }
 
+        private string AesKeyFile { get; set; }
+
         private IFSInterop FSInterop { get; set; }
+
+        private AesHelper AesTool { get; set; }
 
         private FSCoreSrcDependencies(string src, IFSInterop fsinterop)
         {
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
+            AesKeyFile = Path.Combine(SettingsDirectoryName, AesKeyFilename);
         }
 
         public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop)
@@ -50,10 +61,6 @@ namespace BackupCore
             }
             return srcdep;
         }
-        
-        public static readonly string SettingsDirectoryName = ".lagern";
-
-        public static readonly string SettingsFilename = ".settings";
 
         public FileMetadata GetFileMetadata(string relpath)
         {
@@ -83,6 +90,15 @@ namespace BackupCore
         }
 
         public Stream GetFileData(string relpath)
+        {
+            if (AesTool != null)
+            {
+                return AesTool.GetEncryptedStream(GetRawFileData(relpath));
+            }
+            return GetRawFileData(relpath);
+        }
+
+        private Stream GetRawFileData(string relpath)
         {
             return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath));
         }
@@ -172,7 +188,7 @@ namespace BackupCore
         {
             try
             {
-                return GetFileData(SrcSettingsFile);
+                return GetRawFileData(SrcSettingsFile);
             }
             catch (Exception)
             {
@@ -181,5 +197,22 @@ namespace BackupCore
         }
 
         private void WriteSettingsFileStream(byte[] data) => OverwriteOrCreateFile(SrcSettingsFile, data);
+        
+        public void ReadAesKeyFile(string password)
+        {
+            try
+            {
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    GetRawFileData(AesKeyFile).CopyTo(ms);
+                    AesTool = AesHelper.CreateFromKeyFile(ms.ToArray(), password);
+                }
+            }
+            // TODO: Special handling for wrong passwords, no keyfile present, etc.
+            catch (Exception)
+            {
+                AesTool = null;
+            }
+        }
     }
 }

@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Security.Cryptography;
 using System.Linq;
+using System.IO;
 
 namespace BackupCore
 {
-    class AesHelper
+    public class AesHelper
     {
         private Aes DataKeyAesProvider;
         private Aes DataAesProvider;
@@ -19,6 +20,8 @@ namespace BackupCore
 
         private byte[] DataKey; // Store encrypted by DataKeyKey
         private byte[] DataKeyIV; // IV for encrypted DataKey
+
+        public static readonly int IVSize = 20;
 
         private AesHelper(byte[] datakeykey, byte[] passwordsalt, byte[] datakeykeyhash, 
             byte[] datakeykeyhashsalt, byte[] datakey = null, byte[] datakeyiv = null)
@@ -55,7 +58,7 @@ namespace BackupCore
                 rngCsp.GetBytes(phashsalt);
             }
             var phashhasher = new Rfc2898DeriveBytes(datakeykey, phashsalt, 8192);
-            var phashhash = phashhasher.GetBytes(20); 
+            var phashhash = phashhasher.GetBytes(IVSize); 
             
             return new AesHelper(datakeykey, psalt, phashhash, phashsalt);
         }
@@ -66,7 +69,7 @@ namespace BackupCore
             var phasher = new Rfc2898DeriveBytes(password, savedobjects["passwordsalt-v1"]);
             var datakeykey = phasher.GetBytes(128);
             var phashhasher = new Rfc2898DeriveBytes(datakeykey, savedobjects["datakeykeyhashsalt-v1"], 8192);
-            var phashhash = phashhasher.GetBytes(20);
+            var phashhash = phashhasher.GetBytes(IVSize);
             if (phashhash.SequenceEqual(savedobjects["datakeykeyhash-v1"]))
             {
                 return new AesHelper(datakeykey, savedobjects["passwordsalt-v1"], savedobjects["datakeykeyhash-v1"],
@@ -81,13 +84,23 @@ namespace BackupCore
             }
         }
 
-        public (ICryptoTransform encryptor, byte[] iv) GetDataEncyptor()
+        public Stream GetEncryptedStream(Stream input)
+        {
+            return IVCryptoStream.CreateEncryptedStream(input, this);
+        }
+
+        public Stream GetDecryptedStream(Stream input)
+        {
+            return IVCryptoStream.CreateDecryptedStream(input, this);
+        }
+
+        private (ICryptoTransform encryptor, byte[] iv) GetDataEncyptor()
         {
             DataAesProvider.GenerateIV();
             return (DataAesProvider.CreateEncryptor(), DataAesProvider.IV);
         }
 
-        public ICryptoTransform GetDecryptor(byte[] iv)
+        private ICryptoTransform GetDataDecryptor(byte[] iv)
         {
             return DataAesProvider.CreateDecryptor(DataAesProvider.Key, iv);
         }
@@ -138,6 +151,126 @@ namespace BackupCore
         public class PasswordIncorrectException : Exception
         {
             public PasswordIncorrectException(string message) : base(message) { }
+        }
+
+        private class IVCryptoStream : Stream
+        {
+            public static IVCryptoStream CreateEncryptedStream(Stream input, AesHelper aes)
+            {
+                (ICryptoTransform encryptor, byte[] iv) = aes.GetDataEncyptor();
+                return new IVCryptoStream(new CryptoStream(input, encryptor, CryptoStreamMode.Read), iv, true);
+            }
+
+            public static IVCryptoStream CreateDecryptedStream(Stream input, AesHelper aes)
+            {
+                byte[] iv = new byte[AesHelper.IVSize];
+                input.Read(iv, 0, iv.Length);
+                ICryptoTransform decryptor = aes.GetDataDecryptor(iv);
+                return new IVCryptoStream(new CryptoStream(input, decryptor, CryptoStreamMode.Read), iv, false);
+            }
+
+            private Stream Inner { get; set; }
+
+            private byte[] IV { get; set; }
+
+            public override bool CanRead => Inner.CanRead;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => Inner.CanWrite;
+
+            public override long Length
+            {
+                get
+                {
+                    if (EncryptedOut)
+                    {
+                        return Inner.Length + IV.Length;
+                    }
+                    else
+                    {
+                        return Inner.Length - IV.Length;
+                    }
+                }
+            }
+
+            public override long Position
+            {
+                get
+                {
+                    if (EncryptedOut)
+                    {
+                        return Inner.Position + IVPosition;
+                    }
+                    else
+                    {
+                        return Inner.Position - IV.Length;
+                    }
+                }
+                set => throw new NotImplementedException();
+            }
+
+            private int IVPosition { get; set; }
+
+            /// <summary>
+            /// Encrypted out includes IV as first IV.Length bytes of stream.
+            /// When this is false the inner stream has the leading IV
+            /// </summary>
+            private bool EncryptedOut { get; set; }
+
+            IVCryptoStream(Stream inner, byte[] iv, bool encryptedout)
+            {
+                Inner = inner;
+                IV = iv;
+                EncryptedOut = encryptedout;
+                if (encryptedout)
+                {
+                    IVPosition = 0;
+                }
+                else
+                {
+                    IVPosition = iv.Length;
+                }
+            }
+
+            public override void Flush() => Inner.Flush();
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                int ivbytesread = 0;
+                if (EncryptedOut)
+                {
+                    // First copy IV bytes
+                    if (IVPosition < IV.Length)
+                    {
+                        int ivend = (IVPosition + count < IV.Length) ? IVPosition + count : IV.Length;
+                        ivbytesread = ivend - IVPosition;
+                        Array.Copy(IV, IVPosition, buffer, offset, ivbytesread);
+                        IVPosition = ivend;
+                    }
+                }
+                int innerbytesread = 0;
+                if (ivbytesread < count) // bytes left to copy
+                {
+                    innerbytesread = Inner.Read(buffer, offset + ivbytesread, count - ivbytesread);
+                }
+                return ivbytesread + innerbytesread;
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                throw new NotSupportedException("IVCryptoStream does not support seeking.");
+            }
+
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException("Cannot set length on IVCryptoStream.");
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                Inner.Write(buffer, offset, count);
+            }
         }
     }
 }

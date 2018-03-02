@@ -11,5 +11,7 @@ namespace BackupCore
         void DeleteBlob(byte[] hash, string relpath, int byteposition, int bytelength);
         
         (string relativefilepath, int byteposition) StoreBlob(byte[] hash, byte[] blobdata);
+
+        void UseDecryptor(AesHelper aes);
     }
 }

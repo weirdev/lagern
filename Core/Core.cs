@@ -979,6 +979,7 @@ namespace BackupCore
         dest,
         cache,
         name,
-        cloud_config
+        cloud_config,
+        encryption_enabled
     }
 }
