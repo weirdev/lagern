@@ -45,11 +45,11 @@ namespace BackupCore
             return LoadFileAsync(GetIndexFilePath(bsname, fileType));
         }
 
-        public Task<string> StoreBlobAsync(byte[] hash, byte[] data)
+        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
             string relpath = GetBlobRelativePath(hash);
             OverwriteOrCreateFileAsync(Path.Combine(BlobSaveDirectory, relpath), data);
-            return Task.Run(() => relpath);
+            return Task.Run(() => (hash, relpath));
         }
 
         public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)

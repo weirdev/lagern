@@ -23,7 +23,7 @@ namespace BackupCore
             return DstFSInterop.LoadBlobAsync(hash).Result;
         }
 
-        public string StoreBlob(byte[] hash, byte[] blobdata)
+        public (byte[] encryptedHash, string fileId) StoreBlob(byte[] hash, byte[] blobdata)
         {
             return DstFSInterop.StoreBlobAsync(hash, blobdata).Result;
         }

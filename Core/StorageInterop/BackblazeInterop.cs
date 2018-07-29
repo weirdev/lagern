@@ -113,7 +113,7 @@ namespace BackupCore
         /// <param name="hash"></param>
         /// <param name="data"></param>
         /// <returns>fileId</returns>
-        private async Task<string> StoreFileAsync(string file, byte[] hash, byte[] data)
+        private async Task<(byte[] encryptedHash, string fileId)> StoreFileAsync(string file, byte[] hash, byte[] data)
         {
             async Task<GetUploadUrlResponse> GetUploadUrl(int attempts=0)
             {
@@ -151,8 +151,8 @@ namespace BackupCore
                 }
             }
 
-            string fileid = await UploadData();
-            async Task<string> UploadData(int attempts = 0)
+            var hashFileId = await UploadData();
+            async Task<(byte[] encryptedHash, string fileId)> UploadData(int attempts = 0)
             {
                 if (UploadUrlResp == null)
                 {
@@ -174,7 +174,7 @@ namespace BackupCore
                         .PostAsync(filecontent)
                         .ReceiveJson<UploadResponse>();
                     SuccessfulTransmission();
-                    return uploadresp.fileId;
+                    return (hash, uploadresp.fileId);
                 }
                 catch (FlurlHttpException ex)
                 {
@@ -195,7 +195,7 @@ namespace BackupCore
                     throw;
                 }
             }
-            return fileid;
+            return hashFileId;
         }
 
         private async Task<byte[]> LoadFileAsync(string fileName)
@@ -385,7 +385,7 @@ namespace BackupCore
             return LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)));
         }
 
-        public Task<string> StoreBlobAsync(byte[] hash, byte[] data)
+        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
             return StoreFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), hash, data);
         }

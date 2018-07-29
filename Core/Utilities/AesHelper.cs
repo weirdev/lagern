@@ -47,6 +47,11 @@ namespace BackupCore
             }
         }
 
+        /// <summary>
+        /// Create a new AES helper given a password
+        /// </summary>
+        /// <param name="password"></param>
+        /// <returns></returns>
         public static AesHelper CreateFromPassword(string password)
         {
             var phasher = new Rfc2898DeriveBytes(password, 8);
@@ -63,6 +68,12 @@ namespace BackupCore
             return new AesHelper(datakeykey, psalt, phashhash, phashsalt);
         }
 
+        /// <summary>
+        /// Create an AES helper based on a previously saved keyfile and a password to decrypt it
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="password"></param>
+        /// <returns></returns>
         public static AesHelper CreateFromKeyFile(byte[] file, string password)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(file);

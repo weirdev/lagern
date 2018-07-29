@@ -103,6 +103,5 @@ namespace BackupCore
         private Stream GetSettingsFileStream() => new MemoryStream(DstFSInterop.LoadIndexFileAsync(null, IndexFileType.SettingsFile).Result);
 
         private void WriteSettingsFileStreamAsync(byte[] data) => DstFSInterop.StoreIndexFileAsync(null, IndexFileType.SettingsFile, data);
-
     }
 }

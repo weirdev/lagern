@@ -18,8 +18,8 @@ namespace BackupCore
         Task<bool> IndexFileExistsAsync(string bsname, IndexFileType fileType);
         Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType);
         void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data);
-        Task<byte[]> LoadBlobAsync(byte[] hash);
-        Task<string> StoreBlobAsync(byte[] hash, byte[] data);
-        void DeleteBlobAsync(byte[] hash, string fileId);
+        Task<byte[]> LoadBlobAsync(byte[] encryptedHash);
+        Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] rawHash, byte[] data);
+        void DeleteBlobAsync(byte[] encryptedHash, string fileId);
     }
 }

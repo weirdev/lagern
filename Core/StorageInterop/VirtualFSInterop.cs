@@ -173,11 +173,11 @@ namespace BackupCore
             return Task.Run(() => ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
         }
 
-        public Task<string> StoreBlobAsync(byte[] hash, byte[] data)
+        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
             string relpath = GetBlobRelativePath(hash);
             OverwriteOrCreateFile(Path.Combine(BlobSaveDirectory, relpath), data);
-            return Task.Run(() => relpath);
+            return Task.Run(() => (hash, relpath));
         }
 
         public void DeleteBlobAsync(byte[] hash, string fileId)

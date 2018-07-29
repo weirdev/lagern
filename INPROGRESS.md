@@ -3,10 +3,6 @@ For now this will remain the home of the project backlog.
 
 ====
 Currently implementing encryption support.
-To simplify that, refactoring Cloud- and FS-CoreDstDependencies
-into a single class that is initialized differntly for CLoud and FS
-
-Making single IDstFSInterop for cloud and local
 ====
 Data integrity and encryption support
 	Channel codes for backupset and blobstore files
