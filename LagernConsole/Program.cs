@@ -229,11 +229,11 @@ namespace BackupConsole
                 if (opts.Destination.Trim().ToLower() == "backblaze")
                 {
                     ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile);
-                    ICoreDstDependencies dstdep = CloudCoreDstDependencies.InitializeNew(opts.BSName, new BackblazeInterop(opts.CloudConfigFile), opts.Cache!=null);
+                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, new BackblazeInterop(opts.CloudConfigFile), opts.Cache!=null);
                     ICoreDstDependencies cachedep = null;
                     if (opts.Cache != null)
                     {
-                        cachedep = FSCoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, opts.Cache, new DiskFSInterop(), false);
+                        cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, new DiskDstFSInterop(opts.Cache), false);
                     }
                     core = new Core(srcdep, dstdep, cachedep);
                 }
@@ -523,7 +523,7 @@ namespace BackupConsole
                         ICoreDstDependencies dstdep;
                         try
                         {
-                            dstdep = CloudCoreDstDependencies.Load(new BackblazeInterop(cloudsettings), cache != null);
+                            dstdep = CoreDstDependencies.Load(new BackblazeInterop(cloudsettings), cache != null);
                         }
                         catch
                         {
@@ -533,7 +533,7 @@ namespace BackupConsole
                         ICoreDstDependencies cachedep = null;
                         if (cache != null)
                         {
-                            cachedep = FSCoreDstDependencies.Load(cache, new DiskFSInterop());
+                            cachedep = CoreDstDependencies.Load(new DiskDstFSInterop(cache));
                         }
                         return new Core(srcdep, dstdep, cachedep);
                     }
@@ -592,7 +592,7 @@ namespace BackupConsole
             string dir = cwd;
             do
             {
-                if (Directory.Exists(Path.Combine(dir, BackupCore.FSCoreDstDependencies.IndexDirName)))
+                if (Directory.Exists(Path.Combine(dir, "index")))
                 {
                     return dir;
                 }

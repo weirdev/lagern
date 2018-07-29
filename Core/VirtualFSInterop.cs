@@ -3,18 +3,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class VirtualFSInterop : IFSInterop
+    public class VirtualFSInterop : IFSInterop, IDstFSInterop
     {
         public MetadataNode VirtualFS { get; set; }
         private IDictionary<byte[], byte[]> DataStore { get; set; }
 
-        public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
+        public string DstRoot { get; private set; }
+
+        public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstroot)
         {
             VirtualFS = filesystem;
             DataStore = datastore;
+            DstRoot = dstroot;
         }
 
         public bool FileExists(string absolutepath) => VirtualFS.GetFile(absolutepath) != null;
@@ -30,6 +34,11 @@ namespace BackupCore
                     VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
                 }
             }
+        }
+
+        public string BlobSaveDirectory
+        {
+            get => Path.Combine(DstRoot, "blobdata");
         }
 
         public byte[] ReadAllFileBytes(string absolutepath) => DataStore[VirtualFS.GetFile(absolutepath).FileHash];
@@ -54,6 +63,18 @@ namespace BackupCore
 
         public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata fileMetadata = null)
         {
+            var root = VirtualFS;
+            foreach (var dir in absolutepath.Split(Path.DirectorySeparatorChar))
+            {
+                if (!root.HasDirectory(dir))
+                {
+                    root = root.AddDirectory(MakeNewDirectoryMetadata(dir));
+                }
+                else
+                {
+                    root = root.GetDirectory(dir);
+                }
+            }
             var datahash = StoreDataGetHash(data);
             if (fileMetadata == null)
             {
@@ -131,5 +152,73 @@ namespace BackupCore
 
         public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),
                                 new DateTime(), new DateTime(), FileAttributes.Directory, 0, null);
+
+        public Task<bool> IndexFileExistsAsync(string bsname, IndexFileType fileType)
+        {
+            return Task.Run(() => FileExists(GetIndexFilePath(bsname, fileType)));
+        }
+
+        public Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
+        {
+            return Task.Run(() => ReadAllFileBytes(GetIndexFilePath(bsname, fileType)));
+        }
+
+        public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
+        {
+            OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data);
+        }
+
+        public Task<byte[]> LoadBlobAsync(byte[] hash)
+        {
+            return Task.Run(() => ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+        }
+
+        public Task<string> StoreBlobAsync(byte[] hash, byte[] data)
+        {
+            string relpath = GetBlobRelativePath(hash);
+            OverwriteOrCreateFile(Path.Combine(BlobSaveDirectory, relpath), data);
+            return Task.Run(() => relpath);
+        }
+
+        public void DeleteBlobAsync(byte[] hash, string fileId)
+        {
+            Task.Run(() => DeleteFile(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+        }
+
+        private string GetIndexFilePath(string bsname, IndexFileType fileType)
+        {
+            string path;
+            switch (fileType)
+            {
+                case IndexFileType.BlobIndex:
+                    path = Path.Combine(DstRoot, "index", Core.BackupBlobIndexFile);
+                    break;
+                case IndexFileType.BackupSet:
+                    path = Path.Combine(DstRoot, "index", "backupstores", bsname);
+                    break;
+                case IndexFileType.SettingsFile:
+                    path = path = Path.Combine(DstRoot, Core.SettingsFilename);
+                    break;
+                default:
+                    throw new ArgumentException("Unknown IndexFileType");
+            }
+            return path;
+        }
+
+        private string GetBlobRelativePath(byte[] hash)
+        {
+            // Save files with names given by their hashes
+            // In order to keep the number of files per directory managable,
+            // the first two bytes of the hash are stripped and used as 
+            // the names of two nested directories into which the file
+            // is placed.
+            // Ex. hash = 3bc6e94a89 => relpath = 3b/c6/e94a89
+            string hashstring = HashTools.ByteArrayToHexViaLookup32(hash);
+            string dir1 = hashstring.Substring(0, 2);
+            string dir2 = hashstring.Substring(2, 2);
+            string fname = hashstring.Substring(4);
+
+            return Path.Combine(dir1, dir2, fname);
+        }
     }
 }

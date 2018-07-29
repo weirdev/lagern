@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class BinaryEncoding
+    public static class BinaryEncoding
     {
 
         /// <summary>

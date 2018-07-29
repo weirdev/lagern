@@ -28,11 +28,5 @@ namespace BackupCore
         void WriteSetting(BackupSetting key, string value);
 
         void ClearSetting(BackupSetting key);
-
-        /// <summary>
-        /// Read and use the keyfile to encrypt file data
-        /// </summary>
-        /// <param name="password"></param>
-        void ReadAesKeyFile(string password);
     }
 }

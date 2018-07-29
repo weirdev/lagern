@@ -29,7 +29,11 @@ namespace BackupCore
         public static readonly string ShallowSuffix = "~shallow";
 
         public static readonly string BlobListCacheSuffix = "~bloblistcache" + ShallowSuffix;
-                        
+
+        public static readonly string BackupBlobIndexFile = "hashindex";
+
+        public static readonly string SettingsFilename = ".settings";
+
         public Core(ICoreSrcDependencies src, ICoreDstDependencies dst, ICoreDstDependencies cache = null)
         {
             SrcDependencies = src;
@@ -62,31 +66,31 @@ namespace BackupCore
         public static Core LoadDiskCore(string src, string dst, string cache = null)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.Load(src, new DiskFSInterop());
-            FSCoreDstDependencies dstdep;
+            CoreDstDependencies dstdep;
             try
             {
-                dstdep = FSCoreDstDependencies.Load(dst, new DiskFSInterop());
+                dstdep = CoreDstDependencies.Load(new DiskDstFSInterop(dst), cache != null);
             }
             catch (Exception)
             {
                 dstdep = null;
             }
-            FSCoreDstDependencies cachedep = null;
+            CoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = FSCoreDstDependencies.Load(cache, new DiskFSInterop());
+                cachedep = CoreDstDependencies.Load(new DiskDstFSInterop(cache));
             }
             return new Core(srcdep, dstdep, cachedep);
         }
 
-        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null)
+        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, bool encrypted=false)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache);
-            FSCoreDstDependencies dstdep = FSCoreDstDependencies.InitializeNew(bsname, dst, new DiskFSInterop(), cache!=null);
-            FSCoreDstDependencies cachedep = null;
+            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, new DiskDstFSInterop(dst), cache!=null, encrypted);
+            CoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = FSCoreDstDependencies.InitializeNew(bsname + CacheSuffix, cache, new DiskFSInterop(), false);
+                cachedep = CoreDstDependencies.InitializeNew(bsname + CacheSuffix, new DiskDstFSInterop(cache), false, encrypted);
             }
             return new Core(srcdep, dstdep, cachedep);
         }
@@ -981,5 +985,12 @@ namespace BackupCore
         name,
         cloud_config,
         encryption_enabled
+    }
+
+    public enum IndexFileType
+    {
+        BlobIndex,
+        BackupSet,
+        SettingsFile
     }
 }

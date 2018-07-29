@@ -98,7 +98,7 @@ namespace BackupCore
         /// <returns></returns>
         private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
         {
-            byte[] data = Dependencies.LoadBlob(blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+            byte[] data = Dependencies.LoadBlob(hash);
             if (HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
             {
                 return data;
@@ -148,7 +148,7 @@ namespace BackupCore
                 {
                     try
                     {
-                        Dependencies.DeleteBlob(blobhash, blocation.RelativeFilePath, blocation.BytePosition, blocation.ByteLength);
+                        Dependencies.DeleteBlob(blobhash, blocation.RelativeFilePath);
                     }
                     catch (Exception)
                     {
@@ -273,7 +273,8 @@ namespace BackupCore
                 {
                     if (blockreferences == null)
                     {
-                        (posblocation.RelativeFilePath, posblocation.BytePosition) = WriteBlob(blob.Hash, blob.Block);
+                        posblocation.RelativeFilePath = WriteBlob(blob.Hash, blob.Block);
+                        posblocation.BytePosition = 0;
                     }
                 }
                 IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
@@ -297,7 +298,8 @@ namespace BackupCore
                                 && existingbloc.BSetReferenceCounts.ContainsKey(backupset.Substring(0,
                                     backupset.Length - Core.CacheSuffix.Length) + Core.BlobListCacheSuffix)))
                             {
-                                (existingbloc.RelativeFilePath, existingbloc.BytePosition) = WriteBlob(blob.Hash, blob.Block);
+                                existingbloc.RelativeFilePath = WriteBlob(blob.Hash, blob.Block);
+                                existingbloc.BytePosition = 0;
                             }
                         }
                     }
@@ -330,7 +332,7 @@ namespace BackupCore
             return new BlobReferenceIterator(this, blobhash, blobtype, includefiles, bottomup);
         }
 
-        private (string relfilepath, int bytepos) WriteBlob(byte[] hash, byte[] blob)
+        private string WriteBlob(byte[] hash, byte[] blob)
         {
             return Dependencies.StoreBlob(hash, blob);
         }

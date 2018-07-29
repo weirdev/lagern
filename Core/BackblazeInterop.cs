@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace BackupCore
 {
-    public class BackblazeInterop : ICloudInterop
+    public class BackblazeInterop : IDstFSInterop
     {
         private string ConnectionSettingsFile { get; set; }
 
@@ -28,6 +28,16 @@ namespace BackupCore
         private static readonly int MaxDelayMS = 16_000;
 
         private static readonly int Retries = 7;
+
+        public string BlobSaveDirectory
+        {
+            get => "blobdata";
+        }
+
+        public string IndexDirectory
+        {
+            get => "index";
+        }
 
         public BackblazeInterop(string accountid, string applicationkey,
             string bucketid, string bucketname)
@@ -94,7 +104,7 @@ namespace BackupCore
             }
         }
 
-        public async Task<string> UploadFileAsync(string file, byte[] data) => await UploadFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data);
+        private async void StoreFileAsync(string file, byte[] data) => await StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data);
 
         /// <summary>
         /// 
@@ -103,7 +113,7 @@ namespace BackupCore
         /// <param name="hash"></param>
         /// <param name="data"></param>
         /// <returns>fileId</returns>
-        public async Task<string> UploadFileAsync(string file, byte[] hash, byte[] data)
+        private async Task<string> StoreFileAsync(string file, byte[] hash, byte[] data)
         {
             async Task<GetUploadUrlResponse> GetUploadUrl(int attempts=0)
             {
@@ -188,7 +198,7 @@ namespace BackupCore
             return fileid;
         }
 
-        public async Task<byte[]> DownloadFileAsync(string fileNameOrId, bool fileid = false)
+        private async Task<byte[]> LoadFileAsync(string fileName)
         {
             byte[] downloaddata = await Download();
             async Task<byte[]> Download(int attempts = 0)
@@ -200,23 +210,12 @@ namespace BackupCore
                 Delay();
                 try
                 {
-                    HttpResponseMessage downloadresp;
-                    if (fileid)
-                    {
-                        downloadresp = await AuthResp.downloadUrl
-                            .AppendPathSegment("/b2api/v1/b2_download_file_by_id")
-                            .WithHeaders(new { Authorization = AuthResp.authorizationToken })
-                            .PostJsonAsync(new { fileId = fileNameOrId });
-                    }
-                    else
-                    {
-                        downloadresp = await AuthResp.downloadUrl
-                            .AppendPathSegment("file")
-                            .AppendPathSegment(BucketName)
-                            .AppendPathSegment(fileNameOrId)
-                            .WithHeaders(new { Authorization = AuthResp.authorizationToken })
-                            .GetAsync();
-                    }
+                    HttpResponseMessage downloadresp = await AuthResp.downloadUrl
+                        .AppendPathSegment("file")
+                        .AppendPathSegment(BucketName)
+                        .AppendPathSegment(fileName)
+                        .WithHeaders(new { Authorization = AuthResp.authorizationToken })
+                        .GetAsync();
                     var data = await downloadresp.Content.ReadAsByteArrayAsync();
                     SuccessfulTransmission();
                     return data;
@@ -242,7 +241,7 @@ namespace BackupCore
             return downloaddata;
         }
 
-        public void DeleteFileAsync(string filename, string fileid)
+        private void DeleteFileAsync(string filename, string fileid)
         {
             Delete();
             async void Delete(int attempts = 0)
@@ -284,7 +283,7 @@ namespace BackupCore
             }
         }
 
-        public async Task<bool> FileExistsAsync(string file)
+        private async Task<bool> FileExistsAsync(string file)
         {
             bool exists = await Exists();
             async Task<bool> Exists(int attempts = 0)
@@ -364,6 +363,56 @@ namespace BackupCore
                 }
             }
             return max;
+        }
+
+        public Task<bool> IndexFileExistsAsync(string bsname, IndexFileType fileType)
+        {
+            return FileExistsAsync(GetIndexFilePath(bsname, fileType));
+        }
+
+        public Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
+        {
+            return LoadFileAsync(GetIndexFilePath(bsname, fileType));
+        }
+
+        public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
+        {
+            StoreFileAsync(GetIndexFilePath(bsname, fileType), data);
+        }
+
+        public Task<byte[]> LoadBlobAsync(byte[] hash)
+        {
+            return LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)));
+        }
+
+        public Task<string> StoreBlobAsync(byte[] hash, byte[] data)
+        {
+            return StoreFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), hash, data);
+        }
+
+        public void DeleteBlobAsync(byte[] hash, string fileId)
+        {
+            DeleteFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), fileId);
+        }
+
+        private string GetIndexFilePath(string bsname, IndexFileType fileType)
+        {
+            string filename;
+            switch (fileType)
+            {
+                case IndexFileType.BlobIndex:
+                    filename = Path.Combine(IndexDirectory, Core.BackupBlobIndexFile);
+                    break;
+                case IndexFileType.BackupSet:
+                    filename = Path.Combine(IndexDirectory, "backupstores", bsname);
+                    break;
+                case IndexFileType.SettingsFile:
+                    filename = Path.Combine(IndexDirectory, Core.SettingsFilename);
+                    break;
+                default:
+                    throw new ArgumentException("Unknown IndexFileType");
+            }
+            return filename;
         }
 
         private class BBConnectionSettings

@@ -27,12 +27,30 @@ namespace BackupCore
 
         private AesHelper AesTool { get; set; }
 
-        private FSCoreSrcDependencies(string src, IFSInterop fsinterop)
+        private FSCoreSrcDependencies(string src, IFSInterop fsinterop, string password=null)
         {
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
-            AesKeyFile = Path.Combine(SettingsDirectoryName, AesKeyFilename);
+            try
+            {
+                if (ReadSetting(BackupSetting.encryption_enabled).ToLower() == "true")
+                {
+                    AesKeyFile = Path.Combine(SettingsDirectoryName, AesKeyFilename);
+                    if (password != null)
+                    {
+                        ReadAesKeyFile(password);
+                    }
+                    else
+                    {
+                        throw new Exception("Encryption enabled FSCoreSrcDependencies must be initialized with a password.");
+                    }
+                }
+            }
+            catch
+            {
+                // TODO: Shouldnt be checking encryption stuff in constructor, handle in Load or InitializeNew
+            }
         }
 
         public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop)
@@ -198,7 +216,7 @@ namespace BackupCore
 
         private void WriteSettingsFileStream(byte[] data) => OverwriteOrCreateFile(SrcSettingsFile, data);
         
-        public void ReadAesKeyFile(string password)
+        private void ReadAesKeyFile(string password)
         {
             try
             {

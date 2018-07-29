@@ -5,6 +5,9 @@ using System.Text;
 
 namespace BackupCore
 {
+    // TODO: Why are we taking in streams and returning byte arrays
+    // Should likely standardize on byte arrays since settings files
+    // will be quite small
     public static class SettingsFileTools
     {
         public static string ReadSetting(Stream settingsfile, BackupSetting key)
@@ -35,7 +38,7 @@ namespace BackupCore
             return WriteSettings(settings);
         }
 
-        public static void ClearSetting(Stream settingsfile, BackupSetting key)
+        public static byte[] ClearSetting(Stream settingsfile, BackupSetting key)
         {
             Dictionary<BackupSetting, string> settings;
             try
@@ -51,8 +54,11 @@ namespace BackupCore
                 if (settings.ContainsKey(key))
                 {
                     settings.Remove(key);
-                    WriteSettings(settings);
+                    return WriteSettings(settings);
                 }
+                MemoryStream ms = new MemoryStream();
+                settingsfile.CopyTo(ms);
+                return ms.ToArray();
             }
             else
             {

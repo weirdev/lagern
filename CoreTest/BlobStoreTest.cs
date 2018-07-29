@@ -26,7 +26,7 @@ namespace CoreTest
         {
             VirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             VFSDataStore = new BPlusTree<byte[]>(10);
-            BS = new BlobStore(new FSBlobStoreDependencies(new VirtualFSInterop(VirtualFS, VFSDataStore), Path.DirectorySeparatorChar.ToString()));
+            BS = new BlobStore(new BlobStoreDependencies(new VirtualFSInterop(VirtualFS, VFSDataStore, "dst")));
         }
 
         private TestContext testContextInstance;
