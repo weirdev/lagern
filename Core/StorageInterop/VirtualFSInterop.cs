@@ -14,6 +14,8 @@ namespace BackupCore
 
         public string DstRoot { get; private set; }
 
+        private AesHelper Encryptor { get; set; }
+
         public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstroot)
         {
             VirtualFS = filesystem;
@@ -160,21 +162,40 @@ namespace BackupCore
 
         public Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
         {
-            return Task.Run(() => ReadAllFileBytes(GetIndexFilePath(bsname, fileType)));
+            byte[] data = ReadAllFileBytes(GetIndexFilePath(bsname, fileType));
+            if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
+            {
+                data = Encryptor.DecryptBytes(data);
+            }
+            return Task.Run(() => data);
         }
 
         public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
+            if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
+            {
+                data = Encryptor.EncryptBytes(data);
+            }
             OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data);
         }
 
         public Task<byte[]> LoadBlobAsync(byte[] hash)
         {
-            return Task.Run(() => ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+            byte[] data = ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
+            if (Encryptor != null)
+            {
+                data = Encryptor.DecryptBytes(data);
+            }
+            return Task.Run(() => data);
         }
 
         public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
+            if (Encryptor != null)
+            {
+                data = Encryptor.EncryptBytes(data);
+                hash = HashTools.GetSHA1Hasher().ComputeHash(data);
+            }
             string relpath = GetBlobRelativePath(hash);
             OverwriteOrCreateFile(Path.Combine(BlobSaveDirectory, relpath), data);
             return Task.Run(() => (hash, relpath));
@@ -197,7 +218,10 @@ namespace BackupCore
                     path = Path.Combine(DstRoot, "index", "backupstores", bsname);
                     break;
                 case IndexFileType.SettingsFile:
-                    path = path = Path.Combine(DstRoot, Core.SettingsFilename);
+                    path = Path.Combine(DstRoot, Core.SettingsFilename);
+                    break;
+                case IndexFileType.EncryptorKeyFile:
+                    path = Path.Combine(DstRoot, "index", "keyfile");
                     break;
                 default:
                     throw new ArgumentException("Unknown IndexFileType");

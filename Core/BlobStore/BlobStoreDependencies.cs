@@ -13,9 +13,9 @@ namespace BackupCore
             DstFSInterop = fsinterop;
         }
 
-        public void DeleteBlob(byte[] hash, string fileId)
+        public void DeleteBlob(byte[] encryptedHash, string fileId)
         {
-            DstFSInterop.DeleteBlobAsync(hash, fileId);
+            DstFSInterop.DeleteBlobAsync(encryptedHash, fileId);
         }
 
         public byte[] LoadBlob(byte[] hash)

@@ -8,18 +8,45 @@ namespace BackupCore
 {
     public class DiskDstFSInterop : IDstFSInterop
     {
-        public DiskDstFSInterop(string dstPath)
+        public static IDstFSInterop InitializeNew(string dstpath, string password=null)
+        {
+            DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
+            if (password != null)
+            {
+                AesHelper encryptor = AesHelper.CreateFromPassword(password);
+                byte[] keyfile = encryptor.CreateKeyFile();
+                diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                diskDstFSInterop.Encryptor = encryptor;
+            }
+            return diskDstFSInterop;
+        }
+
+        public static IDstFSInterop Load(string dstpath, string password=null)
+        {
+            DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
+            if (password != null)
+            {
+                byte[] keyfile = diskDstFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
+                diskDstFSInterop.Encryptor = encryptor;
+            }
+            return diskDstFSInterop;
+        }
+
+        private DiskDstFSInterop(string dstPath)
         {
             DstPath = dstPath;
         }
 
         public string DstPath { get; private set; }
 
+        private AesHelper Encryptor { get; set; }
+
         public string BlobSaveDirectory
         {
             get => Path.Combine(DstPath, "blobdata");
         }
-
+        
         public string IndexDirectory
         {
             get => Path.Combine(DstPath, "index");
@@ -35,18 +62,33 @@ namespace BackupCore
             return Task.Run(() => File.Exists(GetIndexFilePath(bsname, fileType)));
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] hash)
+        public async Task<byte[]> LoadBlobAsync(byte[] hash)
         {
-            return LoadFileAsync(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
+            byte[] data = await LoadFileAsync(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
+            if (Encryptor != null)
+            {
+                data = Encryptor.DecryptBytes(data);
+            }
+            return data;
         }
 
-        public Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
+        public async Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
         {
-            return LoadFileAsync(GetIndexFilePath(bsname, fileType));
+            byte[] data = await LoadFileAsync(GetIndexFilePath(bsname, fileType));
+            if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
+            {
+                data = Encryptor.DecryptBytes(data);
+            }
+            return data;
         }
 
         public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
+            if (Encryptor != null)
+            {
+                data = Encryptor.EncryptBytes(data);
+                hash = HashTools.GetSHA1Hasher().ComputeHash(data);
+            }
             string relpath = GetBlobRelativePath(hash);
             OverwriteOrCreateFileAsync(Path.Combine(BlobSaveDirectory, relpath), data);
             return Task.Run(() => (hash, relpath));
@@ -54,6 +96,11 @@ namespace BackupCore
 
         public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
+            // Never Encrypt Key File
+            if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
+            {
+                data = Encryptor.EncryptBytes(data);
+            }
             OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
         }
 
@@ -67,6 +114,7 @@ namespace BackupCore
             Task.Run(() =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(absolutepath));
+
                 // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
                 using (FileStream writer = new FileStream(absolutepath, FileMode.OpenOrCreate))
                 {
@@ -91,7 +139,10 @@ namespace BackupCore
                     path = Path.Combine(IndexDirectory, "backupstores", bsname);
                     break;
                 case IndexFileType.SettingsFile:
-                    path = path = Path.Combine(IndexDirectory, Core.SettingsFilename);
+                    path = Path.Combine(IndexDirectory, Core.SettingsFilename);
+                    break;
+                case IndexFileType.EncryptorKeyFile:
+                    path = Path.Combine(IndexDirectory, "keyfile");
                     break;
                 default:
                     throw new ArgumentException("Unknown IndexFileType");

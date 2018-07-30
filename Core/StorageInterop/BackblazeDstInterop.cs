@@ -11,9 +11,11 @@ using System.Threading;
 
 namespace BackupCore
 {
-    public class BackblazeInterop : IDstFSInterop
+    public class BackblazeDstInterop : IDstFSInterop
     {
         private string ConnectionSettingsFile { get; set; }
+
+        private AesHelper Encryptor { get; set; }
 
         private string AccountID { get; set; }
         private string ApplicationKey { get; set; }
@@ -39,24 +41,60 @@ namespace BackupCore
             get => "index";
         }
 
-        public BackblazeInterop(string accountid, string applicationkey,
-            string bucketid, string bucketname)
+        private BackblazeDstInterop(string accountid, string applicationkey,
+            string bucketid, string bucketname, string connectionsettingsfile=null)
         {
             AccountID = accountid;
             ApplicationKey = applicationkey;
             BucketId = bucketid;
             BucketName = bucketname;
+            ConnectionSettingsFile = connectionsettingsfile;
+            AuthResp = AuthorizeAccount().Result;
         }
 
-        public BackblazeInterop(string connectionsettingsfile)
+        public static IDstFSInterop InitializeNew(string connectionsettingsfile, string password = null)
         {
-            ConnectionSettingsFile = connectionsettingsfile;
-            BBConnectionSettings connectionsettings = LoadBBConnectionSettings();
-            AccountID = connectionsettings.accountId;
-            ApplicationKey = connectionsettings.ApplicationKey;
-            BucketId = connectionsettings.bucketId;
-            BucketName = connectionsettings.bucketName;
-            AuthResp = AuthorizeAccount().Result;
+            BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
+            return InitializeNew(connectionsettings.accountId, connectionsettings.ApplicationKey,
+                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
+        }
+
+        public static IDstFSInterop InitializeNew(string accountid, 
+            string applicationkey, string bucketid, string bucketname,
+            string connectionSettingsFile=null, string password = null)
+        {
+            BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, 
+                bucketname, connectionSettingsFile);
+            if (password != null)
+            {
+                AesHelper encryptor = AesHelper.CreateFromPassword(password);
+                byte[] keyfile = encryptor.CreateKeyFile();
+                backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                backblazeDstInterop.Encryptor = encryptor;
+            }
+            return backblazeDstInterop;
+        }
+
+        public static IDstFSInterop Load(string connectionsettingsfile, string password=null)
+        {
+            BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
+            return Load(connectionsettings.accountId, connectionsettings.ApplicationKey,
+                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
+        }
+
+        public static IDstFSInterop Load(string accountid, string applicationkey, 
+            string bucketid, string bucketname, string connectionSettingsFile=null,
+            string password = null)
+        {
+            BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, bucketname,
+                connectionSettingsFile);
+            if (password != null)
+            {
+                byte[] keyfile = backblazeDstInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
+                backblazeDstInterop.Encryptor = encryptor;
+            }
+            return backblazeDstInterop;
         }
 
         /// <summary>
@@ -104,7 +142,7 @@ namespace BackupCore
             }
         }
 
-        private async void StoreFileAsync(string file, byte[] data) => await StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data);
+        private async void StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => await StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data, preventEncryption);
 
         /// <summary>
         /// 
@@ -113,7 +151,7 @@ namespace BackupCore
         /// <param name="hash"></param>
         /// <param name="data"></param>
         /// <returns>fileId</returns>
-        private async Task<(byte[] encryptedHash, string fileId)> StoreFileAsync(string file, byte[] hash, byte[] data)
+        private async Task<(byte[] encryptedHash, string fileId)> StoreFileAsync(string file, byte[] hash, byte[] data, bool preventEncryption=false)
         {
             async Task<GetUploadUrlResponse> GetUploadUrl(int attempts=0)
             {
@@ -161,6 +199,12 @@ namespace BackupCore
                 Delay();
                 try
                 {
+                    if (Encryptor != null && !preventEncryption)
+                    {
+                        data = Encryptor.EncryptBytes(data);
+                        hash = HashTools.GetSHA1Hasher().ComputeHash(data);
+                    }
+
                     var filecontent = new ByteArrayContent(data);
                     filecontent.Headers.Add("Content-Type", "application/octet-stream");
                     var uploadresp = await UploadUrlResp.uploadUrl
@@ -198,7 +242,7 @@ namespace BackupCore
             return hashFileId;
         }
 
-        private async Task<byte[]> LoadFileAsync(string fileName)
+        private async Task<byte[]> LoadFileAsync(string fileName, bool preventEncrypt=false)
         {
             byte[] downloaddata = await Download();
             async Task<byte[]> Download(int attempts = 0)
@@ -217,7 +261,14 @@ namespace BackupCore
                         .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                         .GetAsync();
                     var data = await downloadresp.Content.ReadAsByteArrayAsync();
+
                     SuccessfulTransmission();
+
+                    if (Encryptor != null && !preventEncrypt)
+                    {
+                        data = Encryptor.DecryptBytes(data);
+                    }
+
                     return data;
                 }
                 catch (FlurlHttpException ex)
@@ -329,10 +380,10 @@ namespace BackupCore
             return exists;
         }
 
-        private BBConnectionSettings LoadBBConnectionSettings()
+        private static BBConnectionSettings LoadBBConnectionSettings(string connectionsettingsfile)
         {
             string connectionsettings;
-            using (var sr = new StreamReader(ConnectionSettingsFile))
+            using (var sr = new StreamReader(connectionsettingsfile))
             {
                 connectionsettings = sr.ReadToEnd();
             }
@@ -372,12 +423,12 @@ namespace BackupCore
 
         public Task<byte[]> LoadIndexFileAsync(string bsname, IndexFileType fileType)
         {
-            return LoadFileAsync(GetIndexFilePath(bsname, fileType));
+            return LoadFileAsync(GetIndexFilePath(bsname, fileType), fileType == IndexFileType.EncryptorKeyFile);
         }
 
         public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
-            StoreFileAsync(GetIndexFilePath(bsname, fileType), data);
+            StoreFileAsync(GetIndexFilePath(bsname, fileType), data, fileType==IndexFileType.EncryptorKeyFile);
         }
 
         public Task<byte[]> LoadBlobAsync(byte[] hash)
@@ -408,6 +459,9 @@ namespace BackupCore
                     break;
                 case IndexFileType.SettingsFile:
                     filename = Path.Combine(IndexDirectory, Core.SettingsFilename);
+                    break;
+                case IndexFileType.EncryptorKeyFile:
+                    filename = Path.Combine(IndexDirectory, "keyfile");
                     break;
                 default:
                     throw new ArgumentException("Unknown IndexFileType");

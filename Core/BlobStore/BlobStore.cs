@@ -148,7 +148,7 @@ namespace BackupCore
                 {
                     try
                     {
-                        Dependencies.DeleteBlob(blobhash, blocation.RelativeFilePath);
+                        Dependencies.DeleteBlob(blocation.EncryptedHash, blocation.RelativeFilePath);
                     }
                     catch (Exception)
                     {

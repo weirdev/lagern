@@ -229,11 +229,11 @@ namespace BackupConsole
                 if (opts.Destination.Trim().ToLower() == "backblaze")
                 {
                     ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile);
-                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, new BackblazeInterop(opts.CloudConfigFile), opts.Cache!=null);
+                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile), opts.Cache!=null);
                     ICoreDstDependencies cachedep = null;
                     if (opts.Cache != null)
                     {
-                        cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, new DiskDstFSInterop(opts.Cache), false);
+                        cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, DiskDstFSInterop.InitializeNew(opts.Cache), false);
                     }
                     core = new Core(srcdep, dstdep, cachedep);
                 }
@@ -523,7 +523,7 @@ namespace BackupConsole
                         ICoreDstDependencies dstdep;
                         try
                         {
-                            dstdep = CoreDstDependencies.Load(new BackblazeInterop(cloudsettings), cache != null);
+                            dstdep = CoreDstDependencies.Load(BackblazeDstInterop.Load(cloudsettings), cache != null);
                         }
                         catch
                         {
@@ -533,7 +533,7 @@ namespace BackupConsole
                         ICoreDstDependencies cachedep = null;
                         if (cache != null)
                         {
-                            cachedep = CoreDstDependencies.Load(new DiskDstFSInterop(cache));
+                            cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
                         }
                         return new Core(srcdep, dstdep, cachedep);
                     }

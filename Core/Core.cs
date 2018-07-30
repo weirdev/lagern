@@ -58,18 +58,18 @@ namespace BackupCore
         }
         
         /// <summary>
-        /// Initializes a new lagern Core. Core surfaces all public methods for use by programs implementing this library.
+        /// Loads and existing lagern Core. Core surfaces all public methods for use by programs implementing this library.
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="src">Backup source directory</param>
         /// <param name="dst">Backup destination directory</param>
-        public static Core LoadDiskCore(string src, string dst, string cache = null)
+        public static Core LoadDiskCore(string src, string dst, string cache=null, string password=null)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.Load(src, new DiskFSInterop());
             CoreDstDependencies dstdep;
             try
             {
-                dstdep = CoreDstDependencies.Load(new DiskDstFSInterop(dst), cache != null);
+                dstdep = CoreDstDependencies.Load(DiskDstFSInterop.Load(dst, password), cache != null);
             }
             catch (Exception)
             {
@@ -78,19 +78,19 @@ namespace BackupCore
             CoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = CoreDstDependencies.Load(new DiskDstFSInterop(cache));
+                cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
             }
             return new Core(srcdep, dstdep, cachedep);
         }
 
-        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, bool encrypted=false)
+        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, string password=null)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache);
-            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, new DiskDstFSInterop(dst), cache!=null, encrypted);
+            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst, password), cache!=null);
             CoreDstDependencies cachedep = null;
             if (cache != null)
             {
-                cachedep = CoreDstDependencies.InitializeNew(bsname + CacheSuffix, new DiskDstFSInterop(cache), false, encrypted);
+                cachedep = CoreDstDependencies.InitializeNew(bsname + CacheSuffix, DiskDstFSInterop.InitializeNew(cache), false);
             }
             return new Core(srcdep, dstdep, cachedep);
         }
@@ -991,6 +991,7 @@ namespace BackupCore
     {
         BlobIndex,
         BackupSet,
-        SettingsFile
+        SettingsFile,
+        EncryptorKeyFile
     }
 }

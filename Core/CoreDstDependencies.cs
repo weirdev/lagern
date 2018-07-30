@@ -18,7 +18,7 @@ namespace BackupCore
             DstFSInterop = dstinterop;
         }
 
-        public static CoreDstDependencies InitializeNew(string bsname, IDstFSInterop dstinterop, bool cacheused=false, bool encrypted=false)
+        public static CoreDstDependencies InitializeNew(string bsname, IDstFSInterop dstinterop, bool cacheused=false)
         {
             CoreDstDependencies destdeps = new CoreDstDependencies(dstinterop);
 
@@ -38,7 +38,7 @@ namespace BackupCore
             }
             BackupStoreDependencies backupStoreDependencies = new BackupStoreDependencies(destdeps.DstFSInterop, destdeps.Blobs);
             destdeps.Backups = new BackupStore(backupStoreDependencies);
-            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused, encrypted), bsname);
+            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), bsname);
             return destdeps;
         }
 

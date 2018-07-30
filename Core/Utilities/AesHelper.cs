@@ -105,6 +105,24 @@ namespace BackupCore
             return IVCryptoStream.CreateDecryptedStream(input, this);
         }
 
+        public byte[] EncryptBytes(byte[] input)
+        {
+            MemoryStream rawData = new MemoryStream(input);
+            Stream encryptedStream = GetEncryptedStream(rawData);
+            byte[] encrypteddata = new byte[encryptedStream.Length];
+            encryptedStream.Read(encrypteddata, 0, (int)encryptedStream.Length);
+            return encrypteddata;
+        }
+
+        public byte[] DecryptBytes(byte[] input)
+        {
+            MemoryStream encryptedData = new MemoryStream(input);
+            Stream decryptedStream = GetDecryptedStream(encryptedData);
+            byte[] decrypteddata = new byte[decryptedStream.Length];
+            decryptedStream.Read(decrypteddata, 0, (int)decryptedStream.Length);
+            return decrypteddata;
+        }
+
         private (ICryptoTransform encryptor, byte[] iv) GetDataEncyptor()
         {
             DataAesProvider.GenerateIV();
