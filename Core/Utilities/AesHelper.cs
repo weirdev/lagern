@@ -9,8 +9,8 @@ namespace BackupCore
 {
     public class AesHelper
     {
-        private Aes DataKeyAesProvider;
-        private Aes DataAesProvider;
+        private RijndaelManaged DataKeyAesProvider;
+        private RijndaelManaged DataAesProvider;
 
         private byte[] DataKeyKey; // Dont store, generated from password
         private byte[] PasswordSalt; // Store
@@ -21,7 +21,7 @@ namespace BackupCore
         private byte[] DataKey; // Store encrypted by DataKeyKey
         private byte[] DataKeyIV; // IV for encrypted DataKey
 
-        public static readonly int IVSize = 20;
+        public static readonly int IVSize = 16;
 
         private AesHelper(byte[] datakeykey, byte[] passwordsalt, byte[] datakeykeyhash, 
             byte[] datakeykeyhashsalt, byte[] datakey = null, byte[] datakeyiv = null)
@@ -30,9 +30,13 @@ namespace BackupCore
             PasswordSalt = passwordsalt;
             DataKeyKeyHash = datakeykeyhash;
             DataKeyKeyHashSalt = datakeykeyhashsalt;
-            DataKeyAesProvider = Aes.Create();
+            DataKeyAesProvider = new RijndaelManaged();
             DataKeyAesProvider.Key = datakeykey;
-            DataAesProvider = Aes.Create();
+            DataAesProvider = new RijndaelManaged();
+            DataAesProvider.Mode = CipherMode.CBC;
+            DataAesProvider.Padding = PaddingMode.PKCS7;
+            DataAesProvider.BlockSize = 128;
+            DataAesProvider.KeySize = 128;
             if (datakey != null)
             {
                 DataKey = datakey;
@@ -56,7 +60,7 @@ namespace BackupCore
         {
             var phasher = new Rfc2898DeriveBytes(password, 8);
             var psalt = phasher.Salt;
-            var datakeykey = phasher.GetBytes(128);
+            var datakeykey = phasher.GetBytes(16); // 128 bits
             var phashsalt = new byte[8];
             using (RNGCryptoServiceProvider rngCsp = new RNGCryptoServiceProvider())
             {
@@ -78,7 +82,7 @@ namespace BackupCore
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(file);
             var phasher = new Rfc2898DeriveBytes(password, savedobjects["passwordsalt-v1"]);
-            var datakeykey = phasher.GetBytes(128);
+            var datakeykey = phasher.GetBytes(16);
             var phashhasher = new Rfc2898DeriveBytes(datakeykey, savedobjects["datakeykeyhashsalt-v1"], 8192);
             var phashhash = phashhasher.GetBytes(IVSize);
             if (phashhash.SequenceEqual(savedobjects["datakeykeyhash-v1"]))
@@ -95,32 +99,49 @@ namespace BackupCore
             }
         }
 
-        public Stream GetEncryptedStream(Stream input)
+        public IVCryptoStream GetEncryptedStream(Stream input)
         {
-            return IVCryptoStream.CreateEncryptedStream(input, this);
+            // TODO: Stream wrapping currently experiencing errors
+            //return IVCryptoStream.CreateEncryptedStream(input, this);
+            throw new NotImplementedException();
         }
 
-        public Stream GetDecryptedStream(Stream input)
+        public IVCryptoStream GetDecryptedStream(Stream input)
         {
-            return IVCryptoStream.CreateDecryptedStream(input, this);
+            //return IVCryptoStream.CreateDecryptedStream(input, this);
+            throw new NotImplementedException();
         }
 
         public byte[] EncryptBytes(byte[] input)
         {
-            MemoryStream rawData = new MemoryStream(input);
-            Stream encryptedStream = GetEncryptedStream(rawData);
-            byte[] encrypteddata = new byte[encryptedStream.Length];
-            encryptedStream.Read(encrypteddata, 0, (int)encryptedStream.Length);
-            return encrypteddata;
+            (ICryptoTransform encryptor, byte[] iv) = GetDataEncyptor();
+            try
+            {
+                byte[] encrypted = encryptor.TransformFinalBlock(input, 0, input.Length);
+                byte[] ivAndEncrypted = new byte[IVSize + encrypted.Length];
+                Array.Copy(iv, ivAndEncrypted, iv.Length);
+                Array.Copy(encrypted, 0, ivAndEncrypted, iv.Length, encrypted.Length);
+                return ivAndEncrypted;
+            }
+            finally
+            {
+                encryptor.Dispose();
+            }
         }
 
         public byte[] DecryptBytes(byte[] input)
         {
-            MemoryStream encryptedData = new MemoryStream(input);
-            Stream decryptedStream = GetDecryptedStream(encryptedData);
-            byte[] decrypteddata = new byte[decryptedStream.Length];
-            decryptedStream.Read(decrypteddata, 0, (int)decryptedStream.Length);
-            return decrypteddata;
+            byte[] iv = new byte[IVSize];
+            Array.Copy(input, iv, IVSize);
+            ICryptoTransform decryptor = GetDataDecryptor(iv);
+            try
+            {
+                return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
+            }
+            finally
+            {
+                decryptor.Dispose();
+            }
         }
 
         private (ICryptoTransform encryptor, byte[] iv) GetDataEncyptor()
@@ -182,31 +203,35 @@ namespace BackupCore
             public PasswordIncorrectException(string message) : base(message) { }
         }
 
-        private class IVCryptoStream : Stream
+        public class IVCryptoStream : Stream
         {
             public static IVCryptoStream CreateEncryptedStream(Stream input, AesHelper aes)
             {
                 (ICryptoTransform encryptor, byte[] iv) = aes.GetDataEncyptor();
-                return new IVCryptoStream(new CryptoStream(input, encryptor, CryptoStreamMode.Read), iv, true);
+                return new IVCryptoStream(new CryptoStream(input, encryptor, CryptoStreamMode.Read), input, iv, true);
             }
 
             public static IVCryptoStream CreateDecryptedStream(Stream input, AesHelper aes)
             {
-                byte[] iv = new byte[AesHelper.IVSize];
+                byte[] iv = new byte[IVSize];
                 input.Read(iv, 0, iv.Length);
                 ICryptoTransform decryptor = aes.GetDataDecryptor(iv);
-                return new IVCryptoStream(new CryptoStream(input, decryptor, CryptoStreamMode.Read), iv, false);
+                return new IVCryptoStream(new CryptoStream(input, decryptor, CryptoStreamMode.Read), input, iv, false);
             }
 
-            private Stream Inner { get; set; }
+            private CryptoStream CryptoInner { get; set; }
+
+            private Stream RawInner { get; set; }
 
             private byte[] IV { get; set; }
 
-            public override bool CanRead => Inner.CanRead;
+            public override bool CanRead => CryptoInner.CanRead;
 
             public override bool CanSeek => false;
 
-            public override bool CanWrite => Inner.CanWrite;
+            public override bool CanWrite => CryptoInner.CanWrite;
+
+            public void Clear() => CryptoInner.Clear();
 
             public override long Length
             {
@@ -214,11 +239,11 @@ namespace BackupCore
                 {
                     if (EncryptedOut)
                     {
-                        return Inner.Length + IV.Length;
+                        return RawInner.Length + IV.Length;
                     }
                     else
                     {
-                        return Inner.Length - IV.Length;
+                        return RawInner.Length - IV.Length;
                     }
                 }
             }
@@ -229,14 +254,14 @@ namespace BackupCore
                 {
                     if (EncryptedOut)
                     {
-                        return Inner.Position + IVPosition;
+                        return CryptoInner.Position + IVPosition;
                     }
                     else
                     {
-                        return Inner.Position - IV.Length;
+                        return CryptoInner.Position - IV.Length;
                     }
                 }
-                set => throw new NotImplementedException();
+                set => throw new NotSupportedException();
             }
 
             private int IVPosition { get; set; }
@@ -247,9 +272,10 @@ namespace BackupCore
             /// </summary>
             private bool EncryptedOut { get; set; }
 
-            IVCryptoStream(Stream inner, byte[] iv, bool encryptedout)
+            IVCryptoStream(CryptoStream cryptoinner, Stream rawinner, byte[] iv, bool encryptedout)
             {
-                Inner = inner;
+                CryptoInner = cryptoinner;
+                RawInner = rawinner;
                 IV = iv;
                 EncryptedOut = encryptedout;
                 if (encryptedout)
@@ -262,7 +288,7 @@ namespace BackupCore
                 }
             }
 
-            public override void Flush() => Inner.Flush();
+            public override void Flush() => CryptoInner.Flush();
 
             public override int Read(byte[] buffer, int offset, int count)
             {
@@ -281,7 +307,7 @@ namespace BackupCore
                 int innerbytesread = 0;
                 if (ivbytesread < count) // bytes left to copy
                 {
-                    innerbytesread = Inner.Read(buffer, offset + ivbytesread, count - ivbytesread);
+                    innerbytesread = CryptoInner.Read(buffer, offset, count + IV.Length); // Read 
                 }
                 return ivbytesread + innerbytesread;
             }
@@ -298,7 +324,7 @@ namespace BackupCore
 
             public override void Write(byte[] buffer, int offset, int count)
             {
-                Inner.Write(buffer, offset, count);
+                CryptoInner.Write(buffer, offset, count);
             }
         }
     }

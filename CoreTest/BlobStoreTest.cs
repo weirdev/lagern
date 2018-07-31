@@ -90,21 +90,21 @@ namespace CoreTest
             // Verify size of data represented by "new" hashes is < 20 MB
 
             byte[] small_a = new byte[2048];
-            RandomData(small_a);
+            CoreTest.RandomData(small_a);
             byte[] large_b = new byte[20_971_520];
-            RandomData(large_b);
+            CoreTest.RandomData(large_b);
             byte[] small_c = new byte[8];
-            RandomData(small_c);
+            CoreTest.RandomData(small_c);
             byte[] large_d = new byte[41_943_040];
-            RandomData(large_d);
+            CoreTest.RandomData(large_d);
             byte[] small_e = new byte[4096];
-            RandomData(small_e);
+            CoreTest.RandomData(small_e);
             byte[] small_f = new byte[2048];
-            RandomData(small_f);
+            CoreTest.RandomData(small_f);
             byte[] small_g = new byte[1];
-            RandomData(small_g);
+            CoreTest.RandomData(small_g);
             byte[] small_h = new byte[4096];
-            RandomData(small_h);
+            CoreTest.RandomData(small_h);
 
             byte[] file1 = ConcenateFile(new byte[][] { small_a, large_b, small_c, large_d, small_e });
             byte[] file2 = ConcenateFile(new byte[][] { small_f, large_b, small_g, large_d, small_h });
@@ -187,12 +187,6 @@ namespace CoreTest
             testdata.core.RunBackup("test", "initialrun");
             byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
             var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies.Blobs.Dependencies);
-        }
-
-        public void RandomData(byte[] data)
-        {
-            Random rng = new Random();
-            rng.NextBytes(data);
         }
 
         public byte[] ConcenateFile(byte[][] fileblocks)

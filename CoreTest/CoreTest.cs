@@ -148,6 +148,7 @@ namespace CoreTest
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
         }
 
+        // TODO: Currently may fail occasionally
         [TestMethod]
         public void TestRemoveBackup()
         {
@@ -227,6 +228,12 @@ namespace CoreTest
                 var res = Core.CheckTrackAnyDirectoryChild(directories[i], patterns);
                 Assert.AreEqual(res, correctoutput[i]);
             }
+        }
+
+        public static void RandomData(byte[] data)
+        {
+            Random rng = new Random();
+            rng.NextBytes(data);
         }
     }
 }
