@@ -578,7 +578,7 @@ namespace BackupCore
                             parent.Files.Remove(file);
                             // Dont dereference file just dont add new reference
                         }
-                        // Exchnage for metadata in Changes
+                        // Exchange for metadata in Changes
                         if (fstatus == FileMetadata.FileStatus.MetadataChange || fstatus == FileMetadata.FileStatus.DataModified)
                         {
                             parent.Files[file] = filemeta.Changes.Value.updated;

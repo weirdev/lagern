@@ -16,11 +16,37 @@ namespace BackupCore
 
         private AesHelper Encryptor { get; set; }
 
-        public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstroot)
+        public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
         {
             VirtualFS = filesystem;
             DataStore = datastore;
-            DstRoot = dstroot;
+        }
+
+        public static IDstFSInterop InitializeNewDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string password=null)
+        {
+            VirtualFSInterop virtualFSInterop = new VirtualFSInterop(filesystem, datastore);
+            virtualFSInterop.DstRoot = dstRoot;
+            if (password != null)
+            {
+                AesHelper encryptor = AesHelper.CreateFromPassword(password);
+                byte[] keyfile = encryptor.CreateKeyFile();
+                virtualFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                virtualFSInterop.Encryptor = encryptor;
+            }
+            return virtualFSInterop;
+        }
+
+        public static IDstFSInterop LoadDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string password=null)
+        {
+            VirtualFSInterop virtualFSInterop = new VirtualFSInterop(filesystem, datastore);
+            virtualFSInterop.DstRoot = dstRoot;
+            if (password != null)
+            {
+                byte[] keyfile = virtualFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
+                virtualFSInterop.Encryptor = encryptor;
+            }
+            return virtualFSInterop;
         }
 
         public bool FileExists(string absolutepath) => VirtualFS.GetFile(absolutepath) != null;
@@ -33,7 +59,8 @@ namespace BackupCore
             {
                 if (!DirectoryExists(absolutepath))
                 {
-                    VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
+                    VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), 
+                        MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
                 }
             }
         }
@@ -61,7 +88,8 @@ namespace BackupCore
 
         public Stream GetFileData(string absolutepath) => new MemoryStream(ReadAllFileBytes(absolutepath));
 
-        public string[] GetDirectoryFiles(string absolutepath) => VirtualFS.GetDirectory(absolutepath).Files.Keys.Select(file => Path.Combine(absolutepath, file)).ToArray();
+        public string[] GetDirectoryFiles(string absolutepath) => 
+            VirtualFS.GetDirectory(absolutepath).Files.Keys.Select(file => Path.Combine(absolutepath, file)).ToArray();
 
         public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata fileMetadata = null)
         {
@@ -82,12 +110,15 @@ namespace BackupCore
             {
                 fileMetadata = MakeNewFileMetadata(Path.GetFileName(absolutepath), data.Length, datahash);
             }
-            VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = fileMetadata;
+            VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files[Path.GetFileName(absolutepath)] = 
+                fileMetadata;
         }
 
-        public string[] GetSubDirectories(string absolutepath) => VirtualFS.GetDirectory(absolutepath).Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray();
+        public string[] GetSubDirectories(string absolutepath) => 
+            VirtualFS.GetDirectory(absolutepath).Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray();
 
-        public void DeleteFile(string absolutepath) => VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files.Remove(Path.GetFileName(absolutepath));
+        public void DeleteFile(string absolutepath) => 
+            VirtualFS.GetDirectory(Path.GetDirectoryName(absolutepath)).Files.Remove(Path.GetFileName(absolutepath));
 
         public byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength)
         {
@@ -148,8 +179,8 @@ namespace BackupCore
         // Unlike other public methods of this class, MakeNewFileMetadata and MakeNewDirectoryMetadata
         // are not part of the IFSInterop interface. They are included as convenience methods for
         // use when creating a virtual filesystem
-        public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[] hash = null) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Normal, size, hash);
+        public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[] hash = null) => 
+            new FileMetadata(name, new DateTime(), new DateTime(), new DateTime(), FileAttributes.Normal, size, hash);
 
 
         public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),

@@ -58,15 +58,17 @@ namespace CoreTest
         }
 
         public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int? randomseed=null)
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int? randomseed=null, 
+            bool encrypted=false)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
             (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
-            var vfsi = new VirtualFSInterop(vfsroot, vfsdatastore, "dst");
-            var vfsicache = new VirtualFSInterop(vfsroot, vfsdatastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi, "dst", "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsi, true);
+            var vfsisrc = new VirtualFSInterop(vfsroot, vfsdatastore);
+            var vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "dst");
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
@@ -93,10 +95,11 @@ namespace CoreTest
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
-            var vfsi = new VirtualFSInterop(vfsroot, datastore, "dst");
-            var vfsicache = new VirtualFSInterop(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi);
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsi, true);
+            var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
+            var vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst");
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
         }
@@ -106,17 +109,20 @@ namespace CoreTest
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
-            var vfsi = new VirtualFSInterop(vfsroot, datastore, "dst");
-            var vfsicache = new VirtualFSInterop(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsi, "dst", "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsi, true);
+            var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
+            var vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst");
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
 
-            vfsi = new VirtualFSInterop(vfsroot, datastore, "dst");
-            srcdeps = FSCoreSrcDependencies.Load("src", vfsi);
-            dstdeps = CoreDstDependencies.Load(vfsi, true);
-            cachedeps = CoreDstDependencies.Load(vfsi, false);
+            vfsisrc = new VirtualFSInterop(vfsroot, datastore);
+            vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, "dst");
+            vfsicache = VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
+            srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
+            dstdeps = CoreDstDependencies.Load(vfsidst, true);
+            cachedeps = CoreDstDependencies.Load(vfsicache, false);
             core = new Core(srcdeps, dstdeps, cachedeps);
         }
 
@@ -148,13 +154,14 @@ namespace CoreTest
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
         }
 
-        // TODO: Currently may fail occasionally
         [TestMethod]
         public void TestRemoveBackup()
         {
             var testdata = InitializeNewCoreWithStandardFiles();
 
             var bh1 = testdata.core.RunBackup("test", "run1");
+            System.Threading.Thread.Sleep(1000); // Allow async writes to finish
+
             testdata.vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
             var bh2 = testdata.core.RunBackup("test", "run2");
             testdata.core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
