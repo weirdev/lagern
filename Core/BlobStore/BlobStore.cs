@@ -142,17 +142,20 @@ namespace BackupCore
             {
                 throw new Exception("Negative reference count in blobstore");
             }
-            if (blocation.TotalNonShallowReferenceCount == 0)
+            if (blocation.BlockHashes == null) // Can't delete from disk if this is a multiblock reference (does not directly store data on disk)
             {
-                if (!originallyshallow)
+                if (blocation.TotalNonShallowReferenceCount == 0)
                 {
-                    try
+                    if (!originallyshallow)
                     {
-                        Dependencies.DeleteBlob(blocation.EncryptedHash, blocation.RelativeFilePath);
-                    }
-                    catch (Exception)
-                    {
-                        throw new Exception("Error deleting unreferenced file.");
+                        try
+                        {
+                            Dependencies.DeleteBlob(blocation.EncryptedHash, blocation.RelativeFilePath);
+                        }
+                        catch (Exception)
+                        {
+                            throw new Exception("Error deleting unreferenced file.");
+                        }
                     }
                 }
             }
@@ -352,7 +355,12 @@ namespace BackupCore
 
         public BlobLocation GetBlobLocation(byte[] hash)
         {
-            return IndexStore.GetRecord(hash);
+            BlobLocation blocation = IndexStore.GetRecord(hash);
+            if (blocation == null)
+            {
+                throw new KeyNotFoundException("The given hash does not exist in the Blob Index.");
+            }
+            return blocation;
         }
 
         /// <summary>
