@@ -98,7 +98,7 @@ namespace BackupCore
         /// <returns></returns>
         private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
         {
-            byte[] data = Dependencies.LoadBlob(hash);
+            byte[] data = Dependencies.LoadBlob(blocation.EncryptedHash);
             if (HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
             {
                 return data;
