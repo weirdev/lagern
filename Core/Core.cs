@@ -83,9 +83,11 @@ namespace BackupCore
             return new Core(srcdep, dstdep, cachedep);
         }
 
+        // TODO: This method shouldn't exist in Core, it should be in its own class of similar helper methods,
+        // or simply not exist at all
         public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, string password=null)
         {
-            FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache);
+            ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache, null, password!=null);
             CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst, password), cache!=null);
             CoreDstDependencies cachedep = null;
             if (cache != null)
@@ -622,8 +624,7 @@ namespace BackupCore
             var defaultbset = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
             byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, false, defaultbset);
 
-            SyncCache(backupsetname, defaultbset);
-            // BackupSet save occurred with cache sync
+            SyncCacheSaveBackupSets(backupsetname, defaultbset);
             SaveBlobIndices();
             return backuphash;
         }
@@ -648,15 +649,23 @@ namespace BackupCore
                 Console.WriteLine(e.Message);
             }
         }
-        
-        public void SyncCache(string backupsetname, BackupSet dstbset=null)
+
+        // TODO: Return backup sets from DefaultDstDependencies.Backups.SyncCache()
+        // then save backup sets in a seperate method
+        public void SyncCacheSaveBackupSets(string backupsetname, BackupSet dstbset=null)
         {
+            // BackupSet saves occur with sync
             if (CacheDependencies != null)
             {
                 if (DestinationAvailable)
                 {
                     DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname, dstbset);
                 }
+            }
+            if (dstbset != null)
+            {
+                // If no cache to sync, just save the dst backup set
+                DefaultDstDependencies.Backups.SaveBackupSet(dstbset, backupsetname);
             }
         }
 
@@ -948,9 +957,9 @@ namespace BackupCore
         /// <param name="backuphashprefix"></param>
         public void RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false)
         {
-            SyncCache(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
+            SyncCacheSaveBackupSets(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
             DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix, DestinationAvailable && CacheDependencies==null, forcedelete);
-            SyncCache(backupsetname);
+            SyncCacheSaveBackupSets(backupsetname);
             SaveBlobIndices();
         }
 

@@ -2,8 +2,26 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
-Currently implementing encryption support.
+Currently working on __
 ====
+Test for correct error given incorrect encryption password
+Tests without cache
+Fully model settings file, then parse to that model instead of adhoc reading values
+Encrypt an existing backup/ detect mismatched encryption options
+Support for storing the keyfile at the source
+Test for loading then running backup
+Temporairly store the password when doing multiple LagernConsole commands within a window of time
+Review reference counting logic
+TODOs
+Better support for large backup sets
+	Test large backups
+		Identify bottlenecks
+	Optimize B+ tree BlobStore
+		store some nodes out of memory?
+		optimize node size
+			Make BlobLocations a set size?
+				BlobLocations can currently hold variable length hash lists
+					Need recursive hash lists forming binary or b-tree
 Data integrity and encryption support
 	Channel codes for backupset and blobstore files
 	Channel codes for blobs?
@@ -31,13 +49,6 @@ Backblaze support
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
 Add a "default root" path option to IFSInterop, configured on initialization?
 	aka FS interop will handle relative paths
-Better support for large backup sets
-	Test large backups
-		Identify bottlenecks
-	Optimize B+ tree BlobStore
-		store some nodes out of memory?
-		optimize node size
-			Make BlobLocations a set size?
 Replace custom settings file format with Json
 	Rework how readsetting, etc are called
 Enforce using C# nullable reference types

@@ -27,30 +27,11 @@ namespace BackupCore
 
         private AesHelper AesTool { get; set; }
 
-        private FSCoreSrcDependencies(string src, IFSInterop fsinterop, string password=null)
+        private FSCoreSrcDependencies(string src, IFSInterop fsinterop)
         {
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
-            try
-            {
-                if (ReadSetting(BackupSetting.encryption_enabled).ToLower() == "true")
-                {
-                    AesKeyFile = Path.Combine(SettingsDirectoryName, AesKeyFilename);
-                    if (password != null)
-                    {
-                        ReadAesKeyFile(password);
-                    }
-                    else
-                    {
-                        throw new Exception("Encryption enabled FSCoreSrcDependencies must be initialized with a password.");
-                    }
-                }
-            }
-            catch
-            {
-                // TODO: Shouldnt be checking encryption stuff in constructor, handle in Load or InitializeNew
-            }
         }
 
         public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop)
@@ -59,7 +40,8 @@ namespace BackupCore
         }
 
         public static FSCoreSrcDependencies InitializeNew(string bsname, string src, IFSInterop fsinterop, 
-            string dst = null, string cache = null, string cloudconfigfile = null)
+            string dst = null, string cache = null, string cloudconfigfile = null, 
+            bool encryption_enabled = false)
         {
             var srcdep = new FSCoreSrcDependencies(src, fsinterop);
             srcdep.CreateDirectory(SettingsDirectoryName);
@@ -77,6 +59,7 @@ namespace BackupCore
             {
                 srcdep.WriteSetting(BackupSetting.cloud_config, cloudconfigfile);
             }
+            srcdep.WriteSetting(BackupSetting.encryption_enabled, encryption_enabled.ToString().ToLower());
             return srcdep;
         }
 

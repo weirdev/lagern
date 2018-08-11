@@ -17,7 +17,7 @@ namespace BackupCore
 
         public FileMetadata GetFileMetadata(string absolutepath) => new FileMetadata(absolutepath);
 
-        public Stream GetFileData(string absolutepath) => File.OpenRead(absolutepath);
+        public Stream GetFileData(string absolutepath) => new FileStream(absolutepath, FileMode.OpenOrCreate);
 
         public string[] GetDirectoryFiles(string absolutepath) => Directory.GetFiles(absolutepath);
 

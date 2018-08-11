@@ -34,7 +34,7 @@ namespace BackupCore
             }
             else
             {
-                throw new Exception();
+                throw new Exception(); // TODO: Exception message
             }
             BackupStoreDependencies backupStoreDependencies = new BackupStoreDependencies(destdeps.DstFSInterop, destdeps.Blobs);
             destdeps.Backups = new BackupStore(backupStoreDependencies);

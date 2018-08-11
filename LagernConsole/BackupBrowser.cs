@@ -20,10 +20,10 @@ namespace BackupConsole
         BackupCore.MetadataNode CurrentNode { get; set; }
         bool ContinueLoop { get; set; }
         
-        public BackupBrowser(string backupset, string backuphash)
+        public BackupBrowser(string backupset, string backuphash, BackupCore.Core bcore)
         {
             ContinueLoop = true;
-            BCore = Program.LoadCore();
+            BCore = bcore;
             if (!BCore.DestinationAvailable)
             {
                 backupset += BackupCore.Core.CacheSuffix;
@@ -75,16 +75,16 @@ namespace BackupConsole
                     cachewarning = "(cache)";
                 }
                 Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
-                string[] args = Program.ReadArgs();
+                string[] args = LagernConsole.ReadArgs();
                 try
                 {
-                    Parser.Default.ParseArguments<CDOptions, LSOptions, Program.ExitOptions, Program.RestoreOptions, CBOptions, Program.ListNoNameOptions>(args)
+                    Parser.Default.ParseArguments<CDOptions, LSOptions, LagernConsole.ExitOptions, LagernConsole.RestoreOptions, CBOptions, LagernConsole.ListNoNameOptions>(args)
                         .WithParsed<CDOptions>(opts => ChangeDirectory(opts))
                         .WithParsed<LSOptions>(opts => ListDirectory())
-                        .WithParsed<Program.ExitOptions>(opts => ContinueLoop = false)
-                        .WithParsed<Program.RestoreOptions>(opts => Program.RestoreFile(opts))
+                        .WithParsed<LagernConsole.ExitOptions>(opts => ContinueLoop = false)
+                        .WithParsed<LagernConsole.RestoreOptions>(opts => LagernConsole.RestoreFile(opts))
                         .WithParsed<CBOptions>(opts => ChangeBackup(opts))
-                        .WithParsed<Program.ListNoNameOptions>(opts => Program.ListBackups(opts, BackupSet, BCore));
+                        .WithParsed<LagernConsole.ListNoNameOptions>(opts => LagernConsole.ListBackups(opts, BackupSet, BCore));
                 }
                 catch (ChangeBackupException ex)
                 {

@@ -6,7 +6,7 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
     <RuntimeIdentifiers>win10-x64;osx.10.11-x64</RuntimeIdentifiers>
     <AssemblyName>lagern</AssemblyName>
-    <StartupObject>BackupConsole.Program</StartupObject>
+    <StartupObject>BackupConsole.LagernConsole</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>
