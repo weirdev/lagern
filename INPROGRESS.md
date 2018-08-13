@@ -4,7 +4,6 @@ For now this will remain the home of the project backlog.
 ====
 Currently working on __
 ====
-Test for correct error given incorrect encryption password
 Tests without cache
 Fully model settings file, then parse to that model instead of adhoc reading values
 Encrypt an existing backup/ detect mismatched encryption options

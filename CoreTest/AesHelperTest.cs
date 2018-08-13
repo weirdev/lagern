@@ -34,9 +34,17 @@ namespace CoreTest
         public void TestCreateFromKeyfile()
         {
             string password = "12";
+            string wrongpassword = password + "wrong";
             AesHelper aesHelper = AesHelper.CreateFromPassword(password);
             byte[] keyfile = aesHelper.CreateKeyFile();
-            AesHelper aesHelper2 = AesHelper.CreateFromKeyFile(keyfile, password);
+
+            // Test wrong password
+            AesHelper aesHelper2;
+            Assert.ThrowsException<AesHelper.PasswordIncorrectException>(
+                () => AesHelper.CreateFromKeyFile(keyfile, wrongpassword));
+
+            // Test correct password
+            aesHelper2 = AesHelper.CreateFromKeyFile(keyfile, password);
             Assert.IsNotNull(aesHelper2);
 
             // NOTE: Do not test equivalent encryption, IV is random
