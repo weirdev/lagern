@@ -127,7 +127,7 @@ namespace BackupCore
             return new BlobLocation(encryptedHash, relfilepath, bytelength, childhashes, bsrc);
         }
 
-        public enum BlobTypes
+        public enum BlobType
         {
             Simple=0,
             FileBlob=1,

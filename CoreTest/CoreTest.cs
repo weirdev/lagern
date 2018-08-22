@@ -7,6 +7,7 @@ using System.Linq;
 
 namespace CoreTest
 {
+    // Not currently testing every combination of configurations
     [TestClass]
     public class CoreTest
     {
@@ -59,7 +60,7 @@ namespace CoreTest
 
         public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
             MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int? randomseed=null, 
-            bool encrypted=false)
+            bool encrypted=false, bool cache=true)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
@@ -76,8 +77,9 @@ namespace CoreTest
             }
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
-            ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, cache);
+            ICoreDstDependencies cachedeps = null;
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
@@ -98,7 +100,7 @@ namespace CoreTest
             return (Hasher.ComputeHash(data), data);
         }
 
-        public void InitializeNew(bool encrypted)
+        public void InitializeNew(bool encrypted, bool cache)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
@@ -115,23 +117,25 @@ namespace CoreTest
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
-            ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
-            Core core = new Core(srcdeps, dstdeps, cachedeps);
+            if (cache)
+            {
+                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+                Core core = new Core(srcdeps, dstdeps, cachedeps);
+            }
+            else
+            {
+                Core core = new Core(srcdeps, dstdeps);
+            }
         }
 
         [TestMethod]
         public void TestInitializeNew()
         {
-            InitializeNew(false);
+            InitializeNew(false, true);
+            InitializeNew(true, false);
         }
 
-        [TestMethod]
-        public void TestInitializeNew_Encrypted()
-        {
-            InitializeNew(true);
-        }
-
-        public void LoadCore_NewlyInitialized(bool encrypted)
+        public void LoadCore_NewlyInitialized(bool encrypted, bool cache)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS();
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
@@ -147,7 +151,8 @@ namespace CoreTest
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
-            ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+            ICoreDstDependencies cachedeps = null;
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, dstdeps, cachedeps);
 
             vfsisrc = new VirtualFSInterop(vfsroot, datastore);
@@ -162,107 +167,93 @@ namespace CoreTest
             vfsicache = VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
             srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
             dstdeps = CoreDstDependencies.Load(vfsidst, true);
-            cachedeps = CoreDstDependencies.Load(vfsicache, false);
+            cachedeps = null;
+            if (cache) cachedeps = CoreDstDependencies.Load(vfsicache, false);
             core = new Core(srcdeps, dstdeps, cachedeps);
         }
 
         [TestMethod]
         public void TestLoadCore_NewlyInitialized()
         {
-            LoadCore_NewlyInitialized(false);
+            LoadCore_NewlyInitialized(false, false);
+            LoadCore_NewlyInitialized(true, true);
         }
 
-        [TestMethod]
-        public void TestLoadCore_NewlyInitialized_Encrypted()
+        public void RunBackup(bool encrypted, bool cache)
         {
-            LoadCore_NewlyInitialized(true);
-        }
+            var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = 
+                InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
 
-        public void RunBackup(bool encrypted)
-        {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted);
-
-            testdata.core.RunBackup("test", "run1");
-            testdata.vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            testdata.core.RunBackup("test", "run2");
+            core.RunBackup("test", "run1");
+            vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
+            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            core.RunBackup("test", "run2");
         }
 
         [TestMethod]
         public void TestRunBackup()
         {
-            RunBackup(false);
+            RunBackup(false, true);
+            RunBackup(true, false);
         }
 
-        [TestMethod]
-        public void TestRunBackup_Encrypted()
+        public void GetWTStatus(bool encrypted, bool cache)
         {
-            RunBackup(true);
-        }
-
-        public void GetWTStatus(bool encrypted)
-        {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted);
+            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
 
             testdata.core.GetWTStatus("test");
+            // TODO: test output
         }
 
         [TestMethod]
         public void TestGetWTStatus()
         {
-            GetWTStatus(false);
+            GetWTStatus(false, false);
+            GetWTStatus(true, true);
         }
 
-        [TestMethod]
-        public void TestGetWTStatus_Encrypted()
+        public void Restore(bool encrypted, bool cache)
         {
-            GetWTStatus(true);
-        }
-
-        public void Restore(bool encrypted)
-        {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted);
+            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
             testdata.core.RunBackup("test", "run1");
+            System.Threading.Thread.Sleep(400); // Allow async writes to finish
 
             testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
+            System.Threading.Thread.Sleep(400); // Allow async writes to finish
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
-            // TODO: Check data here as well
+            // TODO: Check data match here as well
         }
 
         [TestMethod]
         public void TestRestore()
         {
-            Restore(false);
+            Restore(false, true);
+            Restore(true, false);
         }
 
-        [TestMethod]
-        public void TestRestore_Encrypted()
+        public void RemoveBackup(bool encrypted, bool cache)
         {
-            Restore(false);
-        }
+            var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
 
-        public void RemoveBackup(bool encrypted)
-        {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted);
+            var bh1 = core.RunBackup("test", "run1");
+            System.Threading.Thread.Sleep(400); // Allow async writes to finish
 
-            var bh1 = testdata.core.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(500); // Allow async writes to finish
+            vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
+            var bh2 = core.RunBackup("test", "run2");
+            System.Threading.Thread.Sleep(400); // Allow async writes to finish
 
-            testdata.vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            var bh2 = testdata.core.RunBackup("test", "run2");
-            testdata.core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
-            testdata.core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
+            // Full hash test
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
+            // Just prefix
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
+            // TODO: Check if there are actually 0 backups left
         }
 
         [TestMethod]
         public void TestRemoveBackup()
         {
-            RemoveBackup(false);
-        }
-
-        [TestMethod]
-        public void TestRemoveBackup_Encrypted()
-        {
-            RemoveBackup(true);
+            RemoveBackup(false, false);
+            RemoveBackup(true, true);
         }
 
         [TestMethod]

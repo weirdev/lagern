@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -24,8 +25,8 @@ namespace BackupCore
         /// </summary>
         public FileMetadata DirMetadata { get; set; }
 
-        public Dictionary<string, MetadataNode> Directories { get; set; }
-        public Dictionary<string, FileMetadata> Files { get; private set; }
+        public ConcurrentDictionary<string, MetadataNode> Directories { get; set; }
+        public ConcurrentDictionary<string, FileMetadata> Files { get; private set; }
 
         public string Path
         {
@@ -46,31 +47,12 @@ namespace BackupCore
         {
             Parent = parent;
             DirMetadata = metadata;
-            Directories = new Dictionary<string, MetadataNode>();
-            Files = new Dictionary<string, FileMetadata>();
+            Directories = new ConcurrentDictionary<string, MetadataNode>();
+            Files = new ConcurrentDictionary<string, FileMetadata>();
         }
 
         // For serialization/deserialization
-        private MetadataNode()
-        {
-            //DirMetadata = metadata;
-            //if (directories != null)
-            //{
-            //    Directories = directories;
-            //}
-            //else
-            //{
-            //    Directories = new Dictionary<string, MetadataNode>();
-            //}
-            //if (files != null)
-            //{
-            //    Files = files;
-            //}
-            //else
-            //{
-            //    files = new Dictionary<string, FileMetadata>();
-            //}
-        }
+        private MetadataNode() { }
 
         public bool HasDirectory(string relpath)
         {
@@ -161,18 +143,13 @@ namespace BackupCore
         /// <param name="metadata"></param>
         public MetadataNode AddDirectory(FileMetadata metadata)
         {
-            MetadataNode node;
-            if (Directories.ContainsKey(metadata.FileName))
-            {
-                node = Directories[metadata.FileName];
-                node.DirMetadata = metadata;
-            }
-            else
-            {
-                node = new MetadataNode(metadata, this);
-                Directories[metadata.FileName] = node;
-            }
-            return node;
+            return Directories.AddOrUpdate(metadata.FileName, 
+                (_) => new MetadataNode(metadata, this), 
+                (_, existingNode) =>
+                    {
+                        existingNode.DirMetadata = metadata;
+                        return existingNode;
+                    });
         }
 
         /// <summary>
@@ -250,19 +227,19 @@ namespace BackupCore
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash));
             FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
             curmn.DirMetadata = dirmetadata;
-            Dictionary<string, FileMetadata> files = new Dictionary<string, FileMetadata>();
+            ConcurrentDictionary<string, FileMetadata> files = new ConcurrentDictionary<string, FileMetadata>();
             foreach (var binfm in BinaryEncoding.enum_decode(savedobjects["Files-v1"]))
             {
                 FileMetadata newfm = FileMetadata.deserialize(binfm);
-                files.Add(newfm.FileName, newfm);
+                files[newfm.FileName] = newfm;
             }
             curmn.Files = files;
-            Dictionary<string, MetadataNode> directories = new Dictionary<string, MetadataNode>();
+            ConcurrentDictionary<string, MetadataNode> directories = new ConcurrentDictionary<string, MetadataNode>();
             var dirs = BinaryEncoding.enum_decode(savedobjects["Directories-v2"]);
             for (int i = 0; i < dirs.Count; i++)
             {
                 MetadataNode newmn = Load(blobs, dirs[i], curmn);
-                directories.Add(newmn.DirMetadata.FileName, newmn);
+                directories[newmn.DirMetadata.FileName] = newmn;
             }
             curmn.Parent = parent;
             curmn.Directories = directories;

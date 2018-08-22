@@ -46,7 +46,7 @@ namespace BackupCore
                 }
                 else
                 {
-                    throw new Exception("Cannot dst and cache are null, cannot initialize");
+                    throw new ArgumentNullException("Dst and cache are null, cannot initialize");
                 }
             }
             else
@@ -547,6 +547,7 @@ namespace BackupCore
 
             List<Task> backupops = new List<Task>();
             BackupDeltaNode(Path.DirectorySeparatorChar.ToString(), deltatree);
+
             void BackupDeltaNode(string relpath, MetadataNode parent)
             {
                 if (parent.DirMetadata.Changes == null)
@@ -572,21 +573,23 @@ namespace BackupCore
                         var fstatus = filemeta.Changes.Value.status;
                         if (fstatus == FileMetadata.FileStatus.Unchanged)
                         {
+                            /*
                             DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash,
-                                BlobLocation.BlobTypes.FileBlob, 1, true);
+                                BlobLocation.BlobType.FileBlob, 1, true);*/
                         }
                         if (fstatus == FileMetadata.FileStatus.Deleted)
                         {
-                            parent.Files.Remove(file);
+                            parent.Files.TryRemove(file, out _);
                             // Dont dereference file just dont add new reference
                         }
                         // Exchange for metadata in Changes
                         if (fstatus == FileMetadata.FileStatus.MetadataChange || fstatus == FileMetadata.FileStatus.DataModified)
                         {
                             parent.Files[file] = filemeta.Changes.Value.updated;
+                            /*
                             // Dont need to save data again but increase reference count
                             DefaultDstDependencies.Blobs.IncrementReferenceCount(backupsetname, filemeta.FileHash, 
-                                BlobLocation.BlobTypes.FileBlob, 1, true);
+                                BlobLocation.BlobType.FileBlob, 1, true);*/
                         }
                         // Store file data
                         if (fstatus == FileMetadata.FileStatus.New || fstatus == FileMetadata.FileStatus.DataModified)
@@ -607,6 +610,8 @@ namespace BackupCore
                     }
                 }
             }
+
+
             if (async)
             {
                 Task.WaitAll(backupops.ToArray());
@@ -623,6 +628,10 @@ namespace BackupCore
 
             var defaultbset = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
             byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, false, defaultbset);
+            // Backup record has just been stored, all data now stored
+
+            // Finalize backup by incrementing reference counts in blobstore as necessary
+            DefaultDstDependencies.Blobs.FinalizeBlobAddition(backupsetname, backuphash, BlobLocation.BlobType.BackupRecord);
 
             SyncCacheSaveBackupSets(backupsetname, defaultbset);
             SaveBlobIndices();
@@ -655,14 +664,11 @@ namespace BackupCore
         public void SyncCacheSaveBackupSets(string backupsetname, BackupSet dstbset=null)
         {
             // BackupSet saves occur with sync
-            if (CacheDependencies != null)
+            if (CacheDependencies != null && DestinationAvailable)
             {
-                if (DestinationAvailable)
-                {
-                    DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname, dstbset);
-                }
+                DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname, dstbset);
             }
-            if (dstbset != null)
+            else if (dstbset != null)
             {
                 // If no cache to sync, just save the dst backup set
                 DefaultDstDependencies.Backups.SaveBackupSet(dstbset, backupsetname);
@@ -691,7 +697,6 @@ namespace BackupCore
                 if (filemeta != null)
                 {
                     byte[] filedata = DefaultDstDependencies.Blobs.RetrieveData(filemeta.FileHash);
-                    // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
                     SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
@@ -716,7 +721,7 @@ namespace BackupCore
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 if (!DestinationAvailable)
                 {
@@ -727,7 +732,7 @@ namespace BackupCore
                 {
                     Console.WriteLine("Error restoring file or directory.");
                 }
-                throw;
+                throw e;
             }
         }
 
@@ -893,7 +898,7 @@ namespace BackupCore
         public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring)
         {
             var br = DefaultDstDependencies.Backups.GetBackupRecord(bsname, backuphashstring);
-            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobTypes.MetadataNode);
+            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
         }
 
         /// <summary>
@@ -925,7 +930,7 @@ namespace BackupCore
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                throw new IOException($"Failed to backup {relpath}", e);
             }
         }
         

@@ -166,7 +166,7 @@ namespace CoreTest
             
             Assert.IsTrue(sizeaddition < 209_715_200);
         }
-
+        
         [TestMethod]
         public void TestBlobStoreSerialize()
         {

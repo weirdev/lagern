@@ -110,14 +110,27 @@ namespace BackupCore
             throw new Exception("Blob data did not match hash.");
         }
 
-        public void IncrementReferenceCount(string backupsetname, byte[] blobhash, BlobLocation.BlobTypes blobtype,
-            int amount, bool includefiles)
+        public void DecrementReferenceCount(string backupsetname, byte[] blobhash, BlobLocation.BlobType blobtype,
+            bool includefiles)
         {
-            foreach (var reference in GetAllBlobReferences(blobhash, blobtype, includefiles))
+            BlobLocation rootBlobLocation = GetBlobLocation(blobhash);
+            if (rootBlobLocation.TotalReferenceCount == 1) // To be deleted?
             {
-                IncrementReferenceCountNoRecurse(backupsetname, reference, amount);
+                IBlobReferenceIterator blobReferences = GetAllBlobReferences(blobhash, blobtype, includefiles, false);
+                foreach (var reference in blobReferences)
+                {
+                    BlobLocation blocation = GetBlobLocation(reference);
+
+                    // When we finish iterating over the children, decrement this blob
+                    blobReferences.PostOrderAction(() => IncrementReferenceCountNoRecurse(backupsetname, blocation, reference, -1));
+                    if (!(rootBlobLocation.TotalReferenceCount == 1)) // Not to be deleted?
+                    {
+                        // Dont need to decrement child references if this wont be deleted
+                        blobReferences.SkipChildren();
+                    }
+                }
             }
-            IncrementReferenceCountNoRecurse(backupsetname, blobhash, amount); // must delete parent last so parent can be loaded/used in GetAllBlobReferences()
+            IncrementReferenceCountNoRecurse(backupsetname, rootBlobLocation, blobhash, -1); // must delete parent last so parent can be loaded/used in GetAllBlobReferences()
         }
 
         private void IncrementReferenceCountNoRecurse(string backupset, byte[] blobhash, int amount) => 
@@ -165,25 +178,43 @@ namespace BackupCore
             }
         }
 
+        // TODO: Update transfer logic with new reference counting logic
         public void TransferBackup(BlobStore dst, string dstbackupset, byte[] bblobhash, bool includefiles)
         {
-            TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobTypes.BackupRecord, includefiles);
+            TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobType.BackupRecord, includefiles);
         }
 
         private void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, 
-            BlobLocation.BlobTypes blobtype, bool includefiles)
+            BlobLocation.BlobType blobtype, bool includefiles)
         {
-            TransferBlobNoReferences(dst, dstbackupset, blobhash, includefiles);
-            TransferFromBlobReferenceIterator(dst, dstbackupset, 
-                GetAllBlobReferences(blobhash, blobtype, includefiles, false), includefiles);
-        }
-
-        private void TransferFromBlobReferenceIterator(BlobStore dst, string backupset, IBlobReferenceIterator references, bool includefiles)
-        {
-            foreach (var reference in references)
+            BlobLocation rootDstBlobLocation;
+            try
             {
-                TransferBlobNoReferences(dst, backupset, reference, includefiles);
+                rootDstBlobLocation = dst.GetBlobLocation(blobhash);
             }
+            catch (KeyNotFoundException)
+            {
+                rootDstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash), includefiles);
+
+                IBlobReferenceIterator blobReferences = dst.GetAllBlobReferences(blobhash, blobtype, includefiles, false);
+                foreach (var reference in blobReferences)
+                {
+                    BlobLocation dstBlobLocation;
+                    try
+                    {
+                        dstBlobLocation = dst.GetBlobLocation(reference);
+                        // Dont need to increment child references if this already exists
+                        blobReferences.SkipChildren();
+                    }               
+                    catch (KeyNotFoundException)
+                    {
+                        dstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference), includefiles);
+                    }
+                    // When we finish iterating over the children, increment this blob
+                    blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
+                }
+            }
+            dst.IncrementReferenceCountNoRecurse(dstbackupset, rootDstBlobLocation, blobhash, 1);
         }
 
         /// <summary>
@@ -192,21 +223,18 @@ namespace BackupCore
         /// <param name="dst"></param>
         /// <param name="blobhash"></param>
         /// <returns>True Blob exists in destination</returns>
-        private void TransferBlobNoReferences(BlobStore dst, string dstbackupset, byte[] blobhash, bool includefiles)
+        private BlobLocation TransferBlobNoReferences(BlobStore dst, string dstbackupset, 
+            byte[] blobhash, BlobLocation blocation, bool includefiles)
         {
-            bool existsindst = dst.ContainsHash(blobhash);
-            if (existsindst)
+            if (blocation.BlockHashes == null)
             {
-                dst.IncrementReferenceCountNoRecurse(dstbackupset, blobhash, 1);
+                return dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(blocation, blobhash)));
             }
             else
             {
-                BlobLocation bloc = GetBlobLocation(blobhash);
-                if (bloc.BlockHashes == null)
-                {
-                    dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, LoadBlob(bloc, blobhash)));
-                }
+                return dst.AddMultiBlobReferenceBlob(dstbackupset, blobhash, blocation.BlockHashes);
             }
+
         }
 
         /// <summary>
@@ -225,7 +253,7 @@ namespace BackupCore
             if (existingblocation == null)
             {
                 return null;
-            }            
+            }
             return (existingblocation, existingblocation.TotalNonShallowReferenceCount > 0);
         }
 
@@ -260,8 +288,7 @@ namespace BackupCore
                 {
                     posblocation = new BlobLocation(blockreferences);
                 }
-            }
-             
+            }             
 
             // Where the data is already stored if it exists
             (BlobLocation bloc, bool datastored)? existingblocstored;
@@ -270,7 +297,7 @@ namespace BackupCore
                 // Have we already stored this?
                 existingblocstored = AddHash(blob.Hash, posblocation);
             }
-            if (existingblocstored == null)
+            if (existingblocstored == null) // ExistBloc == null means posbloc was just added
             {
                 if (!shallow)
                 {
@@ -279,10 +306,16 @@ namespace BackupCore
                         (posblocation.EncryptedHash, posblocation.RelativeFilePath) = WriteBlob(blob.Hash, blob.Block);
                     }
                 }
-                IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
+                else
+                {
+                    posblocation.RelativeFilePath = "";
+                    posblocation.EncryptedHash = blob.Hash;
+                }
+                // Dont change reference counts until finalization
+                // IncrementReferenceCountNoRecurse(backupset, posblocation, blob.Hash, 1);
                 return posblocation;
             }
-            else
+            else // Existbloc already stored at dst
             {
                 (BlobLocation existingbloc, bool datastored) = existingblocstored.Value;
                 // Is the data not already stored in the blobstore (are all references shallow thus far)?
@@ -305,11 +338,35 @@ namespace BackupCore
                         }
                     }
                 }
-                IncrementReferenceCountNoRecurse(backupset, existingbloc, blob.Hash, 1);
+                // Dont change reference counts until finalization
+                // IncrementReferenceCountNoRecurse(backupset, existingbloc, blob.Hash, 1);
                 return existingbloc;
             }
         }
 
+        public void FinalizeBlobAddition(string bsname, byte[] blobhash, BlobLocation.BlobType blobType)
+        {
+            // Handle root blob
+            BlobLocation rootblocation = GetBlobLocation(blobhash);
+            if (rootblocation.TotalReferenceCount == 0)
+            {
+                IBlobReferenceIterator blobReferences = GetAllBlobReferences(blobhash, blobType, true, false);
+                // Loop through children
+                foreach (byte[] reference in blobReferences)
+                {
+                    BlobLocation blocation = GetBlobLocation(blobhash);
+                    if (blocation.TotalReferenceCount > 0) // This was already stored
+                    {
+                        blobReferences.SkipChildren();
+                    }
+                    IncrementReferenceCountNoRecurse(bsname, blocation, blobhash, 1);
+                }
+            }
+            // Increment root blob
+            IncrementReferenceCountNoRecurse(bsname, rootblocation, blobhash, 1);
+        }
+
+        // TODO: should we just have to iteratively remove each backup in the bset?
         public void RemoveAllBackupSetReferences(string bsname)
         {
             foreach (KeyValuePair<byte[], BlobLocation> hashblob in IndexStore)
@@ -321,13 +378,13 @@ namespace BackupCore
             }
         }
 
-        private void AddMultiBlobReferenceBlob(string backupset, byte[] hash, List<byte[]> hashlist)
+        private BlobLocation AddMultiBlobReferenceBlob(string backupset, byte[] hash, List<byte[]> hashlist)
         {
             HashBlobPair referenceblob = new HashBlobPair(hash, null);
-            AddBlob(backupset, referenceblob, hashlist);
+            return AddBlob(backupset, referenceblob, hashlist);
         }
 
-        public IBlobReferenceIterator GetAllBlobReferences(byte[] blobhash, BlobLocation.BlobTypes blobtype,
+        public IBlobReferenceIterator GetAllBlobReferences(byte[] blobhash, BlobLocation.BlobType blobtype,
             bool includefiles, bool bottomup=true)
         {
             return new BlobReferenceIterator(this, blobhash, blobtype, includefiles, bottomup);
@@ -466,7 +523,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="blobhash"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public (int allreferences, int uniquereferences) GetSizes(byte[] blobhash, BlobLocation.BlobTypes blobtype)
+        public (int allreferences, int uniquereferences) GetSizes(byte[] blobhash, BlobLocation.BlobType blobtype)
         {
             Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize = new Dictionary<string, (int, BlobLocation)>();
             GetBlobReferenceFrequencies(blobhash, blobtype, hashfreqsize);
@@ -483,7 +540,7 @@ namespace BackupCore
             return (allreferences, uniquereferences);
         }
 
-        private void GetBlobReferenceFrequencies(byte[] blobhash, BlobLocation.BlobTypes blobtype, 
+        private void GetBlobReferenceFrequencies(byte[] blobhash, BlobLocation.BlobType blobtype, 
             Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize) 
         {
             GetReferenceFrequenciesNoRecurse(blobhash, hashfreqsize);
@@ -585,9 +642,11 @@ namespace BackupCore
             private bool skipchild = false;
             private IBlobReferenceIterator childiterator = null;
 
-            private BlobLocation.BlobTypes BlobType { get; set; }
+            private BlobLocation.BlobType BlobType { get; set; }
+
+            private Action postOrderAction = null;
             
-            public BlobReferenceIterator(BlobStore blobs, byte[] blobhash, BlobLocation.BlobTypes blobtype, 
+            public BlobReferenceIterator(BlobStore blobs, byte[] blobhash, BlobLocation.BlobType blobtype, 
                 bool includefiles, bool bottomup)
             {
                 Blobs = blobs;
@@ -597,16 +656,35 @@ namespace BackupCore
                 BlobType = blobtype;
             }
 
-            public void SkipChild()
+            public void SkipChildren()
             {
-                skipchild = true;
                 if (childiterator != null)
                 {
-                    childiterator.SkipChild();
+                    childiterator.SkipChildren();
+                }
+                else
+                {
+                    skipchild = true;
                 }
                 if (BottomUp)
                 {
-                    throw new Exception("Skip child is not valid when iterating through references top down.");
+                    throw new Exception("Skip child is not valid when iterating through references bottum up.");
+                }
+            }
+
+            public void PostOrderAction(Action action)
+            {
+                if (childiterator != null)
+                {
+                    childiterator.PostOrderAction(action);
+                }
+                else
+                {
+                    postOrderAction = action;
+                }
+                if (BottomUp)
+                {
+                    throw new Exception("Post order action is not valid when iterating through references bottum up.");
                 }
             }
 
@@ -621,35 +699,33 @@ namespace BackupCore
                 BlobLocation blocation = Blobs.GetBlobLocation(ParentHash);
                 switch (BlobType)
                 {
-                    case BlobLocation.BlobTypes.Simple:
+                    case BlobLocation.BlobType.Simple:
                         break;
-                    case BlobLocation.BlobTypes.FileBlob:
+                    case BlobLocation.BlobType.FileBlob:
                         break;
-                    case BlobLocation.BlobTypes.BackupRecord:
+                    case BlobLocation.BlobType.BackupRecord:
                         BackupRecord br = BackupRecord.deserialize(Blobs.RetrieveData(ParentHash));
                         if (!BottomUp)
                         {
-                            skipchild = false;
                             yield return br.MetadataTreeHash; // return 1 immediate reference
                         }
                         if (!skipchild)
                         {
                             childiterator = new BlobReferenceIterator(Blobs, br.MetadataTreeHash, 
-                                BlobLocation.BlobTypes.MetadataNode, IncludeFiles, BottomUp);
+                                BlobLocation.BlobType.MetadataNode, IncludeFiles, BottomUp);
                             foreach (var refref in childiterator) // recurse on references of that reference
                             {
-                                skipchild = false;
                                 yield return refref;
                             }
                             childiterator = null;
                         }
+                        skipchild = false;
                         if (BottomUp)
                         {
-                            skipchild = false;
                             yield return br.MetadataTreeHash; // return 1 immediate reference
                         }
                         break;
-                    case BlobLocation.BlobTypes.MetadataNode:
+                    case BlobLocation.BlobType.MetadataNode:
                         IEnumerable<byte[]> dirreferences;
                         IEnumerable<byte[]> filereferences = null;
                         byte[] mnodebytes = Blobs.RetrieveData(ParentHash);
@@ -661,23 +737,21 @@ namespace BackupCore
                             {
                                 if (!BottomUp)
                                 {
-                                    skipchild = false;
                                     yield return fref;
                                 }
                                 if (!skipchild)
                                 {
-                                    childiterator = new BlobReferenceIterator(Blobs, fref, BlobLocation.BlobTypes.FileBlob, 
+                                    childiterator = new BlobReferenceIterator(Blobs, fref, BlobLocation.BlobType.FileBlob, 
                                         IncludeFiles, BottomUp);
                                     foreach (var frefref in childiterator)
                                     {
-                                        skipchild = false;
                                         yield return frefref;
                                     }
                                     childiterator = null;
                                 }
+                                skipchild = false;
                                 if (BottomUp)
                                 {
-                                    skipchild = false;
                                     yield return fref;
                                 }
                             }
@@ -686,23 +760,21 @@ namespace BackupCore
                         {
                             if (!BottomUp)
                             {
-                                skipchild = false;
                                 yield return reference; // return immediate reference
                             }
                             if (!skipchild)
                             {
-                                childiterator = new BlobReferenceIterator(Blobs, reference, BlobLocation.BlobTypes.MetadataNode, 
+                                childiterator = new BlobReferenceIterator(Blobs, reference, BlobLocation.BlobType.MetadataNode, 
                                     IncludeFiles, BottomUp);
                                 foreach (var refref in childiterator) // recurse on references of that reference
                                 {
-                                    skipchild = false;
                                     yield return refref;
                                 }
                             }
+                            skipchild = false;
                             childiterator = null;
                             if (BottomUp)
                             {
-                                skipchild = false;
                                 yield return reference; // return immediate reference
                             }
                         }
@@ -714,10 +786,12 @@ namespace BackupCore
                 {
                     foreach (var hash in blocation.BlockHashes)
                     {
-                        skipchild = false;
                         yield return hash;
                     }
                 }
+
+                // Run post order action if exists
+                postOrderAction?.Invoke();
             }
 
             IEnumerator IEnumerable.GetEnumerator()
@@ -726,9 +800,13 @@ namespace BackupCore
             }
         }
 
+        /// <summary>
+        /// Skip iterating over any child references of current blob
+        /// </summary>
         public interface IBlobReferenceIterator : IEnumerable<byte[]>
         {
-            void SkipChild();
+            void SkipChildren();
+            void PostOrderAction(Action action);
         }
     }
 }

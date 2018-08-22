@@ -2,25 +2,29 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
-Currently working on __
+Currently working on updating transfer logic
 ====
+Review reference counting logic
 Tests without cache
 Fully model settings file, then parse to that model instead of adhoc reading values
 Encrypt an existing backup/ detect mismatched encryption options
 Support for storing the keyfile at the source
 Test for loading then running backup
 Temporairly store the password when doing multiple LagernConsole commands within a window of time
-Review reference counting logic
+Transfer tests
 TODOs
+Clean up inputted paths (standardize to platform's directory seperator char)
 Better support for large backup sets
-	Test large backups
-		Identify bottlenecks
 	Optimize B+ tree BlobStore
-		store some nodes out of memory?
 		optimize node size
 			Make BlobLocations a set size?
 				BlobLocations can currently hold variable length hash lists
-					Need recursive hash lists forming binary or b-tree
+					Need recursive hash lists forming binary or b-tree?
+						Use this structure to store all references (ie files and dirs in mdtrees)?
+					Or store hash lists as blobs?
+		store some nodes out of memory?
+	Test large backups
+		Identify bottlenecks
 Data integrity and encryption support
 	Channel codes for backupset and blobstore files
 	Channel codes for blobs?
