@@ -9,7 +9,7 @@ namespace BackupCore
 {
     public class VirtualFSInterop : IFSInterop, IDstFSInterop
     {
-        public MetadataNode VirtualFS { get; set; }
+        public MetadataNode VirtualFS { get; private set; }
         private IDictionary<byte[], byte[]> DataStore { get; set; }
 
         public string DstRoot { get; private set; }
@@ -55,13 +55,10 @@ namespace BackupCore
 
         public void CreateDirectoryIfNotExists(string absolutepath)
         {
-            lock (this)
+            if (!DirectoryExists(absolutepath))
             {
-                if (!DirectoryExists(absolutepath))
-                {
-                    VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), 
-                        MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
-                }
+                VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath), 
+                    MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
             }
         }
 

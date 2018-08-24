@@ -184,7 +184,7 @@ namespace BackupCore
             TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobType.BackupRecord, includefiles);
         }
 
-        private void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, 
+        public void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, 
             BlobLocation.BlobType blobtype, bool includefiles)
         {
             BlobLocation rootDstBlobLocation;

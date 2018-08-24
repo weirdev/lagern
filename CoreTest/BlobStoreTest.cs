@@ -22,7 +22,8 @@ namespace CoreTest
 
         private BPlusTree<byte[]> VFSDataStore { get; set; }
         
-        public BlobStoreTest()
+        [TestInitialize]
+        public void Initialize()
         {
             VirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             VFSDataStore = new BPlusTree<byte[]>(10);
@@ -76,9 +77,9 @@ namespace CoreTest
 
             // The Data are arranged as follows
             //  [ small block_a ] = 2 KB
-            //  [ large block_b ] = 20 MB
+            //  [ large block_b ] = 2 MB
             //  [ small block_c ] = 8 bytes
-            //  [ large block_d ] = 40 MB
+            //  [ large block_d ] = 4 MB
             //  [ small block_e ] = 4 KB
 
             // These are then concenated then split by BS.SplitData()
@@ -91,11 +92,11 @@ namespace CoreTest
 
             byte[] small_a = new byte[2048];
             CoreTest.RandomData(small_a);
-            byte[] large_b = new byte[20_971_520];
+            byte[] large_b = new byte[2_971_520];
             CoreTest.RandomData(large_b);
             byte[] small_c = new byte[8];
             CoreTest.RandomData(small_c);
-            byte[] large_d = new byte[41_943_040];
+            byte[] large_d = new byte[4_943_040];
             CoreTest.RandomData(large_d);
             byte[] small_e = new byte[4096];
             CoreTest.RandomData(small_e);
@@ -139,34 +140,12 @@ namespace CoreTest
 
             Assert.IsFalse(file1hash.SequenceEqual(file2hash));
 
-            int i1 = 0;
-            int sizeaddition = 0;
-            for (int i2 = 0; i2 < f2blockshashes.Count; i2++)
-            {
-                if (i1 >= f1blockshashes.Count)
-                {
-                    sizeaddition += f2blockshashes[i2].Block.Length;
-                }
-                else
-                {
-                    int j;
-                    for (j = i1; j < f1blockshashes.Count; j++)
-                    {
-                        if (f1blockshashes[j].Hash.SequenceEqual(f2blockshashes[i2].Hash))
-                        {
-                            Assert.IsTrue(f1blockshashes[j].Block.Length == f2blockshashes[i2].Block.Length);
-                        }
-                    }
-                    if (j == f1blockshashes.Count)
-                    {
-                        sizeaddition += f2blockshashes[i2].Block.Length;
-                    }
-                }
-            }
-            
-            Assert.IsTrue(sizeaddition < 209_715_200);
+            int sizeaddition = VFSDataStore.Select((kvp, _) => kvp.Value.Length).Sum();
+            Assert.IsTrue(sizeaddition < file1.Length + file2.Length); // TODO: Magic number?
         }
-        
+
+        // TODO: test serialize and deserialize with explicitly added blobs of
+        // all blob types as well as after backup
         [TestMethod]
         public void TestBlobStoreSerialize()
         {
@@ -187,6 +166,32 @@ namespace CoreTest
             testdata.core.RunBackup("test", "initialrun");
             byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
             var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies.Blobs.Dependencies);
+        }
+
+        [TestMethod]
+        public void TestTransferBlobAndReferences()
+        {
+            var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
+            var dstVFSDataStore = new BPlusTree<byte[]>(10);
+            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+
+            // FileBlob
+            byte[] randomFile = new byte[100];
+            CoreTest.RandomData(randomFile);
+            byte[] fileHash = BS.StoreData("test", randomFile);
+            BS.TransferBlobAndReferences(dstBS, "test", fileHash, BlobLocation.BlobType.FileBlob, true);
+            Assert.IsTrue(dstBS.RetrieveData(fileHash).SequenceEqual(randomFile));
+
+            // Likely multiblock
+            randomFile = new byte[12_000];
+            CoreTest.RandomData(randomFile);
+            fileHash = BS.StoreData("test", randomFile);
+            BS.TransferBlobAndReferences(dstBS, "test", fileHash, BlobLocation.BlobType.FileBlob, true);
+            Assert.IsTrue(dstBS.RetrieveData(fileHash).SequenceEqual(randomFile));
+
+            // TODO: Deep and shallow for:
+            // MetadataNode
+            // BackupRecord
         }
 
         public byte[] ConcenateFile(byte[][] fileblocks)

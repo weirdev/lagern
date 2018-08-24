@@ -90,10 +90,13 @@ namespace BackupCore
         /// <returns>T if hash already exists in tree, null otherwise.</returns>
         public T AddOrFind(byte[] hash, T blocation)
         {
-            // Traverse down the tree
-            BPlusTreeNode<T> node = FindLeafNode(hash);
-            T dosave = AddKeyToNode(node, hash, blocation);
-            return dosave;
+            lock (this)
+            {
+                // Traverse down the tree
+                BPlusTreeNode<T> node = FindLeafNode(hash);
+                T dosave = AddKeyToNode(node, hash, blocation);
+                return dosave;
+            }
         }
 
         public bool TryGetValue(byte[] hash, out T value)
@@ -237,6 +240,8 @@ namespace BackupCore
 
         public bool Remove(byte[] hash)
         {
+            lock (this)
+            {
             // indexing may be off here
             Stack<int> parentpositions = new Stack<int>();
             BPlusTreeNode<T> node = Root;
@@ -314,6 +319,7 @@ namespace BackupCore
                 }
             }
             return true;
+                }
         }
 
         public bool Remove(KeyValuePair<byte[], T> keyValuePair) => Remove(keyValuePair.Key);
@@ -462,7 +468,10 @@ namespace BackupCore
 
         public T GetRecord(byte[] hash)
         {
-            return GetRecordFromNode(FindLeafNode(hash), hash);
+            lock (this)
+            {
+                return GetRecordFromNode(FindLeafNode(hash), hash);
+            }
         }
         
         public IEnumerator<KeyValuePair<byte[], T>> GetEnumerator()

@@ -918,8 +918,8 @@ namespace BackupCore
         /// <param name="mtree"></param>
         protected void BackupFileSync(string backupset, string relpath, FileMetadata fileMetadata)
         {
-            try
-            {
+            /*try
+            {*/
                 if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
                 {
                     relpath = relpath.Substring(1);
@@ -927,11 +927,11 @@ namespace BackupCore
                 Stream readerbuffer = SrcDependencies.GetFileData(relpath);
                 byte[] filehash = DefaultDstDependencies.Blobs.StoreData(backupset, readerbuffer);
                 fileMetadata.FileHash = filehash;
-            }
+            /*}
             catch (Exception e)
             {
                 throw new IOException($"Failed to backup {relpath}", e);
-            }
+            }*/
         }
         
         /// <summary>
@@ -985,6 +985,8 @@ namespace BackupCore
             }
             dstCore.DefaultDstDependencies.SaveBlobStoreIndex();
         }
+
+        // TODO: Add method for transferring individual backup
 
         public class BackupRemoveException : Exception
         {

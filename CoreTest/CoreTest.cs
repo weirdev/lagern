@@ -186,7 +186,7 @@ namespace CoreTest
 
             core.RunBackup("test", "run1");
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
             core.RunBackup("test", "run2");
         }
 
@@ -216,14 +216,14 @@ namespace CoreTest
         {
             var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
             testdata.core.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
-            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
             // TODO: Check data match here as well
         }
-
+        
         [TestMethod]
         public void TestRestore()
         {
@@ -236,17 +236,18 @@ namespace CoreTest
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
 
             var bh1 = core.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
             var bh2 = core.RunBackup("test", "run2");
-            System.Threading.Thread.Sleep(400); // Allow async writes to finish
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             // Full hash test
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
             // Just prefix
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
-            // TODO: Check if there are actually 0 backups left
+            // All backups deleted
+            Assert.AreEqual(core.GetBackups("test").backups.Count(), 0);
         }
 
         [TestMethod]
@@ -254,6 +255,24 @@ namespace CoreTest
         {
             RemoveBackup(false, false);
             RemoveBackup(true, true);
+        }
+
+        public void TransferBackupSet(bool encrypted, bool cache)
+        {
+            var (srcCore, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+            var (dstCore, _, _, _, _) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+
+            var bh1 = srcCore.RunBackup("test", "run1");
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
+
+            srcCore.TransferBackupSet("test", dstCore, true);
+        }
+        
+        [TestMethod]
+        public void TestTransferBackupSet()
+        {
+            TransferBackupSet(false, true);
+            TransferBackupSet(true, false);
         }
 
         [TestMethod]

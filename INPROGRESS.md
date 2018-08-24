@@ -2,16 +2,17 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
-Currently working on updating transfer logic
+Currently working on transfer tests
 ====
-Review reference counting logic
-Tests without cache
+Multi-use updates
+	Transfer tests
+	Multiple backup destinations
+	Multiple backup set tests
 Fully model settings file, then parse to that model instead of adhoc reading values
 Encrypt an existing backup/ detect mismatched encryption options
 Support for storing the keyfile at the source
 Test for loading then running backup
 Temporairly store the password when doing multiple LagernConsole commands within a window of time
-Transfer tests
 TODOs
 Clean up inputted paths (standardize to platform's directory seperator char)
 Better support for large backup sets
@@ -41,6 +42,9 @@ Project structure change
 		BackupSource may have list of destinations it backs up to
 Delete HashBlobPair class?
 	Replace with tuples
+MetadataNode
+	Improve semantics of serializing/deserializing
+		Better handling of difference between loading the entire tree into memory and loading single node
 Backblaze support
 	Single queue for pending transmissions?
 	Ability to stall main thread from queuing more uploads?
@@ -50,8 +54,6 @@ Backblaze support
 	If receive Retry-After header, use specified time
 		Currently not bothering
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
-Add a "default root" path option to IFSInterop, configured on initialization?
-	aka FS interop will handle relative paths
 Replace custom settings file format with Json
 	Rework how readsetting, etc are called
 Enforce using C# nullable reference types
