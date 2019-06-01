@@ -26,9 +26,9 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public byte[] StoreData(string backupset, byte[] inputdata)
+        public static byte[] StoreData(IEnumerable<BlobStore> blobStores, string backupset, byte[] inputdata)
         {
-            return StoreData(backupset, new MemoryStream(inputdata));
+            return StoreData(blobStores, backupset, new MemoryStream(inputdata));
         }
 
         /// <summary>
@@ -36,7 +36,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <returns>A list of hashes representing the file contents.</returns>
-        public byte[] StoreData(string backupset, Stream readerbuffer)
+        public static byte[] StoreData(IEnumerable<BlobStore> blobStores, string backupset, Stream readerbuffer)
         {
             BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
@@ -47,14 +47,14 @@ namespace BackupCore
             {
                 if (fileblobqueue.TryTake(out HashBlobPair blob))
                 {
-                    AddBlob(backupset, blob);
+                    blobStores.AsParallel().ForAll(bs => bs.AddBlob(backupset, blob));
                     blobshashes.Add(blob.Hash);
                 }
             }
             if (blobshashes.Count > 1)
             {
                 // Multiple blobs so create hashlist reference to reference them all together
-                AddMultiBlobReferenceBlob(backupset, filehash, blobshashes);
+                blobStores.AsParallel().ForAll(bs => bs.AddMultiBlobReferenceBlob(backupset, filehash, blobshashes));
             }
             return filehash;
         }
@@ -427,7 +427,7 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblobqueue"></param>
-        public void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
+        public static void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             SplitData(new MemoryStream(inputdata), filehash, hashblobqueue);
         }
@@ -443,7 +443,7 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblobqueue"></param>
-        public void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
+        public static void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             // https://rsync.samba.org/tech_report/node3.html
             List<byte> newblob = new List<byte>();

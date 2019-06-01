@@ -21,7 +21,8 @@ namespace BackupCore
         public bool DestinationAvailable { get; set; }
 
         public ICoreSrcDependencies SrcDependencies { get; set; }
-        public ICoreDstDependencies DefaultDstDependencies { get; set; }
+        // TODO: Rename to DstsDependencies
+        public List<ICoreDstDependencies> DefaultDstDependencies { get; set; }
         public ICoreDstDependencies CacheDependencies { get; set; }
         
         public static readonly string CacheSuffix = "~cache";
@@ -42,7 +43,7 @@ namespace BackupCore
                 DestinationAvailable = false;
                 if (cache != null)
                 {
-                    DefaultDstDependencies = cache;
+                    DefaultDstDependencies = new List<ICoreDstDependencies>(1) { cache };
                 }
                 else
                 {
@@ -52,7 +53,7 @@ namespace BackupCore
             else
             {
                 DestinationAvailable = true;
-                DefaultDstDependencies = dst;
+                DefaultDstDependencies = new List<ICoreDstDependencies>(1) { dst };
             }
             CacheDependencies = cache;
         }
@@ -100,6 +101,8 @@ namespace BackupCore
         public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
             List<(int trackclass, string pattern)> trackpatterns = null, string prev_backup_hash_prefix = null)
         {
+            // TODO: Verify all destinations have the most current backup before running status
+
             if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
@@ -112,13 +115,14 @@ namespace BackupCore
                 BackupRecord previousbackup;
                 try
                 {
-                    previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                    // Assume all destinations have the same most recent backup, so just use the first backup
+                    previousbackup = DefaultDstDependencies[0].Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
                 }
                 catch
                 {
                     try
                     {
-                        previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname);
+                        previousbackup = DefaultDstDependencies[0].Backups.GetBackupRecord(backupsetname);
                     }
                     catch
                     {
@@ -127,7 +131,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
                         previousbackup.MetadataTreeHash);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
@@ -504,6 +508,8 @@ namespace BackupCore
         public byte[] RunBackup(string backupsetname, string message, bool async=true, bool differentialbackup=true, 
             List<(int trackclass, string pattern)> trackpatterns=null, string prev_backup_hash_prefix=null)
         {
+            SyncCacheSaveBackupSets(backupsetname);
+
             if (!DestinationAvailable)
             {
                 backupsetname = backupsetname + CacheSuffix;
@@ -513,16 +519,19 @@ namespace BackupCore
 
             if (differentialbackup)
             {
+                // We assume the differential backup is to be performed relative to the first backup destination
+                // ie. prev_backup_hash_prefix is in DefaultDstDependencies[0].Backups
+                // TODO: Check all destinations for prev_backup_hash_prefix?
                 BackupRecord previousbackup;
                 try
                 {
-                    previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
+                    previousbackup = DefaultDstDependencies[0].Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefix);
                 }
                 catch
                 {
                     try
                     {
-                        previousbackup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname);
+                        previousbackup = DefaultDstDependencies[0].Backups.GetBackupRecord(backupsetname);
                     }
                     catch
                     {
@@ -531,7 +540,7 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies.Blobs, 
+                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
                         previousbackup.MetadataTreeHash);
                     deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, previousmtree);
                 }
@@ -610,8 +619,7 @@ namespace BackupCore
                     }
                 }
             }
-
-
+            
             if (async)
             {
                 Task.WaitAll(backupops.ToArray());
@@ -624,17 +632,30 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            byte[] newmtreehash = deltatree.Store(DefaultDstDependencies.Blobs, backupsetname);
+            byte[] newmtreehash = deltatree.Store((byte[] data) => 
+                    BlobStore.StoreData(DefaultDstDependencies.Select(dst => dst.Blobs), 
+                    backupsetname, data));
 
-            var defaultbset = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
-            byte[] backuphash = DefaultDstDependencies.Backups.AddBackup(backupsetname, message, newmtreehash, false, defaultbset);
-            // Backup record has just been stored, all data now stored
+            byte[] backuphash = null;
+            foreach (var dst in DefaultDstDependencies)
+            {
+                var defaultbset = dst.Backups.LoadBackupSet(backupsetname);
+                backuphash = dst.Backups.AddBackup(backupsetname, message, newmtreehash, false, defaultbset);
+                dst.Backups.SaveBackupSet(defaultbset, backupsetname);
+                // Backup record has just been stored, all data now stored
 
-            // Finalize backup by incrementing reference counts in blobstore as necessary
-            DefaultDstDependencies.Blobs.FinalizeBlobAddition(backupsetname, backuphash, BlobLocation.BlobType.BackupRecord);
+                // Finalize backup by incrementing reference counts in blobstore as necessary
+                dst.Blobs.FinalizeBlobAddition(backupsetname, backuphash, BlobLocation.BlobType.BackupRecord);
+            }
 
-            SyncCacheSaveBackupSets(backupsetname, defaultbset);
+            // TODO: Only really need to sync cache with one destination
+            SyncCacheSaveBackupSets(backupsetname);
+
             SaveBlobIndices();
+            if (backuphash == null)
+            {
+                throw new NullReferenceException("backuphash cannot be null after a backup");
+            }
             return backuphash;
         }
         
@@ -647,7 +668,7 @@ namespace BackupCore
             // Writeout all "dirty" cached index nodes
             try
             {
-                DefaultDstDependencies.SaveBlobStoreIndex();
+                DefaultDstDependencies.ForEach(x => x.SaveBlobStoreIndex());
                 if (CacheDependencies != null && DestinationAvailable)
                 {
                     CacheDependencies.SaveBlobStoreIndex();
@@ -661,28 +682,28 @@ namespace BackupCore
 
         // TODO: Return backup sets from DefaultDstDependencies.Backups.SyncCache()
         // then save backup sets in a seperate method
-        public void SyncCacheSaveBackupSets(string backupsetname, BackupSet dstbset=null)
+        public void SyncCacheSaveBackupSets(string backupsetname)
         {
-            // BackupSet saves occur with sync
             if (CacheDependencies != null && DestinationAvailable)
             {
-                DefaultDstDependencies.Backups.SyncCache(CacheDependencies.Backups, backupsetname, dstbset);
-            }
-            else if (dstbset != null)
-            {
-                // If no cache to sync, just save the dst backup set
-                DefaultDstDependencies.Backups.SaveBackupSet(dstbset, backupsetname);
+                BackupSet bset = null;
+                BackupSet cachebset = null;
+                foreach (var dst in DefaultDstDependencies)
+                {
+                    (bset, cachebset) = dst.Backups.SyncCache(CacheDependencies.Backups, backupsetname);
+                    dst.Backups.SaveBackupSet(bset, backupsetname);
+                }
+                CacheDependencies.Backups.SaveBackupSet(cachebset, backupsetname + CacheSuffix);
             }
         }
 
-        // TODO: Alternate data streams associated with file -> save as ordinary data (will need changes to FileIndex)
         /// <summary>
         /// Restore a backed up file. Includes metadata.
         /// </summary>
         /// <param name="relfilepath"></param>
         /// <param name="restorepath"></param>
         /// <param name="backupindex"></param>
-        public void RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, string backuphashprefix = null, bool absoluterestorepath=false)
+        public void RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, string backuphashprefix = null, bool absoluterestorepath=false, int backupdst=0)
         {
             if (!DestinationAvailable)
             {
@@ -691,12 +712,12 @@ namespace BackupCore
 
             try
             {
-                var backup = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, backuphashprefix);
-                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies.Blobs, backup.MetadataTreeHash);
+                var backup = DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupsetname, backuphashprefix);
+                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies[backupdst].Blobs, backup.MetadataTreeHash);
                 FileMetadata filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
-                    byte[] filedata = DefaultDstDependencies.Blobs.RetrieveData(filemeta.FileHash);
+                    byte[] filedata = DefaultDstDependencies[backupdst].Blobs.RetrieveData(filemeta.FileHash);
                     SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
@@ -895,10 +916,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="backuphashstring"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring)
+        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(string bsname, string backuphashstring, int backupdst=0)
         {
-            var br = DefaultDstDependencies.Backups.GetBackupRecord(bsname, backuphashstring);
-            return DefaultDstDependencies.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
+            var br = DefaultDstDependencies[backupdst].Backups.GetBackupRecord(bsname, backuphashstring);
+            return DefaultDstDependencies[backupdst].Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
         }
 
         /// <summary>
@@ -912,33 +933,33 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Backup a file and save its hash and ismultiblock to the given filemetadata
+        /// Backup a file to all destinations and save its hash to the given filemetadata
         /// </summary>
         /// <param name="relpath"></param>
         /// <param name="mtree"></param>
         protected void BackupFileSync(string backupset, string relpath, FileMetadata fileMetadata)
         {
-            /*try
-            {*/
+            try
+            {
                 if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
                 {
                     relpath = relpath.Substring(1);
                 }
                 Stream readerbuffer = SrcDependencies.GetFileData(relpath);
-                byte[] filehash = DefaultDstDependencies.Blobs.StoreData(backupset, readerbuffer);
+                byte[] filehash = BlobStore.StoreData(DefaultDstDependencies.Select(dst => dst.Blobs), backupset, readerbuffer);
                 fileMetadata.FileHash = filehash;
-            /*}
+            }
             catch (Exception e)
             {
                 throw new IOException($"Failed to backup {relpath}", e);
-            }*/
+            }
         }
         
         /// <summary>
         /// Retrieves list of backups from a backupset.
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
-        public (IEnumerable<(string backuphash, DateTime backuptime, string message)> backups, bool cache) GetBackups(string backupsetname)
+        public (IEnumerable<(string backuphash, DateTime backuptime, string message)> backups, bool cache) GetBackups(string backupsetname, int backupdst=0)
         {
             if (!DestinationAvailable)
             {
@@ -946,9 +967,9 @@ namespace BackupCore
             }
 
             List<(string, DateTime, string)> backups = new List<(string, DateTime, string)>();
-            foreach (var backup in DefaultDstDependencies.Backups.LoadBackupSet(backupsetname).Backups)
+            foreach (var backup in DefaultDstDependencies[backupdst].Backups.LoadBackupSet(backupsetname).Backups)
             {
-                var br = DefaultDstDependencies.Backups.GetBackupRecord(backupsetname, backup.hash);
+                var br = DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupsetname, backup.hash);
                 backups.Add((HashTools.ByteArrayToHexViaLookup32(backup.hash).ToLower(),
                     br.BackupTime, br.BackupMessage));
             }
@@ -960,10 +981,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="backuphashprefix"></param>
-        public void RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false)
+        public void RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false, int backupdst=0)
         {
             SyncCacheSaveBackupSets(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
-            DefaultDstDependencies.Backups.RemoveBackup(backupsetname, backuphashprefix, DestinationAvailable && CacheDependencies==null, forcedelete);
+            DefaultDstDependencies[backupdst].Backups.RemoveBackup(backupsetname, backuphashprefix, DestinationAvailable && CacheDependencies==null, forcedelete);
             SyncCacheSaveBackupSets(backupsetname);
             SaveBlobIndices();
         }
@@ -973,17 +994,18 @@ namespace BackupCore
         /// </summary>
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
-        public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles)
+        public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles, int backupdst_transfersrc=0, int backupdst_transferdst=0)
         {
-            BackupSet backupSet = DefaultDstDependencies.Backups.LoadBackupSet(backupsetname);
+            // TODO: This function probably makes more sense transferring between backup destinations within the current Core object
+            BackupSet backupSet = DefaultDstDependencies[backupdst_transfersrc].Backups.LoadBackupSet(backupsetname);
             // Transfer backup set
-            dstCore.DefaultDstDependencies.Backups.SaveBackupSet(backupSet, backupsetname);
+            dstCore.DefaultDstDependencies[backupdst_transferdst].Backups.SaveBackupSet(backupSet, backupsetname);
             // Transfer backing data
             foreach (var backup in backupSet.Backups)
             {
-                DefaultDstDependencies.Blobs.TransferBackup(dstCore.DefaultDstDependencies.Blobs, backupsetname, backup.hash, includefiles & !backup.shallow);
+                DefaultDstDependencies[backupdst_transfersrc].Blobs.TransferBackup(dstCore.DefaultDstDependencies[backupdst_transferdst].Blobs, backupsetname, backup.hash, includefiles & !backup.shallow);
             }
-            dstCore.DefaultDstDependencies.SaveBlobStoreIndex();
+            dstCore.DefaultDstDependencies[backupdst_transferdst].SaveBlobStoreIndex();
         }
 
         // TODO: Add method for transferring individual backup
