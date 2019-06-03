@@ -45,7 +45,7 @@ namespace BackupCore
         
         public byte[] FileHash { get; set; }
 
-        public (FileStatus status, FileMetadata updated)? Changes { get; set; } = null;
+        public List<(FileStatus status, FileMetadata updated)> Changes { get; set; } = null;
 
         /// <summary>
         /// New FileMetadata by explicitly specifying each field of
@@ -58,7 +58,7 @@ namespace BackupCore
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
             DateTime datecreated, FileAttributes attributes, long filesize, byte[] filehash,
-            (FileStatus, FileMetadata)? changes=null)
+            List<(FileStatus, FileMetadata)> changes=null)
         {
             FileName = filename;
             DateAccessedUTC = dateaccessed;
@@ -80,7 +80,7 @@ namespace BackupCore
         /// <exception cref="UnauthorizedAccessException"/>
         /// <exception cref="PathTooLongException"/>
         /// <exception cref="NotSupportedException"/>
-        public FileMetadata(string filepath, (FileStatus, FileMetadata)? changes = null)
+        public FileMetadata(string filepath, List<(FileStatus, FileMetadata)> changes = null)
         {
             FileName = Path.GetFileName(filepath);
             FileInfo fi = new FileInfo(filepath);

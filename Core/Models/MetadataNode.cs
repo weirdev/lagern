@@ -64,6 +64,11 @@ namespace BackupCore
             return GetDirectory(relpath).DirMetadata;
         }
 
+        /// <summary>
+        /// Gets a directory relative to this directory, returns null if does not exist.
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <returns></returns>
         public MetadataNode GetDirectory(string relpath)
         {
             if (relpath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()))

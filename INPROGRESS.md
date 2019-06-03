@@ -20,6 +20,8 @@ Tests for BackupStore
 	SyncCache test
 Encrypt an existing backup/ detect mismatched encryption options
 Support for storing the keyfile at the source
+Enforce using C# nullable reference types
+	(once feature is part of standard C# release or available as a package)
 *
 
 Test for loading then running backup
@@ -69,8 +71,6 @@ Backblaze support
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
 Replace custom settings file format with Json
 	Rework how readsetting, etc are called
-Enforce using C# nullable reference types
-	(once feature is part of standard C# release or available as a package)
 Add more unit tests
 	Verify more conditions in existing unit tests
 "Enhanced data"
@@ -87,6 +87,8 @@ Add more unit tests
 		Handle restoring to different OS/permissions scheme than saved to
 Support deleting entire backup sets (at dest)
 Handle common things that could go wrong
+	better handling when reading a file fails
+		after failure, option to ignore file in .track file
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes
 		Write out old index without overwriting then rename
