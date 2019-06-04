@@ -202,6 +202,12 @@ namespace BackupCore
             SaveBackupSet(bset, bsname);
         }
 
+        /// <summary>
+        /// Gets the latest BackupRecord in this BackupStore.
+        /// Returns null if no backups.
+        /// </summary>
+        /// <param name="bsname"></param>
+        /// <returns></returns>
         public BackupRecord GetBackupRecord(string bsname)
         {
             var bset = LoadBackupSet(bsname);
@@ -209,7 +215,7 @@ namespace BackupCore
             {
                 return GetBackupRecord(bsname, bset.Backups[bset.Backups.Count - 1].hash);
             }
-            return null;
+            return null; // TODO: This should throw an error not return null
         }
 
         public BackupRecord GetBackupRecord(string bsname, string prefix)

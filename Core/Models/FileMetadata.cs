@@ -45,7 +45,12 @@ namespace BackupCore
         
         public byte[] FileHash { get; set; }
 
-        public List<(FileStatus status, FileMetadata updated)> Changes { get; set; } = null;
+        /// <summary>
+        /// Status can be null as a placeholder for multibackup scenarios,
+        /// where file is not on disk nor in one previous backup (so not deleted),
+        /// but is in at least one previous backup
+        /// </summary>
+        public FileStatus? Status { get; set; } = null;
 
         /// <summary>
         /// New FileMetadata by explicitly specifying each field of
@@ -58,7 +63,7 @@ namespace BackupCore
         /// <param name="filesize"></param>
         public FileMetadata(string filename, DateTime dateaccessed, DateTime datemodified, 
             DateTime datecreated, FileAttributes attributes, long filesize, byte[] filehash,
-            List<(FileStatus, FileMetadata)> changes=null)
+            FileStatus? changes=null)
         {
             FileName = filename;
             DateAccessedUTC = dateaccessed;
@@ -67,7 +72,7 @@ namespace BackupCore
             FileSize = filesize;
             DateCreatedUTC = datecreated;
             FileHash = filehash;
-            Changes = changes;
+            Status = changes;
         }
 
         /// <summary>
@@ -80,7 +85,7 @@ namespace BackupCore
         /// <exception cref="UnauthorizedAccessException"/>
         /// <exception cref="PathTooLongException"/>
         /// <exception cref="NotSupportedException"/>
-        public FileMetadata(string filepath, List<(FileStatus, FileMetadata)> changes = null)
+        public FileMetadata(string filepath, FileStatus? changes = null)
         {
             FileName = Path.GetFileName(filepath);
             FileInfo fi = new FileInfo(filepath);
@@ -96,7 +101,22 @@ namespace BackupCore
                 FileSize = fi.Length;
             }
             DateCreatedUTC = fi.CreationTimeUtc;
-            Changes = changes;
+            Status = changes;
+        }
+
+        /// <summary>
+        /// New FileMetadata as copy of an original.
+        /// </summary>
+        /// <param name="original"></param>
+        public FileMetadata(FileMetadata original)
+        {
+            FileName = original.FileName;
+            DateAccessedUTC = original.DateAccessedUTC;
+            DateModifiedUTC = original.DateModifiedUTC;
+            Attributes = original.Attributes;
+            FileSize = original.FileSize;
+            DateCreatedUTC = original.DateCreatedUTC;
+            Status = original.Status; // Nullable values still have value semantics
         }
 
         /*
