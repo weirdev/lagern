@@ -160,13 +160,13 @@ namespace BackupCore
         /// <param name="metadatatreehash"></param>
         /// <param name="shallow"></param>
         /// <returns>The hash of the new backup</returns>
-        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow, BackupSet bset=null)
+        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow, DateTime backupTime, BackupSet bset=null)
         {
             if (bset == null)
             {
                 bset = LoadBackupSet(bsname);
             }
-            BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
+            BackupRecord newbackup = new BackupRecord(message, metadatatreehash, backupTime);
             byte[] brbytes = newbackup.serialize();
             byte[] backuphash = BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
             bset.Backups.Add((backuphash, shallow));

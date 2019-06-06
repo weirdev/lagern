@@ -149,7 +149,7 @@ namespace CoreTest
         [TestMethod]
         public void TestBlobStoreSerialize()
         {
-            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
             testdata.core.RunBackup("test", "initialrun");
             byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.serialize();
 
@@ -162,7 +162,7 @@ namespace CoreTest
         [TestMethod]
         public void TestBlobStoreDeserialize()
         {
-            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
             testdata.core.RunBackup("test", "initialrun");
             byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.serialize();
             var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies[0].Blobs.Dependencies);

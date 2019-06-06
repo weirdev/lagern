@@ -96,7 +96,7 @@ namespace BackupCore
         /// <param name="blocation"></param>
         /// <param name="hash">Null for no verification</param>
         /// <returns></returns>
-        private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
+        private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=0)
         {
             byte[] data = Dependencies.LoadBlob(blocation.EncryptedHash);
             if (HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
@@ -107,6 +107,7 @@ namespace BackupCore
             {
                 return LoadBlob(blocation, hash, retries - 1);
             }
+            // NOTE: This hash check sometimes fails and throws the error, Issue #17
             throw new Exception("Blob data did not match hash.");
         }
 
@@ -194,7 +195,7 @@ namespace BackupCore
             }
             catch (KeyNotFoundException)
             {
-                rootDstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash), includefiles);
+                rootDstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash));
 
                 IBlobReferenceIterator blobReferences = dst.GetAllBlobReferences(blobhash, blobtype, includefiles, false);
                 foreach (var reference in blobReferences)
@@ -208,7 +209,7 @@ namespace BackupCore
                     }               
                     catch (KeyNotFoundException)
                     {
-                        dstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference), includefiles);
+                        dstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference));
                     }
                     // When we finish iterating over the children, increment this blob
                     blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
@@ -223,8 +224,8 @@ namespace BackupCore
         /// <param name="dst"></param>
         /// <param name="blobhash"></param>
         /// <returns>True Blob exists in destination</returns>
-        private BlobLocation TransferBlobNoReferences(BlobStore dst, string dstbackupset, 
-            byte[] blobhash, BlobLocation blocation, bool includefiles)
+        private BlobLocation TransferBlobNoReferences(BlobStore dst, string dstbackupset,
+            byte[] blobhash, BlobLocation blocation)
         {
             if (blocation.BlockHashes == null)
             {
@@ -529,12 +530,12 @@ namespace BackupCore
             GetBlobReferenceFrequencies(blobhash, blobtype, hashfreqsize);
             int allreferences = 0;
             int uniquereferences = 0;
-            foreach (var reference in hashfreqsize.Values)
+            foreach (var (frequency, blocation) in hashfreqsize.Values)
             {
-                allreferences += reference.blocation.ByteLength * reference.frequency;
-                if (reference.blocation.TotalReferenceCount == reference.frequency)
+                allreferences += blocation.ByteLength * frequency;
+                if (blocation.TotalReferenceCount == frequency)
                 {
-                    uniquereferences += reference.blocation.ByteLength; // TODO: unique referenes 
+                    uniquereferences += blocation.ByteLength; // TODO: unique referenes 
                 }
             }
             return (allreferences, uniquereferences);

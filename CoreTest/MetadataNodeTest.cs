@@ -14,7 +14,7 @@ namespace CoreTest
         [TestMethod]
         public void TestGetFile()
         {
-            MetadataNode mtree = CoreTest.CreateBasicVirtualFS();
+            MetadataNode mtree = CoreTest.CreateBasicVirtualFS(1);
             var a = VirtualFSInterop.MakeNewFileMetadata("a.ext", 100);
             mtree.AddFile(a);
             var b = VirtualFSInterop.MakeNewFileMetadata("b");
