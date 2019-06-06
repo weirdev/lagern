@@ -20,10 +20,13 @@ namespace BackupConsole
         BackupCore.MetadataNode CurrentNode { get; set; }
         bool ContinueLoop { get; set; }
         
-        public BackupBrowser(string backupset, string backuphash, BackupCore.Core bcore)
+        int BackupDst { get; set; }
+        
+        public BackupBrowser(string backupset, string backuphash, BackupCore.Core bcore, int backupdst=0)
         {
             ContinueLoop = true;
             BCore = bcore;
+            BackupDst = backupdst;
             if (!BCore.DestinationAvailable)
             {
                 backupset += BackupCore.Core.CacheSuffix;
@@ -31,16 +34,16 @@ namespace BackupConsole
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupset);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupset);
             }
             else
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(backupset, backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupset, backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.hash;
             BackupSet = backupset;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.record;
-            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies.Blobs, backuprecord.MetadataTreeHash);
+            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
             CurrentNode = BackupTree;
         }
 
@@ -175,10 +178,10 @@ namespace BackupConsole
                 }
                 backuphash = BackupHash;
             }
-            var targetbackuphashandrecord = BCore.DefaultDstDependencies.Backups.GetBackupHashAndRecord(BackupSet, backuphash, opts.Offset);
+            var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(BackupSet, backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies.Blobs, backuprecord.MetadataTreeHash);
+            BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
             CurrentNode = BackupTree.GetDirectory(curpath);
             if (CurrentNode == null)
             {

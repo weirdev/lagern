@@ -17,7 +17,16 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public void SyncCache(BackupStore cache, string bsname, BackupSet dstbset=null, BackupSet cachebset=null)
+        /// <summary>
+        /// Syncs a cache with this backup store for the given bsname.
+        /// Moves blobs only present in cache to the blobstore tied to this BackupStore
+        /// Does not trigger a save of either cache or this backup set
+        /// </summary>
+        /// <param name="cache"></param>
+        /// <param name="bsname"></param>
+        /// <param name="dstbset"></param>
+        /// <param name="cachebset"></param>
+        public (BackupSet dstbset, BackupSet cachebset) SyncCache(BackupStore cache, string bsname, BackupSet dstbset=null, BackupSet cachebset=null)
         {
             int cacheindex = 0;
             int dstindex = 0;
@@ -126,10 +135,8 @@ namespace BackupCore
                 dstbr = null;
             }
             Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
-            SaveBackupSet(dstbset, bsname);
-            cache.SaveBackupSet(cachebset, cachebsname);
+            return (dstbset, cachebset);
         }
-
 
         public IEnumerable<string> GetBackupsAndMetadataReferencesAsStrings(string bsname)
         {
@@ -153,15 +160,15 @@ namespace BackupCore
         /// <param name="metadatatreehash"></param>
         /// <param name="shallow"></param>
         /// <returns>The hash of the new backup</returns>
-        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow, BackupSet bset=null)
+        public byte[] AddBackup(string bsname, string message, byte[] metadatatreehash, bool shallow, DateTime backupTime, BackupSet bset=null)
         {
             if (bset == null)
             {
                 bset = LoadBackupSet(bsname);
             }
-            BackupRecord newbackup = new BackupRecord(message, metadatatreehash);
+            BackupRecord newbackup = new BackupRecord(message, metadatatreehash, backupTime);
             byte[] brbytes = newbackup.serialize();
-            byte[] backuphash = Dependencies.Blobs.StoreData(bsname, brbytes);
+            byte[] backuphash = BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
             bset.Backups.Add((backuphash, shallow));
             return backuphash;
         }
@@ -195,6 +202,12 @@ namespace BackupCore
             SaveBackupSet(bset, bsname);
         }
 
+        /// <summary>
+        /// Gets the latest BackupRecord in this BackupStore.
+        /// Returns null if no backups.
+        /// </summary>
+        /// <param name="bsname"></param>
+        /// <returns></returns>
         public BackupRecord GetBackupRecord(string bsname)
         {
             var bset = LoadBackupSet(bsname);
@@ -202,7 +215,7 @@ namespace BackupCore
             {
                 return GetBackupRecord(bsname, bset.Backups[bset.Backups.Count - 1].hash);
             }
-            return null;
+            return null; // TODO: This should throw an error not return null
         }
 
         public BackupRecord GetBackupRecord(string bsname, string prefix)

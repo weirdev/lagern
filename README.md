@@ -12,6 +12,10 @@ Data from a file is split into chunks (called blocks) that average ~4KB. For lar
 
 Metadata from a file (right now we don't support all NTFS metadata) is stored, along with the metadata of all other files and directories being backed up, in a metadata index (<destination>/index/metadata). This index rembebers the original file tree of the backup source. The metadata index also contains, for each file, an ordered list of the hashes making up that file.
 
+Backups can be performed "differentially". This is similar to, but different than, a "delta" backup in other backup utilities and version control systems. All lagern backups are "delta" backups in the sense that multiple backups may rely on the same blob of (deduplicated) data. However, unlike some "delta" implementations, deleting a lagern backup never deletes data relyed on by another backup.
+
+A differential backup in lagern mostly refers to how files are chosen to be scanned for backing up. This allows us to sometimes avoid scanning a file's data. ie. "Only scan this file if it appears to have changed (date modified changed etc.)". This choice is made relative to a single existing backup. Files that are not scanned (but are not to be totally ignored from the backup) are still in the new backup. Their data is just assumed to be the same as in the selected existing backup. By default, lagern performs differential backups relative to the last backup in the selected destination.
+
 Uses ranked list of add/ignore rules
 		Foward slashes only for all systems
 			Allow escaping spaces with \ ?

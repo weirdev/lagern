@@ -243,7 +243,7 @@ namespace BackupConsole
                     {
                         cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, DiskDstFSInterop.InitializeNew(opts.Cache), false);
                     }
-                    core = new Core(srcdep, dstdep, cachedep);
+                    core = new Core(srcdep, new List<ICoreDstDependencies>() { dstdep }, cachedep);
                 }
                 else
                 {
@@ -329,7 +329,7 @@ namespace BackupConsole
                 {
                     trackclasses = null;
                 }
-                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, opts.BackupHash);
+                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string> { opts.BackupHash });
             }
             catch (Exception e)
             {
@@ -559,7 +559,7 @@ namespace BackupConsole
                         {
                             cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
                         }
-                        return new Core(srcdep, dstdep, cachedep);
+                        return new Core(srcdep, new List<ICoreDstDependencies>() { dstdep }, cachedep);
                     }
                     else
                     {

@@ -64,6 +64,11 @@ namespace BackupCore
             return GetDirectory(relpath).DirMetadata;
         }
 
+        /// <summary>
+        /// Gets a directory relative to this directory, returns null if does not exist.
+        /// </summary>
+        /// <param name="relpath"></param>
+        /// <returns></returns>
         public MetadataNode GetDirectory(string relpath)
         {
             if (relpath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()))
@@ -192,13 +197,14 @@ namespace BackupCore
         /// with hard- (and soft-?) -links TODO: handle links
         /// </summary>
         /// <param name="blobs"></param>
+        /// <param name="storeGetHash">Function called to store node data, returns hash</param>
         /// <returns></returns>
-        public byte[] Store(BlobStore blobs, string backupset)
+        public byte[] Store(Func<byte[], byte[]> storeGetHash)
         {
             List<byte[]> dirhashes = new List<byte[]>();
             foreach (MetadataNode dir in Directories.Values)
             {
-                dirhashes.Add(dir.Store(blobs, backupset));
+                dirhashes.Add(dir.Store(storeGetHash));
             }
             Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
             // -"-v1"
@@ -217,7 +223,7 @@ namespace BackupCore
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             
-            return blobs.StoreData(backupset, BinaryEncoding.dict_encode(mtdata));
+            return storeGetHash(BinaryEncoding.dict_encode(mtdata));
         }
 
         public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)

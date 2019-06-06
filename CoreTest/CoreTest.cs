@@ -13,11 +13,15 @@ namespace CoreTest
     {
         static System.Security.Cryptography.SHA1 Hasher = HashTools.GetSHA1Hasher();
 
-        public static MetadataNode CreateBasicVirtualFS()
+        public static MetadataNode CreateBasicVirtualFS(int destinations)
         {
             MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src"));
-            vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("dst"));
+            var dstroot = vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("dst"));
+            for (int i = 0; i < destinations; i++)
+            {
+                dstroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata(i.ToString()));
+            }
             vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("cache"));
             return vfsroot;
         }
@@ -59,28 +63,35 @@ namespace CoreTest
         }
 
         public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int? randomseed=null, 
-            bool encrypted=false, bool cache=true)
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int nonencrypteddsts, int encrypteddsts,
+                int? randomseed=null, bool cache=true)
         {
-            MetadataNode vfsroot = CreateBasicVirtualFS();
+            MetadataNode vfsroot = CreateBasicVirtualFS(nonencrypteddsts + encrypteddsts);
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
             (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
             var vfsisrc = new VirtualFSInterop(vfsroot, vfsdatastore);
-            IDstFSInterop vfsidst;
-            if (encrypted)
+
+            List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
+            for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "dst", "password");
+                IDstFSInterop vfsidst;
+                if (i < nonencrypteddsts)
+                {
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()));
+                }
+                else
+                {
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), "password");
+                }
+                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, cache);
+                destinations.Add(dstdeps);
             }
-            else
-            {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "dst");
-            }
+            
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, cache);
             ICoreDstDependencies cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
-            Core core = new Core(srcdeps, dstdeps, cachedeps);
+            Core core = new Core(srcdeps, destinations, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
 
@@ -100,76 +111,82 @@ namespace CoreTest
             return (Hasher.ComputeHash(data), data);
         }
 
-        public void InitializeNew(bool encrypted, bool cache)
+        public void InitializeNew(bool cache, int nonencrypteddsts, int encrypteddsts)
         {
-            MetadataNode vfsroot = CreateBasicVirtualFS();
+            MetadataNode vfsroot = CreateBasicVirtualFS(nonencrypteddsts + encrypteddsts);
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
-            IDstFSInterop vfsidst;
-            if (encrypted)
+
+            List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
+            for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst", "password");
+                IDstFSInterop vfsidst;
+                if (i < nonencrypteddsts)
+                {
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()));
+                }
+                else
+                {
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), "password");
+                }
+                destinations.Add(CoreDstDependencies.InitializeNew("test", vfsidst, true));
             }
-            else
-            {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst");
-            }
+
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             if (cache)
             {
                 ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
-                Core core = new Core(srcdeps, dstdeps, cachedeps);
+                Core core = new Core(srcdeps, destinations, cachedeps);
             }
             else
             {
-                Core core = new Core(srcdeps, dstdeps);
+                Core core = new Core(srcdeps, destinations);
             }
         }
 
         [TestMethod]
         public void TestInitializeNew()
         {
-            InitializeNew(false, true);
-            InitializeNew(true, false);
+            InitializeNew(true, 1, 0);
+            InitializeNew(false, 0, 1);
         }
 
         public void LoadCore_NewlyInitialized(bool encrypted, bool cache)
         {
-            MetadataNode vfsroot = CreateBasicVirtualFS();
+            MetadataNode vfsroot = CreateBasicVirtualFS(1);
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
             IDstFSInterop vfsidst;
             if (encrypted)
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst", "password");
+                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"), "password");
             } else
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "dst");
+                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"));
             }
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, Path.Combine("dst", "1"), "cache");
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
-            Core core = new Core(srcdeps, dstdeps, cachedeps);
+            Core core = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
 
             vfsisrc = new VirtualFSInterop(vfsroot, datastore);
             if (encrypted)
             {
-                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, "dst", "password");
+                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"), "password");
             }
             else
             {
-                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, "dst");
+                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"));
             }
             vfsicache = VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
             srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
             dstdeps = CoreDstDependencies.Load(vfsidst, true);
             cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.Load(vfsicache, false);
-            core = new Core(srcdeps, dstdeps, cachedeps);
+            core = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
         }
 
         [TestMethod]
@@ -179,10 +196,10 @@ namespace CoreTest
             LoadCore_NewlyInitialized(true, true);
         }
 
-        public void RunBackup(bool encrypted, bool cache)
+        public void RunBackup(bool cache, int nonencrypteddsts, int encrypteddsts)
         {
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = 
-                InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+                InitializeNewCoreWithStandardFiles(nonencrypteddsts, encrypteddsts, cache: cache);
 
             core.RunBackup("test", "run1");
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
@@ -193,13 +210,27 @@ namespace CoreTest
         [TestMethod]
         public void TestRunBackup()
         {
-            RunBackup(false, true);
-            RunBackup(true, false);
+            RunBackup(true, 1, 0);
+            RunBackup(false, 0, 1);
+        }
+
+        [TestMethod]
+        public void TestRunMultiBackup()
+        {
+            RunBackup(true, 2, 2);
         }
 
         public void GetWTStatus(bool encrypted, bool cache)
         {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+            (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+                MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
+            if (encrypted) {
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+            }
+            else
+            {
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+            }
 
             testdata.core.GetWTStatus("test");
             // TODO: test output
@@ -214,7 +245,16 @@ namespace CoreTest
 
         public void Restore(bool encrypted, bool cache)
         {
-            var testdata = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+            (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+                MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
+            if (encrypted)
+            {
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+            }
+            else
+            {
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+            }
             testdata.core.RunBackup("test", "run1");
             System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
@@ -233,7 +273,17 @@ namespace CoreTest
 
         public void RemoveBackup(bool encrypted, bool cache)
         {
-            var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+            (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+                MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
+            if (encrypted)
+            {
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+            }
+            else
+            {
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+            }
+            var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = testdata;
 
             var bh1 = core.RunBackup("test", "run1");
             System.Threading.Thread.Sleep(40); // Allow async writes to finish
@@ -244,6 +294,7 @@ namespace CoreTest
 
             // Full hash test
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
+            System.Threading.Thread.Sleep(40); // Allow async writes to finish
             // Just prefix
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
             // All backups deleted
@@ -259,8 +310,27 @@ namespace CoreTest
 
         public void TransferBackupSet(bool encrypted, bool cache)
         {
-            var (srcCore, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
-            var (dstCore, _, _, _, _) = InitializeNewCoreWithStandardFiles(encrypted: encrypted, cache: cache);
+            (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
+                MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
+            if (encrypted)
+            {
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+            }
+            else
+            {
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+            }
+            var (srcCore, _, _, _, _) = testdata;
+            
+            if (encrypted)
+            {
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+            }
+            else
+            {
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+            }
+            var (dstCore, _, _, _, _) = testdata;
 
             var bh1 = srcCore.RunBackup("test", "run1");
             System.Threading.Thread.Sleep(40); // Allow async writes to finish
@@ -309,7 +379,6 @@ namespace CoreTest
             int[] correctoutput = new int[] { 0, 0, 0, 0, 3, 2, 1, 1 };
             for (int i = 0; i < files.Length; i++)
             {
-                int a = Core.FileTrackClass(files[i], patterns);
                 Assert.AreEqual(Core.FileTrackClass(files[i], patterns), correctoutput[i]);
             }
         }

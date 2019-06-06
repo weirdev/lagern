@@ -2,19 +2,34 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
-Currently working on transfer tests
+Currently working on multiple backup destinations
+Multiple destinations may be missing different blobs existing in the current backup
+	If just one previous tree used to generate delta tree, we may not scan (and thus generate blobs for) a file that is in the previous selected tree but not in another destination. Thus we need to get blobs to the destination lacking them.
+	We dont want to do a general backup sync between destinations, because we may not want all backups on all destinations (ie. frequent backups to disk/local storage, infrequent backups to cloud)
+	Intersection tree--calculate tree of files/dirs in common between all destinations
+		Use this for delta tree => extra files get scanned, but all blobs get where they need to go with minimal code changes
+	Problem: Adding new destination (or effectively doing so by changing a bunch of data, backing up to D1, then to D1 and D2 together) incurs the same runtime as a brand new backup to D2 as every file gets scanned
+		Possible mitigation: Clone existing backupset/transfer to new backup set then run backup
 ====
+*Issues added to GitHub from top to bottom, new issues may exist only on GitHub
 Multi-use updates
-	Transfer tests
 	Multiple backup destinations
 	Multiple backup set tests
 Fully model settings file, then parse to that model instead of adhoc reading values
+Tests for BackupStore
+	SyncCache test
 Encrypt an existing backup/ detect mismatched encryption options
 Support for storing the keyfile at the source
+Enforce using C# nullable reference types
+	(once feature is part of standard C# release or available as a package)
+*
+
 Test for loading then running backup
 Temporairly store the password when doing multiple LagernConsole commands within a window of time
 TODOs
 Clean up inputted paths (standardize to platform's directory seperator char)
+Backup daemon
+Add ignore rule for "only update file once per day/week/month..."
 Better support for large backup sets
 	Optimize B+ tree BlobStore
 		optimize node size
@@ -56,8 +71,6 @@ Backblaze support
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
 Replace custom settings file format with Json
 	Rework how readsetting, etc are called
-Enforce using C# nullable reference types
-	(once feature is part of standard C# release or available as a package)
 Add more unit tests
 	Verify more conditions in existing unit tests
 "Enhanced data"
@@ -74,6 +87,8 @@ Add more unit tests
 		Handle restoring to different OS/permissions scheme than saved to
 Support deleting entire backup sets (at dest)
 Handle common things that could go wrong
+	better handling when reading a file fails
+		after failure, option to ignore file in .track file
 	circular links when checking if ancestor is backup source
 	safe writeout of indexes
 		Write out old index without overwriting then rename
@@ -90,6 +105,8 @@ ArgParser
 	can require only one or at least one of a set of options
 		'|' or '^' between options
 		options inside [] ?
+Replace ArgParser with Knack?
+	https://github.com/Microsoft/knack
 More flexible "list" command
 	Ranges of n-m backups ago
 		Also by date?

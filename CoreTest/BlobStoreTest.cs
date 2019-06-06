@@ -112,7 +112,7 @@ namespace CoreTest
 
             BlockingCollection<HashBlobPair> fileblockqueue = new BlockingCollection<HashBlobPair>();
             byte[] file1hash = new byte[20]; // Overall hash of file
-            BS.SplitData(new MemoryStream(file1), file1hash, fileblockqueue);
+            BlobStore.SplitData(new MemoryStream(file1), file1hash, fileblockqueue);
 
             List<HashBlobPair> f1blockshashes = new List<HashBlobPair>();
             while (!fileblockqueue.IsCompleted)
@@ -126,7 +126,7 @@ namespace CoreTest
 
             fileblockqueue = new BlockingCollection<HashBlobPair>();
             byte[] file2hash = new byte[20]; // Overall hash of file
-            BS.SplitData(new MemoryStream(file2), file2hash, fileblockqueue);
+            BlobStore.SplitData(new MemoryStream(file2), file2hash, fileblockqueue);
 
             List<HashBlobPair> f2blockshashes = new List<HashBlobPair>();
             while (!fileblockqueue.IsCompleted)
@@ -149,9 +149,9 @@ namespace CoreTest
         [TestMethod]
         public void TestBlobStoreSerialize()
         {
-            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
             testdata.core.RunBackup("test", "initialrun");
-            byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
+            byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.serialize();
 
             // Test that something was serialized
             Assert.IsTrue(serialized.Length > 0);
@@ -162,10 +162,10 @@ namespace CoreTest
         [TestMethod]
         public void TestBlobStoreDeserialize()
         {
-            var testdata = CoreTest.InitializeNewCoreWithStandardFiles();
+            var testdata = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
             testdata.core.RunBackup("test", "initialrun");
-            byte[] serialized = testdata.core.DefaultDstDependencies.Blobs.serialize();
-            var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies.Blobs.Dependencies);
+            byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.serialize();
+            var bs = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies[0].Blobs.Dependencies);
         }
 
         [TestMethod]
@@ -178,14 +178,14 @@ namespace CoreTest
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] fileHash = BS.StoreData("test", randomFile);
+            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, "test", randomFile);
             BS.TransferBlobAndReferences(dstBS, "test", fileHash, BlobLocation.BlobType.FileBlob, true);
             Assert.IsTrue(dstBS.RetrieveData(fileHash).SequenceEqual(randomFile));
 
             // Likely multiblock
             randomFile = new byte[12_000];
             CoreTest.RandomData(randomFile);
-            fileHash = BS.StoreData("test", randomFile);
+            fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, "test", randomFile);
             BS.TransferBlobAndReferences(dstBS, "test", fileHash, BlobLocation.BlobType.FileBlob, true);
             Assert.IsTrue(dstBS.RetrieveData(fileHash).SequenceEqual(randomFile));
 

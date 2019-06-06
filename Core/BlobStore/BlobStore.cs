@@ -26,9 +26,9 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
-        public byte[] StoreData(string backupset, byte[] inputdata)
+        public static byte[] StoreData(IEnumerable<BlobStore> blobStores, string backupset, byte[] inputdata)
         {
-            return StoreData(backupset, new MemoryStream(inputdata));
+            return StoreData(blobStores, backupset, new MemoryStream(inputdata));
         }
 
         /// <summary>
@@ -36,7 +36,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <returns>A list of hashes representing the file contents.</returns>
-        public byte[] StoreData(string backupset, Stream readerbuffer)
+        public static byte[] StoreData(IEnumerable<BlobStore> blobStores, string backupset, Stream readerbuffer)
         {
             BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
             byte[] filehash = new byte[20]; // Overall hash of file
@@ -47,14 +47,14 @@ namespace BackupCore
             {
                 if (fileblobqueue.TryTake(out HashBlobPair blob))
                 {
-                    AddBlob(backupset, blob);
+                    blobStores.AsParallel().ForAll(bs => bs.AddBlob(backupset, blob));
                     blobshashes.Add(blob.Hash);
                 }
             }
             if (blobshashes.Count > 1)
             {
                 // Multiple blobs so create hashlist reference to reference them all together
-                AddMultiBlobReferenceBlob(backupset, filehash, blobshashes);
+                blobStores.AsParallel().ForAll(bs => bs.AddMultiBlobReferenceBlob(backupset, filehash, blobshashes));
             }
             return filehash;
         }
@@ -96,7 +96,7 @@ namespace BackupCore
         /// <param name="blocation"></param>
         /// <param name="hash">Null for no verification</param>
         /// <returns></returns>
-        private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=1)
+        private byte[] LoadBlob(BlobLocation blocation, byte[] hash, int retries=0)
         {
             byte[] data = Dependencies.LoadBlob(blocation.EncryptedHash);
             if (HashTools.GetSHA1Hasher().ComputeHash(data).SequenceEqual(hash))
@@ -107,6 +107,7 @@ namespace BackupCore
             {
                 return LoadBlob(blocation, hash, retries - 1);
             }
+            // NOTE: This hash check sometimes fails and throws the error, Issue #17
             throw new Exception("Blob data did not match hash.");
         }
 
@@ -194,7 +195,7 @@ namespace BackupCore
             }
             catch (KeyNotFoundException)
             {
-                rootDstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash), includefiles);
+                rootDstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash));
 
                 IBlobReferenceIterator blobReferences = dst.GetAllBlobReferences(blobhash, blobtype, includefiles, false);
                 foreach (var reference in blobReferences)
@@ -208,7 +209,7 @@ namespace BackupCore
                     }               
                     catch (KeyNotFoundException)
                     {
-                        dstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference), includefiles);
+                        dstBlobLocation = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference));
                     }
                     // When we finish iterating over the children, increment this blob
                     blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
@@ -223,8 +224,8 @@ namespace BackupCore
         /// <param name="dst"></param>
         /// <param name="blobhash"></param>
         /// <returns>True Blob exists in destination</returns>
-        private BlobLocation TransferBlobNoReferences(BlobStore dst, string dstbackupset, 
-            byte[] blobhash, BlobLocation blocation, bool includefiles)
+        private BlobLocation TransferBlobNoReferences(BlobStore dst, string dstbackupset,
+            byte[] blobhash, BlobLocation blocation)
         {
             if (blocation.BlockHashes == null)
             {
@@ -427,7 +428,7 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblobqueue"></param>
-        public void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
+        public static void SplitData(byte[] inputdata, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             SplitData(new MemoryStream(inputdata), filehash, hashblobqueue);
         }
@@ -443,7 +444,7 @@ namespace BackupCore
         /// <param name="type"></param>
         /// <param name="filehash"></param>
         /// <param name="hashblobqueue"></param>
-        public void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
+        public static void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             // https://rsync.samba.org/tech_report/node3.html
             List<byte> newblob = new List<byte>();
@@ -529,12 +530,12 @@ namespace BackupCore
             GetBlobReferenceFrequencies(blobhash, blobtype, hashfreqsize);
             int allreferences = 0;
             int uniquereferences = 0;
-            foreach (var reference in hashfreqsize.Values)
+            foreach (var (frequency, blocation) in hashfreqsize.Values)
             {
-                allreferences += reference.blocation.ByteLength * reference.frequency;
-                if (reference.blocation.TotalReferenceCount == reference.frequency)
+                allreferences += blocation.ByteLength * frequency;
+                if (blocation.TotalReferenceCount == frequency)
                 {
-                    uniquereferences += reference.blocation.ByteLength; // TODO: unique referenes 
+                    uniquereferences += blocation.ByteLength; // TODO: unique referenes 
                 }
             }
             return (allreferences, uniquereferences);

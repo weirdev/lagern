@@ -22,9 +22,9 @@ namespace BackupCore
         
         public byte[] MetadataTreeHash { get; set; }
 
-        public BackupRecord(string message, byte[] treehash)
+        public BackupRecord(string message, byte[] treehash, DateTime backupTime)
         {
-            BackupTime = DateTime.UtcNow;
+            BackupTime = backupTime;
             BackupMessage = message;
             MetadataTreeHash = treehash;
             UUID = new byte[16];
