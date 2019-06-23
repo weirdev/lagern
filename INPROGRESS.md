@@ -11,24 +11,10 @@ Multiple destinations may be missing different blobs existing in the current bac
 	Problem: Adding new destination (or effectively doing so by changing a bunch of data, backing up to D1, then to D1 and D2 together) incurs the same runtime as a brand new backup to D2 as every file gets scanned
 		Possible mitigation: Clone existing backupset/transfer to new backup set then run backup
 ====
+
 *Issues added to GitHub from top to bottom, new issues may exist only on GitHub
-Multi-use updates
-	Multiple backup destinations
-	Multiple backup set tests
-Fully model settings file, then parse to that model instead of adhoc reading values
-Tests for BackupStore
-	SyncCache test
-Encrypt an existing backup/ detect mismatched encryption options
-Support for storing the keyfile at the source
-Enforce using C# nullable reference types
-	(once feature is part of standard C# release or available as a package)
 *
 
-Test for loading then running backup
-Temporairly store the password when doing multiple LagernConsole commands within a window of time
-TODOs
-Clean up inputted paths (standardize to platform's directory seperator char)
-Backup daemon
 Add ignore rule for "only update file once per day/week/month..."
 Better support for large backup sets
 	Optimize B+ tree BlobStore
