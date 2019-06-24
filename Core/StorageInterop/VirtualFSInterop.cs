@@ -30,7 +30,7 @@ namespace BackupCore
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                virtualFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                virtualFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
                 virtualFSInterop.Encryptor = encryptor;
             }
             return virtualFSInterop;
@@ -205,13 +205,19 @@ namespace BackupCore
             return Task.Run(() => data);
         }
 
-        public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
+        /// <summary>
+        /// Not actually asynchronous
+        /// </summary>
+        /// <param name="bsname"></param>
+        /// <param name="fileType"></param>
+        /// <param name="data"></param>
+        public Task StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
             if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
             {
                 data = Encryptor.EncryptBytes(data);
             }
-            OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data);
+            return Task.Run(() => OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data));
         }
 
         public Task<byte[]> LoadBlobAsync(byte[] hash)
@@ -236,9 +242,9 @@ namespace BackupCore
             return Task.Run(() => (hash, relpath));
         }
 
-        public void DeleteBlobAsync(byte[] hash, string fileId)
+        public Task DeleteBlobAsync(byte[] hash, string fileId)
         {
-            Task.Run(() => DeleteFile(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+            return Task.Run(() => DeleteFile(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
         }
 
         private string GetIndexFilePath(string bsname, IndexFileType fileType)

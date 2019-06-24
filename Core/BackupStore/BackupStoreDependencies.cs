@@ -23,7 +23,7 @@ namespace BackupCore
 
         public void StoreBackupSetData(string backupsetname, byte[] bsdata)
         {
-            DstFSInterop.StoreIndexFileAsync(backupsetname, IndexFileType.BackupSet, bsdata);
+            DstFSInterop.StoreIndexFileAsync(backupsetname, IndexFileType.BackupSet, bsdata).Wait();
         }
     }
 }

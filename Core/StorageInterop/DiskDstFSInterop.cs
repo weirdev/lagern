@@ -15,7 +15,7 @@ namespace BackupCore
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
                 diskDstFSInterop.Encryptor = encryptor;
             }
             return diskDstFSInterop;
@@ -52,9 +52,9 @@ namespace BackupCore
             get => Path.Combine(DstPath, "index");
         }
 
-        public void DeleteBlobAsync(byte[] hash, string fileId)
+        public Task DeleteBlobAsync(byte[] hash, string fileId)
         {
-            Task.Run(() => File.Delete(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+            return Task.Run(() => File.Delete(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
         }
 
         public Task<bool> IndexFileExistsAsync(string bsname, IndexFileType fileType)
@@ -94,14 +94,14 @@ namespace BackupCore
             return Task.Run(() => (hash, relpath));
         }
 
-        public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
+        public Task StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
             // Never Encrypt Key File
             if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
             {
                 data = Encryptor.EncryptBytes(data);
             }
-            OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
+            return OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
         }
 
         private Task<byte[]> LoadFileAsync(string absolutepath)
@@ -109,9 +109,9 @@ namespace BackupCore
             return Task.Run(() => File.ReadAllBytes(absolutepath));
         }
 
-        public void OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
+        public Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
         {
-            Task.Run(() =>
+            return Task.Run(() =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(absolutepath));
 

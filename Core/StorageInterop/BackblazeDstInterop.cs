@@ -69,7 +69,7 @@ namespace BackupCore
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
+                backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
                 backblazeDstInterop.Encryptor = encryptor;
             }
             return backblazeDstInterop;
@@ -127,7 +127,7 @@ namespace BackupCore
                         + Convert.ToBase64String(Encoding.UTF8.GetBytes(AccountID
                             + ":" + ApplicationKey))
                 })
-                .GetJsonAsync<AuthorizationResponse>();
+                .GetJsonAsync<AuthorizationResponse>().ConfigureAwait(false);
                 SuccessfulTransmission();
                 return authresp;
             }
@@ -136,13 +136,13 @@ namespace BackupCore
                 FailedTransmission();
                 if (attempts < Retries)
                 {
-                    return await AuthorizeAccount(attempts + 1);
+                    return await AuthorizeAccount(attempts + 1).ConfigureAwait(false);
                 }
                 throw;
             }
         }
 
-        private async void StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => await StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data, preventEncryption);
+        private Task StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data, preventEncryption);
 
         /// <summary>
         /// 
@@ -166,7 +166,7 @@ namespace BackupCore
                     .AppendPathSegment("/b2api/v1/b2_get_upload_url")
                     .WithHeaders(new { Authorization = AuthResp.authorizationToken })
                     .PostJsonAsync(new { bucketId = BucketId })
-                    .ReceiveJson<GetUploadUrlResponse>();
+                    .ReceiveJson<GetUploadUrlResponse>().ConfigureAwait(false);
                     SuccessfulTransmission();
                     return urlresp;
                 }
@@ -183,7 +183,7 @@ namespace BackupCore
                     }
                     if (attempts < Retries)
                     {
-                        return await GetUploadUrl(attempts + 1);
+                        return await GetUploadUrl(attempts + 1).ConfigureAwait(false);
                     }
                     throw;
                 }
@@ -216,7 +216,7 @@ namespace BackupCore
                             X_Bz_Content_Sha1 = HashTools.ByteArrayToHexViaLookup32(hash)
                         })
                         .PostAsync(filecontent)
-                        .ReceiveJson<UploadResponse>();
+                        .ReceiveJson<UploadResponse>().ConfigureAwait(false);
                     SuccessfulTransmission();
                     return (hash, uploadresp.fileId);
                 }
@@ -234,7 +234,7 @@ namespace BackupCore
 
                     if (attempts < Retries)
                     {
-                        return await UploadData(attempts + 1);
+                        return await UploadData(attempts + 1).ConfigureAwait(false);
                     }
                     throw;
                 }
@@ -259,8 +259,8 @@ namespace BackupCore
                         .AppendPathSegment(BucketName)
                         .AppendPathSegment(fileName)
                         .WithHeaders(new { Authorization = AuthResp.authorizationToken })
-                        .GetAsync();
-                    var data = await downloadresp.Content.ReadAsByteArrayAsync();
+                        .GetAsync().ConfigureAwait(false);
+                    var data = await downloadresp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
 
                     SuccessfulTransmission();
 
@@ -284,7 +284,7 @@ namespace BackupCore
                     }
                     if (attempts < Retries)
                     {
-                        return await Download(attempts + 1);
+                        return await Download(attempts + 1).ConfigureAwait(false);
                     }
                     throw;
                 }
@@ -292,10 +292,10 @@ namespace BackupCore
             return downloaddata;
         }
 
-        private void DeleteFileAsync(string filename, string fileid)
+        private Task DeleteFileAsync(string filename, string fileid)
         {
-            Delete();
-            async void Delete(int attempts = 0)
+            return Delete();
+            async Task<HttpResponseMessage> Delete(int attempts = 0)
             {
                 if (AuthResp == null)
                 {
@@ -311,8 +311,9 @@ namespace BackupCore
                         {
                             fileId = fileid,
                             fileName = filename
-                        });
+                        }).ConfigureAwait(false);
                     SuccessfulTransmission();
+                    return deleteresp;
                 }
                 catch (FlurlHttpException ex)
                 {
@@ -327,7 +328,7 @@ namespace BackupCore
                     }
                     if (attempts < Retries)
                     {
-                        Delete(attempts + 1);
+                        return await Delete(attempts + 1).ConfigureAwait(false);
                     }
                     throw;
                 }
@@ -355,7 +356,7 @@ namespace BackupCore
                             startFileName = file,
                             maxFileCount = 1
                         })
-                        .ReceiveJson<GetFilesResponse>();
+                        .ReceiveJson<GetFilesResponse>().ConfigureAwait(false);
                     SuccessfulTransmission();
                     return filesresp.files.Length > 0 && filesresp.files[0].fileName == file;
                 }
@@ -372,7 +373,7 @@ namespace BackupCore
                     }
                     if (attempts < Retries)
                     {
-                        return await Exists(attempts + 1);
+                        return await Exists(attempts + 1).ConfigureAwait(false);
                     }
                     throw;
                 }
@@ -426,9 +427,9 @@ namespace BackupCore
             return LoadFileAsync(GetIndexFilePath(bsname, fileType), fileType == IndexFileType.EncryptorKeyFile);
         }
 
-        public void StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
+        public Task StoreIndexFileAsync(string bsname, IndexFileType fileType, byte[] data)
         {
-            StoreFileAsync(GetIndexFilePath(bsname, fileType), data, fileType==IndexFileType.EncryptorKeyFile);
+            return StoreFileAsync(GetIndexFilePath(bsname, fileType), data, fileType==IndexFileType.EncryptorKeyFile);
         }
 
         public Task<byte[]> LoadBlobAsync(byte[] hash)
@@ -441,9 +442,9 @@ namespace BackupCore
             return StoreFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), hash, data);
         }
 
-        public void DeleteBlobAsync(byte[] hash, string fileId)
+        public Task DeleteBlobAsync(byte[] hash, string fileId)
         {
-            DeleteFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), fileId);
+            return DeleteFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), fileId);
         }
 
         private string GetIndexFilePath(string bsname, IndexFileType fileType)
