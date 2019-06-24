@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -15,7 +16,7 @@ namespace BackupCore
 
         public void DeleteBlob(byte[] encryptedHash, string fileId)
         {
-            DstFSInterop.DeleteBlobAsync(encryptedHash, fileId);
+            DstFSInterop.DeleteBlobAsync(encryptedHash, fileId).Wait();
         }
 
         public byte[] LoadBlob(byte[] hash)

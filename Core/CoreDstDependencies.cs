@@ -81,7 +81,7 @@ namespace BackupCore
 
         public void SaveBlobStoreIndex()
         {
-            DstFSInterop.StoreIndexFileAsync(null, IndexFileType.BlobIndex, Blobs.serialize());
+            DstFSInterop.StoreIndexFileAsync(null, IndexFileType.BlobIndex, Blobs.serialize()).Wait();
         }
 
         public void WriteSetting(BackupSetting key, string value)
@@ -102,6 +102,6 @@ namespace BackupCore
 
         private Stream GetSettingsFileStream() => new MemoryStream(DstFSInterop.LoadIndexFileAsync(null, IndexFileType.SettingsFile).Result);
 
-        private void WriteSettingsFileStreamAsync(byte[] data) => DstFSInterop.StoreIndexFileAsync(null, IndexFileType.SettingsFile, data);
+        private void WriteSettingsFileStreamAsync(byte[] data) => DstFSInterop.StoreIndexFileAsync(null, IndexFileType.SettingsFile, data).Wait();
     }
 }
