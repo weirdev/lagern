@@ -12,7 +12,6 @@ namespace BackupCore
 
         private IDstFSInterop DstFSInterop { get; set; }
 
-
         private CoreDstDependencies(IDstFSInterop dstinterop)
         {
             DstFSInterop = dstinterop;

@@ -236,8 +236,8 @@ namespace BackupConsole
                 Core core;
                 if (opts.Destination.Trim().ToLower() == "backblaze")
                 {
-                    ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile, password!=null);
-                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), opts.Cache!=null);
+                    ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile, password);
+                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, srcdep.AesTool), opts.Cache!=null);
                     ICoreDstDependencies cachedep = null;
                     if (opts.Cache != null)
                     {
@@ -473,12 +473,13 @@ namespace BackupConsole
 
         public static Core LoadCore()
         {
-            var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
             string destination;
             string cache;
             string cloudsettings;
             bool encryptionEnabled;
             string password = null;
+
+            var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop(), null);
 
             try
             {
@@ -488,9 +489,11 @@ namespace BackupConsole
             {
                 encryptionEnabled = false;
             }
+
             if (encryptionEnabled)
             {
                 password = PasswordPrompt();
+                srcdep.ReadAesKeyFile(password);
             }
 
             try
@@ -547,7 +550,7 @@ namespace BackupConsole
                         ICoreDstDependencies dstdep;
                         try
                         {
-                            dstdep = CoreDstDependencies.Load(BackblazeDstInterop.Load(cloudsettings, password), cache != null);
+                            dstdep = CoreDstDependencies.Load(BackblazeDstInterop.Load(cloudsettings, srcdep.AesTool), cache != null);
                         }
                         catch
                         {

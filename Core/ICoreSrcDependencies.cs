@@ -7,6 +7,8 @@ namespace BackupCore
 {
     public interface ICoreSrcDependencies
     {
+        AesHelper AesTool { get; set; }
+
         FileMetadata GetFileMetadata(string relpath);
 
         IEnumerable<string> GetDirectoryFiles(string relpath);

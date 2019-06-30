@@ -8,28 +8,17 @@ namespace BackupCore
 {
     public class DiskDstFSInterop : IDstFSInterop
     {
-        public static IDstFSInterop InitializeNew(string dstpath, string password=null)
+        public static IDstFSInterop InitializeNew(string dstpath, AesHelper encryptor=null)
         {
             DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
-            if (password != null)
-            {
-                AesHelper encryptor = AesHelper.CreateFromPassword(password);
-                byte[] keyfile = encryptor.CreateKeyFile();
-                diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
-                diskDstFSInterop.Encryptor = encryptor;
-            }
+            diskDstFSInterop.Encryptor = encryptor;
             return diskDstFSInterop;
         }
 
-        public static IDstFSInterop Load(string dstpath, string password=null)
+        public static IDstFSInterop Load(string dstpath, AesHelper encryptor=null)
         {
             DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
-            if (password != null)
-            {
-                byte[] keyfile = diskDstFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
-                AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
-                diskDstFSInterop.Encryptor = encryptor;
-            }
+            diskDstFSInterop.Encryptor = encryptor;
             return diskDstFSInterop;
         }
 

@@ -71,25 +71,27 @@ namespace CoreTest
             (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
             var vfsisrc = new VirtualFSInterop(vfsroot, vfsdatastore);
 
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache", password: "password");
+            ICoreDstDependencies cachedeps = null;
+
             List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
             for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
                 IDstFSInterop vfsidst;
                 if (i < nonencrypteddsts)
                 {
-                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()));
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), null);
                 }
                 else
                 {
-                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), "password");
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), srcdeps.AesTool);
                 }
                 ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, cache);
                 destinations.Add(dstdeps);
             }
             
-            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
-            ICoreDstDependencies cachedeps = null;
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache", null);
+            
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, destinations, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
@@ -118,22 +120,24 @@ namespace CoreTest
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
 
             List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
+
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, password: "password");
+
             for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
                 IDstFSInterop vfsidst;
                 if (i < nonencrypteddsts)
                 {
-                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()));
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), null);
                 }
                 else
                 {
-                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), "password");
+                    vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), srcdeps.AesTool);
                 }
                 destinations.Add(CoreDstDependencies.InitializeNew("test", vfsidst, true));
             }
 
-            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache", null);
             if (cache)
             {
                 ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
@@ -157,16 +161,16 @@ namespace CoreTest
             MetadataNode vfsroot = CreateBasicVirtualFS(1);
             BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, Path.Combine("dst", "1"), "cache", password: encrypted ? "password" : null);
             IDstFSInterop vfsidst;
             if (encrypted)
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"), "password");
+                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"), srcdeps.AesTool);
             } else
             {
-                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"));
+                vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"), null);
             }
-            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, Path.Combine("dst", "1"), "cache");
+            var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache", null);
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
@@ -175,13 +179,13 @@ namespace CoreTest
             vfsisrc = new VirtualFSInterop(vfsroot, datastore);
             if (encrypted)
             {
-                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"), "password");
+                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"), srcdeps.AesTool);
             }
             else
             {
-                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"));
+                vfsidst = VirtualFSInterop.LoadDst(vfsroot, datastore, Path.Combine("dst", "1"), null);
             }
-            vfsicache = VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
+            vfsicache = VirtualFSInterop.LoadDst(vfsroot, datastore, "cache", null);
             srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
             dstdeps = CoreDstDependencies.Load(vfsidst, true);
             cachedeps = null;

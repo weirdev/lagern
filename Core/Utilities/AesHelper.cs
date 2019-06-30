@@ -99,6 +99,7 @@ namespace BackupCore
             }
         }
 
+        // NOTE: The single reference to this method is unreachable, thus this method is itself unreachable
         public IVCryptoStream GetEncryptedStream(Stream input)
         {
             // TODO: Stream wrapping currently experiencing errors

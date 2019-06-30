@@ -52,48 +52,37 @@ namespace BackupCore
             AuthResp = AuthorizeAccount().Result;
         }
 
-        public static IDstFSInterop InitializeNew(string connectionsettingsfile, string password = null)
+        public static IDstFSInterop InitializeNew(string connectionsettingsfile, AesHelper encryptor = null)
         {
             BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
             return InitializeNew(connectionsettings.accountId, connectionsettings.ApplicationKey,
-                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
+                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, encryptor);
         }
 
         public static IDstFSInterop InitializeNew(string accountid, 
             string applicationkey, string bucketid, string bucketname,
-            string connectionSettingsFile=null, string password = null)
+            string connectionSettingsFile=null, AesHelper encryptor = null)
         {
             BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, 
                 bucketname, connectionSettingsFile);
-            if (password != null)
-            {
-                AesHelper encryptor = AesHelper.CreateFromPassword(password);
-                byte[] keyfile = encryptor.CreateKeyFile();
-                backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
-                backblazeDstInterop.Encryptor = encryptor;
-            }
+            backblazeDstInterop.Encryptor = encryptor;
             return backblazeDstInterop;
         }
 
-        public static IDstFSInterop Load(string connectionsettingsfile, string password=null)
+        public static IDstFSInterop Load(string connectionsettingsfile, AesHelper encryptor = null)
         {
             BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
             return Load(connectionsettings.accountId, connectionsettings.ApplicationKey,
-                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
+                connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, encryptor);
         }
 
         public static IDstFSInterop Load(string accountid, string applicationkey, 
             string bucketid, string bucketname, string connectionSettingsFile=null,
-            string password = null)
+            AesHelper encryptor = null)
         {
             BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, bucketname,
                 connectionSettingsFile);
-            if (password != null)
-            {
-                byte[] keyfile = backblazeDstInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
-                AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
-                backblazeDstInterop.Encryptor = encryptor;
-            }
+            backblazeDstInterop.Encryptor = encryptor;
             return backblazeDstInterop;
         }
 

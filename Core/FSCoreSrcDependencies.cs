@@ -21,27 +21,35 @@ namespace BackupCore
         
         private string SrcSettingsFile { get; set; }
 
+        // TODO: AesKeyFile is never used in source dependencies, only in destination dependencies
+        // So this property is never used
         private string AesKeyFile { get; set; }
 
         private IFSInterop FSInterop { get; set; }
 
-        private AesHelper AesTool { get; set; }
+        public AesHelper AesTool { get; set; }
 
         private FSCoreSrcDependencies(string src, IFSInterop fsinterop)
         {
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
+            AesKeyFile = Path.Combine(SettingsDirectoryName, AesKeyFilename);
         }
 
-        public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop)
+        public static FSCoreSrcDependencies Load(string src, IFSInterop fsinterop, string password = null)
         {
-            return new FSCoreSrcDependencies(src, fsinterop);
+            var srcdep = new FSCoreSrcDependencies(src, fsinterop);
+            if (password != null)
+            {
+                srcdep.ReadAesKeyFile(password);
+            }
+            return srcdep;
         }
 
         public static FSCoreSrcDependencies InitializeNew(string bsname, string src, IFSInterop fsinterop, 
             string dst = null, string cache = null, string cloudconfigfile = null, 
-            bool encryption_enabled = false)
+            string password = null)
         {
             var srcdep = new FSCoreSrcDependencies(src, fsinterop);
             srcdep.CreateDirectory(SettingsDirectoryName);
@@ -59,7 +67,13 @@ namespace BackupCore
             {
                 srcdep.WriteSetting(BackupSetting.cloud_config, cloudconfigfile);
             }
-            srcdep.WriteSetting(BackupSetting.encryption_enabled, encryption_enabled.ToString().ToLower());
+            srcdep.WriteSetting(BackupSetting.encryption_enabled, (password!=null).ToString().ToLower());
+            if (password != null)
+            {
+                srcdep.AesTool = AesHelper.CreateFromPassword(password);
+                byte[] keyfile = srcdep.AesTool.CreateKeyFile();
+                srcdep.OverwriteOrCreateFile(AesKeyFilename, keyfile);
+            }
             return srcdep;
         }
 
@@ -90,18 +104,14 @@ namespace BackupCore
             return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
         }
 
-        public Stream GetFileData(string relpath)
-        {
-            if (AesTool != null)
-            {
-                return AesTool.GetEncryptedStream(GetRawFileData(relpath));
-            }
-            return GetRawFileData(relpath);
-        }
-
         private Stream GetRawFileData(string relpath)
         {
             return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath));
+        }
+
+        public Stream GetFileData(string relpath)
+        {
+            return GetRawFileData(relpath);
         }
 
         public void OverwriteOrCreateFile(string path, byte[] data, FileMetadata fileMetadata = null, bool absolutepath = false)
@@ -199,7 +209,7 @@ namespace BackupCore
 
         private void WriteSettingsFileStream(byte[] data) => OverwriteOrCreateFile(SrcSettingsFile, data);
         
-        private void ReadAesKeyFile(string password)
+        public void ReadAesKeyFile(string password)
         {
             try
             {

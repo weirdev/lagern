@@ -70,7 +70,7 @@ namespace BackupCore
             CoreDstDependencies dstdep;
             try
             {
-                dstdep = CoreDstDependencies.Load(DiskDstFSInterop.Load(dst, password), cache != null);
+                dstdep = CoreDstDependencies.Load(DiskDstFSInterop.Load(dst, srcdep.AesTool), cache != null);
             }
             catch (Exception)
             {
@@ -88,8 +88,8 @@ namespace BackupCore
         // or simply not exist at all
         public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, string password=null)
         {
-            ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache, null, password!=null);
-            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst, password), cache!=null);
+            ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache, null, password);
+            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst, srcdep.AesTool), cache!=null);
             CoreDstDependencies cachedep = null;
             if (cache != null)
             {
