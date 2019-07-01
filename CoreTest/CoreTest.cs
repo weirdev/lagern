@@ -286,15 +286,15 @@ namespace CoreTest
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = testdata;
 
             var bh1 = core.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
+            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
             var bh2 = core.RunBackup("test", "run2");
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
+            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             // Full hash test
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
+            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
             // Just prefix
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
             // All backups deleted
@@ -333,7 +333,6 @@ namespace CoreTest
             var (dstCore, _, _, _, _) = testdata;
 
             var bh1 = srcCore.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             srcCore.TransferBackupSet("test", dstCore, true);
         }

@@ -267,7 +267,7 @@ namespace BackupCore
                     if (deltanodes[i] != null)
                     {
                         filtereddn.Add(deltanodes[i]);
-                        filteredpn.Add(deltanodes[i]);
+                        filteredpn.Add(previousmnodes[i]);
                     }
                 }
                 deltanodes = filtereddn;
