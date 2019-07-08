@@ -3,6 +3,7 @@ using System.IO;
 using CoreTest;
 using System.Diagnostics;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Testing
 {
@@ -66,7 +67,7 @@ namespace Testing
 
         static double BackupRun(string bsname, string src, string dst)
         {
-            var backupper = BackupCore.Core.LoadDiskCore(src, dst); // Dont count initial setup in time
+            var backupper = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
@@ -83,7 +84,7 @@ namespace Testing
 
         static void GetStatus(string bsname, string src, string dst)
         {
-            var core = BackupCore.Core.LoadDiskCore(src, dst);
+            var core = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) });
             foreach (var item in core.GetWTStatus(bsname))
             {
                 Console.WriteLine(string.Format("{0}:\t{1}", item.path, item.change));

@@ -39,27 +39,18 @@ namespace BackupCore
             return new FSCoreSrcDependencies(src, fsinterop);
         }
 
-        public static FSCoreSrcDependencies InitializeNew(string bsname, string src, IFSInterop fsinterop, 
-            string dst = null, string cache = null, string cloudconfigfile = null, 
-            bool encryption_enabled = false)
+        public static FSCoreSrcDependencies InitializeNew(string bsname, string src, IFSInterop fsinterop, string cache = null)
         {
             var srcdep = new FSCoreSrcDependencies(src, fsinterop);
             srcdep.CreateDirectory(SettingsDirectoryName);
 
             srcdep.WriteSetting(BackupSetting.name, bsname);
-            if (dst != null)
-            {
-                srcdep.WriteSetting(BackupSetting.dest, dst);
-            }
+            
             if (cache != null)
             {
                 srcdep.WriteSetting(BackupSetting.cache, cache);
             }
-            if (cloudconfigfile != null)
-            {
-                srcdep.WriteSetting(BackupSetting.cloud_config, cloudconfigfile);
-            }
-            srcdep.WriteSetting(BackupSetting.encryption_enabled, encryption_enabled.ToString().ToLower());
+           
             return srcdep;
         }
 

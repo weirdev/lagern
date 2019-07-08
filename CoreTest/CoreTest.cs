@@ -88,7 +88,7 @@ namespace CoreTest
             }
             
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "dst", "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, destinations, cachedeps);
@@ -166,7 +166,7 @@ namespace CoreTest
                 vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"));
             }
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, Path.Combine("dst", "1"), "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
             ICoreDstDependencies cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);

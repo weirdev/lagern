@@ -20,7 +20,7 @@ namespace BackupConsole
         
         public static void Main(string[] args)
         {
-            if (args.Length > 0 && args[0] == "loop")
+            if (args.Length > 0 && args[0].Trim() == "loop")
             {
                 while (true)
                 {
@@ -40,10 +40,11 @@ namespace BackupConsole
             // This overall try catch looks ugly, but helps crashes seem to occur gracefully to the user
             try
             {
-                var p = Parser.Default.ParseArguments<InitOptions, ShowOptions, SetOptions, ClearOptions,
+                var p = Parser.Default.ParseArguments<InitOptions, AddDestinationOptions, ShowOptions, SetOptions, ClearOptions,
                     StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions,
                     BrowseOptions, TransferOptions, SyncCacheOptions, ExitOptions>(args)
                   .WithParsed<InitOptions>(opts => Initialize(opts))
+                  .WithParsed<AddDestinationOptions>(AddDestination)
                   .WithParsed<ShowOptions>(opts => ShowSettings(opts))
                   .WithParsed<SetOptions>(opts => SetSetting(opts))
                   .WithParsed<ClearOptions>(opts => ClearSetting(opts))
@@ -72,12 +73,31 @@ namespace BackupConsole
             [Option('n', "bsname", Required = true, HelpText = "The name of the new backup set")]
             public string BSName { get; set; }
 
-            [Value(0, Required = true, HelpText = "The destination path or name of the cloud service in which to store the new backup set")]
-            public string Destination { get; set; }
+            /*
+            [Value(0, Required = true, HelpText = "The destination paths or names of the cloud services in which to store the new backup set")]
+            public IEnumerable<string> Destinations { get; set; }
+            */
 
             [Option('c', "cache", Required = false, HelpText = "The path of the cache, should be on the same disk " +
                 "as the files being backed up")]
             public string Cache { get; set; }
+
+            [Option("cloud-config", Required = false, HelpText = "Path to a JSON-formatted file containing configuration settings " +
+                "for cloud backup provider")]
+            public string CloudConfigFile { get; set; }
+
+            [Option('p', "password", Required = false, HelpText = "Encrypt stored backups with given password")]
+            public bool PromptForPassword { get; set; }
+        }
+
+        [Verb("dest", HelpText = "Add a destinations to which new backups will be saved")]
+        class AddDestinationOptions
+        {
+            [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
+            public string BSName { get; set; }
+
+            [Value(0, Required = true, HelpText = "The destination path or name of the cloud service in which to store the backup set")]
+            public string Destination { get; set; }
 
             [Option("cloud-config", Required = false, HelpText = "Path to a JSON-formatted file containing configuration settings " +
                 "for cloud backup provider")]
@@ -226,28 +246,13 @@ namespace BackupConsole
 
         private static void Initialize(InitOptions opts)
         {
-            string password = null;
-            if (opts.PromptForPassword)
-            {
-                password = PasswordPrompt();
-            }
             try
             {
-                Core core;
-                if (opts.Destination.Trim().ToLower() == "backblaze")
+                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), opts.Cache);
+
+                if (opts.Cache != null)
                 {
-                    ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), "backblaze", opts.Cache, opts.CloudConfigFile, password!=null);
-                    ICoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), opts.Cache!=null);
-                    ICoreDstDependencies cachedep = null;
-                    if (opts.Cache != null)
-                    {
-                        cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, DiskDstFSInterop.InitializeNew(opts.Cache), false);
-                    }
-                    core = new Core(srcdep, new List<ICoreDstDependencies>() { dstdep }, cachedep);
-                }
-                else
-                {
-                    core = Core.InitializeNewDiskCore(opts.BSName, cwd, opts.Destination, opts.Cache, password);
+                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, DiskDstFSInterop.InitializeNew(opts.Cache), false);
                 }
             }
             catch (Exception e)
@@ -256,11 +261,52 @@ namespace BackupConsole
             }
         }
 
+        private static void AddDestination(AddDestinationOptions opts)
+        {
+            var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
+            var settings = srcdep.ReadSettings();
+            bool cache_used = settings.ContainsKey(BackupSetting.cache);
+
+            string password = null;
+            if (opts.PromptForPassword)
+            {
+                password = PasswordPrompt();
+            }
+
+            string destination = opts.Destination.Trim();
+            if (destination.ToLower() == "backblaze")
+            {
+                destination = "backblaze";
+                CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
+            }
+            else
+            {
+                CoreDstDependencies.InitializeNew(opts.BSName, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
+            }
+
+
+            List<string> dstlistings;
+            if (settings.ContainsKey(BackupSetting.dests))
+            {
+                dstlistings = settings[BackupSetting.dests].Split(';', StringSplitOptions.RemoveEmptyEntries).Select(d => d.Trim()).ToList();
+            }
+            else
+            {
+                dstlistings = new List<string>();
+            }
+
+            List<string[]> dsts_passopts_cc = dstlistings.Select(dl => dl.Split('|')).ToList();
+
+            dsts_passopts_cc.Add(new string[] { destination, password != null ? "p" : "n",  opts.CloudConfigFile ?? ""});
+            dstlistings = dsts_passopts_cc.Select(dpc => string.Join('|', dpc)).ToList();
+            srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings));
+        }
+
         private static void ShowSettings(ShowOptions opts)
         {
             if (opts.Setting != null)
             {
-                var settingval = ReadSetting(LoadCore(), opts.Setting.Value);
+                var settingval = ReadSetting(LoadCore().SrcDependencies, opts.Setting.Value);
                 if (settingval != null)
                 {
                     Console.WriteLine(settingval);
@@ -282,7 +328,7 @@ namespace BackupConsole
 
         private static void SetSetting(SetOptions opts)
         {
-            WriteSetting(LoadCore(), opts.Setting, opts.Value);
+            WriteSetting(LoadCore().SrcDependencies, opts.Setting, opts.Value);
         }
 
         private static void Status(StatusOptions opts)
@@ -347,7 +393,7 @@ namespace BackupConsole
                 {
                     bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force);
                 }
-                catch (BackupCore.Core.BackupRemoveException ex)
+                catch (Core.BackupRemoveException ex)
                 {
                     Console.WriteLine(ex.Message);
                 }
@@ -460,7 +506,7 @@ namespace BackupConsole
         {
             if (bsname == null)
             {
-                bsname = ReadSetting(core, BackupCore.BackupSetting.name);
+                bsname = ReadSetting(core.SrcDependencies, BackupCore.BackupSetting.name);
                 if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
@@ -474,33 +520,19 @@ namespace BackupConsole
         public static Core LoadCore()
         {
             var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
-            string destination;
             string cache;
-            string cloudsettings;
-            bool encryptionEnabled;
-            string password = null;
 
+            string destinations;
             try
             {
-                encryptionEnabled = srcdep.ReadSetting(BackupSetting.encryption_enabled).ToLower().Trim() == "true";
+                destinations = srcdep.ReadSetting(BackupSetting.dests);
             }
             catch (KeyNotFoundException)
             {
-                encryptionEnabled = false;
-            }
-            if (encryptionEnabled)
-            {
-                password = PasswordPrompt();
+                destinations = null;
             }
 
-            try
-            {
-                destination = srcdep.ReadSetting(BackupSetting.dest);
-            }
-            catch (KeyNotFoundException)
-            {
-                destination = null;
-            }
+
             try
             {
                 cache = srcdep.ReadSetting(BackupSetting.cache);
@@ -509,22 +541,16 @@ namespace BackupConsole
             {
                 cache = null;
             }
-            try
+
+            if (destinations == null)
             {
-                cloudsettings = srcdep.ReadSetting(BackupSetting.cloud_config);
-            }
-            catch (KeyNotFoundException)
-            {
-                cloudsettings = null;
-            }
-            if (destination == null)
-            {
-                destination = GetBUDestinationDir();
+                string destination = GetBUDestinationDir();
                 if (destination != null) // We are in a backup destination
                 {
                     try
                     {
-                        return Core.LoadDiskCore(null, destination, null, password);
+                        // TODO: password support here
+                        return Core.LoadDiskCore(null, new List<(string, string)>(1) { (destination, null) }, null);
                     }
                     catch
                     {
@@ -540,36 +566,52 @@ namespace BackupConsole
             }
             else
             {
-                try
+                ICoreDstDependencies cachedep = null;
+                if (cache != null)
                 {
-                    if (destination == "backblaze")
+                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
+                }
+
+                List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+                foreach (var destination in destinations.Split(';'))
+                {
+                    string[] dst_passopt_cc = destination.Split('|');
+                    string dst_path = dst_passopt_cc[0].Trim();
+                    bool use_pass = dst_passopt_cc[1].Trim().ToLower() == "p";
+                    string cloud_config = dst_passopt_cc[2].Trim() == "" ? null : dst_passopt_cc[2].Trim();
+
+                    string password = null;
+                    if (use_pass)
                     {
-                        ICoreDstDependencies dstdep;
+                        password = PasswordPrompt();
+                    }
+
+                    if (dst_path.ToLower() == "backblaze")
+                    {
                         try
                         {
-                            dstdep = CoreDstDependencies.Load(BackblazeDstInterop.Load(cloudsettings, password), cache != null);
+                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password), cache != null));
                         }
                         catch
                         {
-                            // Problem accessing backblaze, will fallback to cache
-                            dstdep = null;
+                            Console.WriteLine("Failed to load backblaze");
                         }
-                        ICoreDstDependencies cachedep = null;
-                        if (cache != null)
-                        {
-                            cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
-                        }
-                        return new Core(srcdep, new List<ICoreDstDependencies>() { dstdep }, cachedep);
+                            
+                            
                     }
                     else
                     {
-                        return Core.LoadDiskCore(cwd, destination, cache, password);
+                        try
+                        {
+                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password), cache != null));
+                        }
+                        catch (Exception)
+                        {
+                            Console.WriteLine($"Failed to load {dst_path}");
+                        }
                     }
                 }
-                catch
-                {
-                    throw;
-                }
+                return new Core(srcdep, dstdeps, cachedep);
             }
         }
 
@@ -596,16 +638,17 @@ namespace BackupConsole
         {
             var bcore = LoadCore();
             string backupsetname = GetBackupSetName(opts.BSName, bcore);
-            bcore.TransferBackupSet(backupsetname, BackupCore.Core.InitializeNewDiskCore(backupsetname, null, opts.Destination), true);
+            // TODO: password support
+            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string)>(1) { (opts.Destination, null) }), true);
         }
 
-        public static string ReadSetting(Core core, BackupSetting key) => core.SrcDependencies.ReadSetting(key);
+        public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);
 
-        private static void WriteSetting(Core core, BackupSetting key, string value) => core.SrcDependencies.WriteSetting(key, value);
+        private static void WriteSetting(ICoreSrcDependencies src, BackupSetting key, string value) => src.WriteSetting(key, value);
 
         private static void ClearSetting(ClearOptions opts)
         {
-            BackupCore.Core core = LoadCore();
+            Core core = LoadCore();
             core.SrcDependencies.ClearSetting(opts.Setting);
         }
 

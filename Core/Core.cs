@@ -64,38 +64,46 @@ namespace BackupCore
         /// <param name="backupsetname"></param>
         /// <param name="src">Backup source directory</param>
         /// <param name="dst">Backup destination directory</param>
-        public static Core LoadDiskCore(string src, string dst, string cache=null, string password=null)
+        public static Core LoadDiskCore(string src, IEnumerable<(string dst_path, string password)> dsts, string cache=null)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.Load(src, new DiskFSInterop());
-            CoreDstDependencies dstdep;
-            try
+            List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+            foreach (var (dst_path, password) in dsts)
             {
-                dstdep = CoreDstDependencies.Load(DiskDstFSInterop.Load(dst, password), cache != null);
+                try
+                {
+                    dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password), cache != null));
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine($"Failed to load {dst_path}");
+                }
             }
-            catch (Exception)
-            {
-                dstdep = null;
-            }
+            
             CoreDstDependencies cachedep = null;
             if (cache != null)
             {
                 cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
             }
-            return new Core(srcdep, new List<ICoreDstDependencies>(1) { dstdep }, cachedep);
+            return new Core(srcdep, dstdeps, cachedep);
         }
 
         // TODO: This method shouldn't exist in Core, it should be in its own class of similar helper methods,
         // or simply not exist at all
-        public static Core InitializeNewDiskCore(string bsname, string src, string dst, string cache = null, string password=null)
+        public static Core InitializeNewDiskCore(string bsname, string src, IEnumerable<(string dst_path, string password)> dsts, string cache = null)
         {
-            ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), dst, cache, null, password!=null);
-            CoreDstDependencies dstdep = CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst, password), cache!=null);
+            ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), cache);
+            List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+            foreach (var (dst_path, password) in dsts)
+            {
+                dstdeps.Add(CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(dst_path, password), cache != null));
+            }
             CoreDstDependencies cachedep = null;
             if (cache != null)
             {
                 cachedep = CoreDstDependencies.InitializeNew(bsname + CacheSuffix, DiskDstFSInterop.InitializeNew(cache), false);
             }
-            return new Core(srcdep, new List<ICoreDstDependencies>(1) { dstdep }, cachedep);
+            return new Core(srcdep, dstdeps, cachedep);
         }
 
         /// <summary>
@@ -717,6 +725,10 @@ namespace BackupCore
                     {
                         try
                         {
+                            if (d >= prev_backup_hash_prefixes.Count)
+                            {
+                                throw new KeyNotFoundException();
+                            }
                             BackupRecord previousbackup = dst.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefixes[d]);
                             if (previousbackup != null)
                             {
@@ -727,7 +739,7 @@ namespace BackupCore
                                 throw new KeyNotFoundException();
                             }
                         }
-                        catch
+                        catch (KeyNotFoundException)
                         {
                             BackupRecord previousbackup = dst.Backups.GetBackupRecord(backupsetname);
                             if (previousbackup != null)
@@ -1234,11 +1246,9 @@ namespace BackupCore
     
     public enum BackupSetting
     {
-        dest,
+        dests,
         cache,
-        name,
-        cloud_config,
-        encryption_enabled
+        name
     }
 
     public enum IndexFileType
