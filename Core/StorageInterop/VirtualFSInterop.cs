@@ -220,14 +220,16 @@ namespace BackupCore
             return Task.Run(() => OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data));
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] hash)
+        public Task<byte[]> LoadBlobAsync(byte[] encryptedhash)
         {
-            byte[] data = ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
-            if (Encryptor != null)
-            {
-                data = Encryptor.DecryptBytes(data);
-            }
-            return Task.Run(() => data);
+            return Task.Run(() => {
+                byte[] data = ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(encryptedhash)));
+                if (Encryptor != null)
+                {
+                    data = Encryptor.DecryptBytes(data);
+                }
+                return data;
+            });
         }
 
         public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)

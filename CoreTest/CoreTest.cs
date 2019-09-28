@@ -271,17 +271,17 @@ namespace CoreTest
             Restore(true, false);
         }
 
-        public void RemoveBackup(bool encrypted, bool cache)
+        public void RemoveBackup(bool encrypted, bool cache, int? randomseed=null)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache, randomseed: randomseed);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache, randomseed: randomseed);
             }
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = testdata;
 
@@ -304,8 +304,8 @@ namespace CoreTest
         [TestMethod]
         public void TestRemoveBackup()
         {
-            RemoveBackup(false, false);
-            RemoveBackup(true, true);
+            //RemoveBackup(false, false);
+            RemoveBackup(true, true, 91);
         }
 
         public void TransferBackupSet(bool encrypted, bool cache)

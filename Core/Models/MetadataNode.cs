@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Collections;
+using BackupCore.Models;
 
 namespace BackupCore
 {
@@ -198,13 +199,20 @@ namespace BackupCore
         /// </summary>
         /// <param name="blobs"></param>
         /// <param name="storeGetHash">Function called to store node data, returns hash</param>
-        /// <returns></returns>
-        public byte[] Store(Func<byte[], byte[]> storeGetHash)
+        /// <returns>The hash of the stored tree and a tree of its child hashes.</returns>
+        public (byte[] nodehash, HashTreeNode node) Store(Func<byte[], byte[]> storeGetHash)
         {
+            List<(byte[] nodehash, HashTreeNode node)> children = new List<(byte[] nodehash, HashTreeNode node)>();
             List<byte[]> dirhashes = new List<byte[]>();
             foreach (MetadataNode dir in Directories.Values)
             {
-                dirhashes.Add(dir.Store(storeGetHash));
+                var (newhash, newnode) = dir.Store(storeGetHash);
+                dirhashes.Add(newhash);
+                children.Add((newhash, newnode));
+            }
+            foreach (var fm in Files.Values.AsEnumerable())
+            {
+                children.Add((fm.FileHash, null));
             }
             Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
             // -"-v1"
@@ -223,7 +231,9 @@ namespace BackupCore
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             
-            return storeGetHash(BinaryEncoding.dict_encode(mtdata));
+            byte[] nodehash = storeGetHash(BinaryEncoding.dict_encode(mtdata));
+            HashTreeNode node = new HashTreeNode(children);
+            return (nodehash, node);
         }
 
         public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode parent = null)

@@ -8,6 +8,7 @@ using System.Xml;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Security.Cryptography;
+using BackupCore.Models;
 
 namespace BackupCore
 {
@@ -721,18 +722,14 @@ namespace BackupCore
                 var dst = DefaultDstDependencies[d];
                 if (differential)
                 {
-                    if (prev_backup_hash_prefixes == null || d >= prev_backup_hash_prefixes.Count || prev_backup_hash_prefixes[d] == null)
+                    if (prev_backup_hash_prefixes != null && d < prev_backup_hash_prefixes.Count && prev_backup_hash_prefixes[d] != null)
                     {
                         try
                         {
-                            if (d >= prev_backup_hash_prefixes.Count)
-                            {
-                                throw new KeyNotFoundException();
-                            }
                             BackupRecord previousbackup = dst.Backups.GetBackupRecord(backupsetname, prev_backup_hash_prefixes[d]);
                             if (previousbackup != null)
                             {
-                                previousbackups.Add(previousbackup);
+                                previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
                             }
                             else
                             {
@@ -853,7 +850,7 @@ namespace BackupCore
             byte[] newmtreehash = Blobs.StoreDataSync(newmtreebytes, BlobLocation.BlobTypes.MetadataTree);
             */
 
-            List<byte[]> newmtreehashes = deltatrees.Select(deltatree => deltatree.Store((byte[] data) => 
+            List<(byte[] mtreehash, HashTreeNode references)> newmtreehashes = deltatrees.Select(deltatree => deltatree.Store((byte[] data) => 
                     BlobStore.StoreData(DefaultDstDependencies.Select(dst => dst.Blobs), 
                     backupsetname, data))).ToList();
 
@@ -863,12 +860,12 @@ namespace BackupCore
             {
                 var dst = DefaultDstDependencies[i];
                 var defaultbset = dst.Backups.LoadBackupSet(backupsetname);
-                backuphash = dst.Backups.AddBackup(backupsetname, message, newmtreehashes[i], false, backupTime, defaultbset);
+                backuphash = dst.Backups.AddBackup(backupsetname, message, newmtreehashes[i].mtreehash, false, backupTime, defaultbset);
                 dst.Backups.SaveBackupSet(defaultbset, backupsetname);
                 // Backup record has just been stored, all data now stored
 
                 // Finalize backup by incrementing reference counts in blobstore as necessary
-                dst.Blobs.FinalizeBlobAddition(backupsetname, backuphash, BlobLocation.BlobType.BackupRecord);
+                dst.Blobs.FinalizeBackupAddition(backupsetname, backuphash, newmtreehashes[i].mtreehash, newmtreehashes[i].references);
             }
 
             // TODO: Only really need to sync cache with one destination
