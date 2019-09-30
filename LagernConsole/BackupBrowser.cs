@@ -22,7 +22,7 @@ namespace BackupConsole
         
         int BackupDst { get; set; }
         
-        public BackupBrowser(string backupset, string backuphash, BackupCore.Core bcore, int backupdst=0)
+        public BackupBrowser(string backupset, string? backuphash, BackupCore.Core bcore, int backupdst=0)
         {
             ContinueLoop = true;
             BCore = bcore;
@@ -51,7 +51,9 @@ namespace BackupConsole
         class CDOptions
         {
             [Value(0, Required = true, HelpText = "The path of the directory to change to")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Directory { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         }
 
         [Verb("ls", HelpText = "List the contents of a directory")]
@@ -64,7 +66,7 @@ namespace BackupConsole
             public int Offset { get; set; }
 
             [Option('b', "backup", Required = false, Default = null, HelpText = "The hash of the backup to switch to.")]
-            public string Backup { get; set; }
+            public string? Backup { get; set; }
         }
 
         public void CommandLoop()
@@ -96,9 +98,9 @@ namespace BackupConsole
             }
         }
 
-        private  string GetBUDestinationDir()
+        private string? GetBUDestinationDir()
         {
-            string dir = cwd;
+            string? dir = cwd;
             do
             {
                 if (Directory.Exists(Path.Combine(dir, "backup")))
@@ -137,7 +139,7 @@ namespace BackupConsole
 
         private void ChangeDirectory(CDOptions opts)
         {
-            BackupCore.MetadataNode dir;
+            BackupCore.MetadataNode? dir;
             try
             {
                 if (opts.Directory.StartsWith(Path.DirectorySeparatorChar.ToString()))
@@ -169,7 +171,7 @@ namespace BackupConsole
         private void ChangeBackup(CBOptions opts)
         {
             string curpath = CurrentNode.Path;
-            string backuphash = opts.Backup;
+            string backuphash;
             if (opts.Backup == null)
             {
                 if (opts.Offset == 0)
@@ -177,13 +179,20 @@ namespace BackupConsole
                     throw new ChangeBackupException("Must set either or both backup or offset.");
                 }
                 backuphash = BackupHash;
+            } else
+            {
+                backuphash = opts.Backup;
             }
             var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(BackupSet, backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
-            CurrentNode = BackupTree.GetDirectory(curpath);
-            if (CurrentNode == null)
+            BackupCore.MetadataNode ? curnode = BackupTree.GetDirectory(curpath);
+            if (curnode != null)
+            {
+                CurrentNode = curnode;
+            } 
+            else
             {
                 CurrentNode = BackupTree;
             }

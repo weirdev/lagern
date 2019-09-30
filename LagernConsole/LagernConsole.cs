@@ -71,7 +71,9 @@ namespace BackupConsole
         class InitOptions
         {
             [Option('n', "bsname", Required = true, HelpText = "The name of the new backup set")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string BSName { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
 
             /*
             [Value(0, Required = true, HelpText = "The destination paths or names of the cloud services in which to store the new backup set")]
@@ -80,11 +82,11 @@ namespace BackupConsole
 
             [Option('c', "cache", Required = false, HelpText = "The path of the cache, should be on the same disk " +
                 "as the files being backed up")]
-            public string Cache { get; set; }
+            public string? Cache { get; set; }
 
             [Option("cloud-config", Required = false, HelpText = "Path to a JSON-formatted file containing configuration settings " +
                 "for cloud backup provider")]
-            public string CloudConfigFile { get; set; }
+            public string? CloudConfigFile { get; set; }
 
             [Option('p', "password", Required = false, HelpText = "Encrypt stored backups with given password")]
             public bool PromptForPassword { get; set; }
@@ -94,14 +96,16 @@ namespace BackupConsole
         class AddDestinationOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Value(0, Required = true, HelpText = "The destination path or name of the cloud service in which to store the backup set")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Destination { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
 
             [Option("cloud-config", Required = false, HelpText = "Path to a JSON-formatted file containing configuration settings " +
                 "for cloud backup provider")]
-            public string CloudConfigFile { get; set; }
+            public string? CloudConfigFile { get; set; }
 
             [Option('p', "password", Required = false, HelpText = "Encrypt stored backups with given password")]
             public bool PromptForPassword { get; set; }
@@ -124,7 +128,9 @@ namespace BackupConsole
             public BackupCore.BackupSetting Setting { get; set; }
 
             [Value(0, Required = true, HelpText = "The value to give setting")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Value { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         }
 
         [Verb("clear", HelpText = "Clear a lagern setting")]
@@ -138,36 +144,40 @@ namespace BackupConsole
         class StatusOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to use for a differential backup")]
-            public string BackupHash { get; set; }
+            public string? BackupHash { get; set; }
         }
 
         [Verb("run", HelpText = "Run a backup.")]
         class RunOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Option('b', "backup", Required = false, SetName = "differential", HelpText = "The hash of the backup to use for a differential backup")]
-            public string BackupHash { get; set; }
+            public string? BackupHash { get; set; }
 
             [Option('s', "scan", SetName = "differential", HelpText = "Forces scan of all files (makes backup non-differential)")]
             public bool Scan { get; set; }
 
             [Option('m', "message", Default = "", HelpText = "A message describing the backup")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Message { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         }
 
         [Verb("delete", HelpText = "Delete a backup")]
         class DeleteOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Option('b', "backup", Required = true, HelpText = "The backup hash (or its prefix) of the backup to be deleted")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string BackupHash { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
 
             [Option('f', "force", Required = false, Default = false, HelpText = "Force deleting backup from destination when destination inaccessible")]
             public bool Force { get; set; }
@@ -177,16 +187,18 @@ namespace BackupConsole
         public class RestoreOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
-            public string BackupHash { get; set; }
+            public string? BackupHash { get; set; }
 
             [Option('r', "restorepath", Required = false, HelpText = "The path which to restore the file or directory, defaults to current directory")]
-            public string RestorePath { get; set; }
+            public string? RestorePath { get; set; }
 
             [Value(0, Required = true, HelpText = "The path, relative to the backup root of the file or directory to restore")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Path { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         }
 
         [Verb("list", HelpText = "List saved backups")]
@@ -203,34 +215,36 @@ namespace BackupConsole
         public class ListOptions : ListNoNameOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
         }
 
         [Verb("browse", HelpText = "Browse a previous backup")]
         public class BrowseOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
-            public string BackupHash { get; set; }
+            public string? BackupHash { get; set; }
         }
 
         [Verb("transfer", HelpText = "Transfer a backup store to another location")]
         public class TransferOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
 
             [Value(0, Required = true, HelpText = "The destination which to transfer the backup store")]
+            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Destination { get; set; }
+            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
         }
 
         [Verb("synccache", HelpText = "Sync the cache to the destination")]
         class SyncCacheOptions
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
-            public string BSName { get; set; }
+            public string? BSName { get; set; }
         }
 
         /*
@@ -266,8 +280,9 @@ namespace BackupConsole
             var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
             var settings = srcdep.ReadSettings();
             bool cache_used = settings.ContainsKey(BackupSetting.cache);
+            string bsname = GetBackupSetName(opts.BSName, srcdep);
 
-            string password = null;
+            string? password = null;
             if (opts.PromptForPassword)
             {
                 password = PasswordPrompt();
@@ -277,11 +292,15 @@ namespace BackupConsole
             if (destination.ToLower() == "backblaze")
             {
                 destination = "backblaze";
-                CoreDstDependencies.InitializeNew(opts.BSName, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
+                if (opts.CloudConfigFile == null)
+                {
+                    throw new ArgumentException("Cloud config file needed to initialize backblaze backup.");
+                }
+                CoreDstDependencies.InitializeNew(bsname, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
             }
             else
             {
-                CoreDstDependencies.InitializeNew(opts.BSName, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
+                CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
             }
 
 
@@ -336,10 +355,10 @@ namespace BackupConsole
             try
             {
                 var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore);
+                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 TablePrinter table = new TablePrinter();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
-                List<(int, string)> trackclasses;
+                List<(int, string)>? trackclasses;
                 try
                 {
                     trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
@@ -365,8 +384,8 @@ namespace BackupConsole
             try
             {
                 var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore);
-                List<(int, string)> trackclasses;
+                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                List<(int, string)>? trackclasses;
                 try
                 {
                     trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
@@ -375,7 +394,7 @@ namespace BackupConsole
                 {
                     trackclasses = null;
                 }
-                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string> { opts.BackupHash });
+                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string?> { opts.BackupHash });
             }
             catch (Exception e)
             {
@@ -388,7 +407,7 @@ namespace BackupConsole
             try
             { 
                 var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore);
+                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
                     bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force);
@@ -409,7 +428,7 @@ namespace BackupConsole
             try
             {
                 var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore);
+                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 string restorepath = opts.Path;
                 bool absolutepath = false;
                 if (opts.RestorePath != null)
@@ -425,7 +444,7 @@ namespace BackupConsole
             }
         }
 
-        public static void ListBackups(ListNoNameOptions opts, string bsname, BackupCore.Core bcore = null)
+        public static void ListBackups(ListNoNameOptions opts, string bsname, Core? bcore = null)
         {
             ListOptions opts2 = new ListOptions
             {
@@ -436,13 +455,13 @@ namespace BackupConsole
             ListBackups(opts2, bcore);
         }
 
-        public static void ListBackups(ListOptions opts, BackupCore.Core bcore = null)
+        public static void ListBackups(ListOptions opts, Core? bcore = null)
         {
             if (bcore == null)
             {
                 bcore = LoadCore();
             }
-            string bsname = GetBackupSetName(opts.BSName, bcore);
+            string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             (var backupsenum, bool cache) = bcore.GetBackups(bsname);
             var backups = backupsenum.ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
@@ -492,7 +511,7 @@ namespace BackupConsole
             try
             {
                 var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore);
+                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 bcore.SyncCacheSaveBackupSets(bsname);
                 bcore.SaveBlobIndices();
             }
@@ -502,11 +521,11 @@ namespace BackupConsole
             }
         }
 
-        public static string GetBackupSetName(string bsname, Core core)
+        public static string GetBackupSetName(string? bsname, ICoreSrcDependencies srcDependencies)
         {
             if (bsname == null)
             {
-                bsname = ReadSetting(core.SrcDependencies, BackupCore.BackupSetting.name);
+                bsname = ReadSetting(srcDependencies, BackupCore.BackupSetting.name);
                 if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
@@ -520,9 +539,9 @@ namespace BackupConsole
         public static Core LoadCore()
         {
             var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
-            string cache;
+            string? cache;
 
-            string destinations;
+            string? destinations;
             try
             {
                 destinations = srcdep.ReadSetting(BackupSetting.dests);
@@ -544,13 +563,13 @@ namespace BackupConsole
 
             if (destinations == null)
             {
-                string destination = GetBUDestinationDir();
+                string? destination = GetBUDestinationDir();
                 if (destination != null) // We are in a backup destination
                 {
                     try
                     {
                         // TODO: password support here
-                        return Core.LoadDiskCore(null, new List<(string, string)>(1) { (destination, null) }, null);
+                        return Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null);
                     }
                     catch
                     {
@@ -566,7 +585,7 @@ namespace BackupConsole
             }
             else
             {
-                ICoreDstDependencies cachedep = null;
+                ICoreDstDependencies? cachedep = null;
                 if (cache != null)
                 {
                     cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
@@ -578,9 +597,9 @@ namespace BackupConsole
                     string[] dst_passopt_cc = destination.Split('|');
                     string dst_path = dst_passopt_cc[0].Trim();
                     bool use_pass = dst_passopt_cc[1].Trim().ToLower() == "p";
-                    string cloud_config = dst_passopt_cc[2].Trim() == "" ? null : dst_passopt_cc[2].Trim();
+                    string? cloud_config = dst_passopt_cc[2].Trim() == "" ? null : dst_passopt_cc[2].Trim();
 
-                    string password = null;
+                    string? password = null;
                     if (use_pass)
                     {
                         password = PasswordPrompt();
@@ -590,6 +609,10 @@ namespace BackupConsole
                     {
                         try
                         {
+                            if (cloud_config == null)
+                            {
+                                throw new Exception("Backblaze backups require a cloud config file to be specified");
+                            }
                             dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password), cache != null));
                         }
                         catch
@@ -629,7 +652,7 @@ namespace BackupConsole
         public static void BrowseBackup(BrowseOptions opts)
         {
             Core bcore = LoadCore();
-            string bsname = GetBackupSetName(opts.BSName, bcore);
+            string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             var browser = new BackupBrowser(bsname, opts.BackupHash, bcore);
             browser.CommandLoop();
         }
@@ -637,9 +660,9 @@ namespace BackupConsole
         public static void TransferBackupStore(TransferOptions opts)
         {
             var bcore = LoadCore();
-            string backupsetname = GetBackupSetName(opts.BSName, bcore);
+            string backupsetname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string)>(1) { (opts.Destination, null) }), true);
+            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
         }
 
         public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);
@@ -654,7 +677,7 @@ namespace BackupConsole
 
         private static string GetBUSourceDir()
         {
-            string dir = cwd;
+            string? dir = cwd;
             do
             {
                 if (File.Exists(Path.Combine(dir, LagernSettingsFile)))
@@ -666,9 +689,9 @@ namespace BackupConsole
             return cwd;
         }
 
-        private static string GetBUDestinationDir()
+        private static string? GetBUDestinationDir()
         {
-            string dir = cwd;
+            string? dir = cwd;
             do
             {
                 if (Directory.Exists(Path.Combine(dir, "index")))

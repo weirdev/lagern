@@ -27,7 +27,7 @@ namespace BackupConsole
             }
         }
 
-        public Tuple<string, Dictionary<string, string>, Dictionary<string, string>> ParseInput(string[] args)
+        public Tuple<string, Dictionary<string, string>, Dictionary<string, string?>>? ParseInput(string[] args)
         {
             // TODO: fail more often (gracefully) for bad inputs
             if (args.Length >= 1)
@@ -36,7 +36,7 @@ namespace BackupConsole
                 {
                     ArgumentNode subcommand = Commands[args[0]];
                     var parsed = subcommand.ParseArgs(args);
-                    return new Tuple<string, Dictionary<string, string>, Dictionary<string, string>>(args[0], parsed.Item1, parsed.Item2);
+                    return new Tuple<string, Dictionary<string, string>, Dictionary<string, string?>>(args[0], parsed.Item1, parsed.Item2);
                 }
             }
             else if (Commands.ContainsKey("")) // allow for default action if no subcommand given
@@ -50,17 +50,24 @@ namespace BackupConsole
         {
             CommandStrings.Add(commandstring);
             ArgumentNode an = new ArgumentNode(commandstring);
-            Commands.Add(an.Key, an);
+            if (an.Key != null)
+            {
+                Commands.Add(an.Key, an);
+            } 
+            else
+            {
+                throw new ArgumentException("Outermost command must have a name");
+            }
         }
 
         class ArgumentNode
         {
-            public string Key { get; set; }
+            public string? Key { get; set; }
             List<string> ArgNames { get; set; } = new List<string>();
             Dictionary<string, bool> PossibleFlags { get; set; } = new Dictionary<string, bool>();
-            ArgumentNode ChildNode { get; set; } = null;
+            ArgumentNode? ChildNode { get; set; } = null;
 
-            public ArgumentNode(string commandstring, Dictionary<string, bool> possibleflags=null)
+            public ArgumentNode(string commandstring, Dictionary<string, bool>? possibleflags=null)
             {
                 // "subcommand <requiredparam1> <requiredparam2> [-a <>] [-b] [<optionalparam1> <optionalparam2> [<optionalparam3> [-c]]] [-d <>]"
                 // <Key=subcommand, [requiredparam1, requiredparam2], {a:"", b:null, d:""}, <Key=null, [optionalparam1, optionalparam2], {}, <Key=null, [optionalparam3], {c:null}, null>>>
@@ -139,7 +146,7 @@ namespace BackupConsole
                 }
             }
 
-            public Tuple<Dictionary<string, string>, Dictionary<string, string>> ParseArgs(string[] args, int startpos=0, Dictionary<string, string> argvals=null, Dictionary<string, string> flags=null)
+            public Tuple<Dictionary<string, string>, Dictionary<string, string?>> ParseArgs(string[] args, int startpos=0, Dictionary<string, string>? argvals=null, Dictionary<string, string?>? flags=null)
             {
                 if (argvals == null)
                 {
@@ -147,7 +154,7 @@ namespace BackupConsole
                 }
                 if (flags == null)
                 {
-                    flags = new Dictionary<string, string>();
+                    flags = new Dictionary<string, string?>();
                 }
                 if (Key != null)
                 {
@@ -210,7 +217,7 @@ namespace BackupConsole
                 {
                     ChildNode.ParseArgs(args, startpos, argvals, flags);
                 }
-                return new Tuple<Dictionary<string, string>, Dictionary<string, string>>(argvals, flags);
+                return new Tuple<Dictionary<string, string>, Dictionary<string, string?>>(argvals, flags);
             }
         }
     }

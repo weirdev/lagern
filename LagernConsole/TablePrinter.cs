@@ -8,7 +8,7 @@ namespace BackupConsole
 {
     class TablePrinter
     {
-        public string[] Header { get; set; }
+        public string[]? Header { get; set; }
         public List<string[]> BodyRows { get; set; } = new List<string[]>();
         private int[] ColumnSizes { get; set; } = new int[0];
 

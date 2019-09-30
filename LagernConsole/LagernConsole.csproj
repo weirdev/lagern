@@ -1,17 +1,22 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <OutputName>lagern</OutputName>
-    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <RuntimeIdentifiers>win10-x64;osx.10.11-x64</RuntimeIdentifiers>
     <AssemblyName>lagern</AssemblyName>
     <StartupObject>BackupConsole.LagernConsole</StartupObject>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.1.1-beta" />
-    <ProjectReference Include="..\Core\Core.csproj" />
+    <PackageReference Include="CommandLineParser" Version="2.6.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LagernCore\LagernCore.csproj" />
+  </ItemGroup>
+
 
 </Project>
