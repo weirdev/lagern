@@ -6,6 +6,6 @@ namespace BackupCore.Utilities
 {
     public interface ISkippableChildrenIterator<T> : IEnumerable<T>
     {
-        void SkipChildren();
+        void SkipChildrenOfCurrent();
     }
 }

@@ -59,11 +59,11 @@ namespace BackupCore.Models
                 return GetEnumerator();
             }
 
-            public void SkipChildren()
+            public void SkipChildrenOfCurrent()
             {
                 if (ChildIterator != null)
                 {
-                    ChildIterator.SkipChildren();
+                    ChildIterator.SkipChildrenOfCurrent();
                 }
                 else
                 {

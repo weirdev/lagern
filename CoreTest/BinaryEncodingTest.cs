@@ -13,12 +13,7 @@ namespace CoreTest
     [TestClass]
     public class BinaryEncodingTest
     {
-        public BinaryEncodingTest()
-        {
-            //
-            // TODO: Add constructor logic here
-            //
-        }
+        public BinaryEncodingTest() { }
 
         private TestContext testContextInstance;
 

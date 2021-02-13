@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BackupCore;
@@ -12,12 +11,7 @@ namespace CoreTest
     [TestClass]
     public class BlobLocationTest
     {
-        public BlobLocationTest()
-        {
-            //
-            // TODO: Add constructor logic here
-            //
-        }
+        public BlobLocationTest() { }
 
         private TestContext testContextInstance;
 
@@ -62,9 +56,43 @@ namespace CoreTest
         [TestMethod]
         public void TestSerializeDeserialize()
         {
-            BlobLocation old = new BlobLocation(null, "somewhere1", 40);
-            BlobLocation deser = BlobLocation.deserialize(old.serialize());
+            BlobLocation old;
+            BlobLocation deser;
+            byte[] serialized;
+            byte[] reserialized;
+
+            old = new BlobLocation(null, "somewhere1", 40);
+            serialized = old.serialize();
+            deser = BlobLocation.deserialize(serialized);
+            reserialized = deser.serialize();
             Assert.AreEqual(old, deser);
+            Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
+
+            old = new BlobLocation(new byte[] {100, 23, 6}, "somewhere1", 40);
+            serialized = old.serialize();
+            deser = BlobLocation.deserialize(serialized);
+            reserialized = deser.serialize();
+            Assert.AreEqual(old, deser);
+            Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
+
+            old = new BlobLocation(new List<byte[]>() { new byte[] { 100, 40 }, new byte[] { 23 }, new byte[] { 6, 70, 10, 205 } });
+            serialized = old.serialize();
+            deser = BlobLocation.deserialize(serialized);
+            reserialized = deser.serialize();
+            Assert.AreEqual(old, deser);
+            Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
+
+            old = new BlobLocation(new byte[] { 100, 23, 6 }, "somewhere1", 40);
+            old.BSetReferenceCounts.Add("dst", 10);
+            old.BSetReferenceCounts.Add("dst2", 20);
+            serialized = old.serialize();
+            deser = BlobLocation.deserialize(serialized);
+            reserialized = deser.serialize();
+            Assert.AreEqual(old, deser);
+            Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
+            Assert.IsTrue(deser.BSetReferenceCounts.Count == 2);
+            Assert.AreEqual(deser.BSetReferenceCounts.GetValueOrDefault("dst"), 10);
+            Assert.AreEqual(deser.BSetReferenceCounts.GetValueOrDefault("dst2"), 20);
         }
     }
 }

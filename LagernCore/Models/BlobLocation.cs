@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LagernCore.Utilities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -51,10 +52,15 @@ namespace BackupCore
                 return false;
             }
 
-            return RelativeFilePath == ((BlobLocation)obj).RelativeFilePath && ((((BlobLocation)obj).EncryptedHash == null && EncryptedHash == null)
-                || ((BlobLocation)obj).EncryptedHash.SequenceEqual(EncryptedHash)) && 
-                ByteLength == ((BlobLocation)obj).ByteLength && ((((BlobLocation)obj).BlockHashes == null && BlockHashes == null)
-                || ((BlobLocation)obj).BlockHashes.SequenceEqual(BlockHashes));
+            BlobLocation other = (BlobLocation) obj;
+            return RelativeFilePath == other.RelativeFilePath &&
+                ((other.EncryptedHash == null || EncryptedHash == null) ?
+                        other.EncryptedHash == null && EncryptedHash == null :
+                        other.EncryptedHash.SequenceEqual(EncryptedHash)) &&
+                ByteLength == other.ByteLength &&
+                ((other.BlockHashes == null || BlockHashes == null) ?
+                        other.BlockHashes == null && BlockHashes == null :
+                        other.BlockHashes.DeepSequenceEqual(BlockHashes));
         }
 
         public override int GetHashCode()

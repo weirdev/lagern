@@ -95,7 +95,7 @@ namespace BackupCore
             else
             {
                 throw new PasswordIncorrectException("The password used to decrypt the keyfile " +
-                    "does not match the file used to creat it.");
+                    "does not match the file used to create it.");
             }
         }
 

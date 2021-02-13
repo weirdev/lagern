@@ -221,6 +221,17 @@ namespace BackupCore
         }
 
         /// <summary>
+        /// Non recursive equality check
+        /// </summary>
+        public bool NodeEquals(MetadataNode node)
+        {
+            return EqualityComparer<FileMetadata>.Default.Equals(DirMetadata, node.DirMetadata) &&
+                   Directories.Keys.ToHashSet().SetEquals(node.Directories.Keys) &&
+                   Files.Select(kv => (kv.Key, kv.Value)).ToHashSet().SetEquals(node.Files.Select(kv => (kv.Key, kv.Value))) &&
+                   Path == node.Path;
+        }
+
+        /// <summary>
         /// Store this node and its descendents in a blobstore
         /// Breaks with circular references, but these should only occur
         /// with hard- (and soft-?) -links TODO: handle links

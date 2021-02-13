@@ -7,9 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -18,7 +15,7 @@ namespace BackupCore
     /// </summary>
     public class BlobStore
     {
-        private BPlusTree<BlobLocation> IndexStore { get; set; }
+        public BPlusTree<BlobLocation> IndexStore { get; private set; }
 
         public IBlobStoreDependencies Dependencies { get; set; }
 
@@ -131,10 +128,17 @@ namespace BackupCore
 
                     // When we finish iterating over the children, decrement this blob
                     blobReferences.PostOrderAction(() => IncrementReferenceCountNoRecurse(backupsetname, blocation, reference, -1));
-                    if (rootBlobLocation.BSetReferenceCounts[backupsetname] != 1) // Not to be deleted?
+                    try
                     {
-                        // Dont need to decrement child references if this wont be deleted
-                        blobReferences.SkipChildren();
+                        if (blocation.BSetReferenceCounts[backupsetname] != 1) // Not to be deleted?
+                        {
+                            // Dont need to decrement child references if this wont be deleted
+                            blobReferences.SkipChildrenOfCurrent();
+                        }
+                    }
+                    catch (KeyNotFoundException e)
+                    {
+                        throw e;
                     }
                 }
             }
@@ -196,40 +200,87 @@ namespace BackupCore
             TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobType.BackupRecord, includefiles);
         }
 
+        // TODO: If include files is false, should we require dstbackupset.EndsWith(Core.ShallowSuffix)?
         public void TransferBlobAndReferences(BlobStore dst, string dstbackupset, byte[] blobhash, 
             BlobLocation.BlobType blobtype, bool includefiles)
         {
-            BlobLocation rootDstBlobLocation;
+            bool refInDst;
+            bool shallowInDst;
+            BlobLocation? rootDstBlobLocation = null;
             try
             {
                 rootDstBlobLocation = dst.GetBlobLocation(blobhash);
+                refInDst = true;
+                shallowInDst = rootDstBlobLocation.TotalNonShallowReferenceCount == 0;
             }
             catch (KeyNotFoundException)
             {
+                refInDst = false;
+                shallowInDst = false; // Meaningless when ref not in dst
+            }
+
+            if (!refInDst || (shallowInDst && includefiles))
+            {
                 byte[]? blob;
-                (rootDstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash));
+                if (refInDst)
+                {
+                    blob = RetrieveData(blobhash);
+                }
+                else
+                {
+                    (rootDstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, blobhash, GetBlobLocation(blobhash));
+                }
 
                 IBlobReferenceIterator blobReferences = GetAllBlobReferences(blobhash, blobtype, includefiles, false);
                 blobReferences.SupplyData(blob);
                 foreach (var reference in blobReferences)
                 {
-                    BlobLocation dstBlobLocation;
+                    bool iterRefInDst;
+                    bool iterShallowInDst;
+                    BlobLocation? dstBlobLocation = null;
                     try
                     {
                         dstBlobLocation = dst.GetBlobLocation(reference);
-                        // Dont need to increment child references if this already exists
-                        blobReferences.SkipChildren();
-                    }               
+                        iterRefInDst = true;
+                        iterShallowInDst = dstBlobLocation.TotalNonShallowReferenceCount == 0;
+                    }
                     catch (KeyNotFoundException)
                     {
-                        (dstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference));
-                        blobReferences.SupplyData(blob);
+                        iterRefInDst = false;
+                        iterShallowInDst = false; // Meaningless when ref not in dst
                     }
-                    // When we finish iterating over the children, increment this blob
-                    blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
+
+                    if (!iterRefInDst || (iterShallowInDst && includefiles))
+                    {
+                        if (iterRefInDst)
+                        {
+                            blob = RetrieveData(reference);
+                        }
+                        else
+                        {
+                            (dstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference));
+                        }
+                        blobReferences.SupplyData(blob);
+                    } 
+                    else
+                    {
+                        // Dont need to increment child references if this already exists
+                        blobReferences.SkipChildrenOfCurrent();
+                    }
+
+                    //if (!iterRefInDst) // Don't increment child reference if already present?
+                    //{
+                        // When we finish iterating over the children, increment this blob
+#pragma warning disable CS8604 // Possible null reference argument.
+                        blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
+#pragma warning restore CS8604 // Possible null reference argument.
+                    //}
                 }
             }
+
+#pragma warning disable CS8604 // Possible null reference argument.
             dst.IncrementReferenceCountNoRecurse(dstbackupset, rootDstBlobLocation, blobhash, 1);
+#pragma warning restore CS8604 // Possible null reference argument.
         }
 
         /// <summary>
@@ -386,7 +437,7 @@ namespace BackupCore
                         BlobLocation blocation = GetBlobLocation(blobhash);
                         if (backupblocation.BSetReferenceCounts.ContainsKey(bsname) && blocation.BSetReferenceCounts[bsname] > 0) // This was already stored
                         {
-                            childReferences.SkipChildren();
+                            childReferences.SkipChildrenOfCurrent();
                         }
                         else if (blocation.BlockHashes != null)
                         {
@@ -417,7 +468,7 @@ namespace BackupCore
                     BlobLocation blocation = GetBlobLocation(blobhash);
                     if (blocation.TotalReferenceCount > 0) // This was already stored
                     {
-                        blobReferences.SkipChildren();
+                        blobReferences.SkipChildrenOfCurrent();
                     }
                     IncrementReferenceCountNoRecurse(bsname, blocation, blobhash, 1);
                 }
@@ -610,8 +661,8 @@ namespace BackupCore
             }
         }
 
-        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, Dictionary<string, 
-            (int frequency, BlobLocation blocation)> hashfreqsize)
+        private void GetReferenceFrequenciesNoRecurse(byte[] blobhash, 
+            Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize)
         {
             string hashstring = HashTools.ByteArrayToHexViaLookup32(blobhash);
             BlobLocation blocation = GetBlobLocation(blobhash);
@@ -727,11 +778,11 @@ namespace BackupCore
                 BlobType = blobtype;
             }
 
-            public void SkipChildren()
+            public void SkipChildrenOfCurrent()
             {
                 if (childiterator != null)
                 {
-                    childiterator.SkipChildren();
+                    childiterator.SkipChildrenOfCurrent();
                 }
                 else
                 {
@@ -745,6 +796,10 @@ namespace BackupCore
 
             public void PostOrderAction(Action action)
             {
+                if (BottomUp)
+                {
+                    throw new Exception("Post order action is not valid when iterating through references bottum up.");
+                }
                 if (childiterator != null)
                 {
                     childiterator.PostOrderAction(action);
@@ -752,10 +807,6 @@ namespace BackupCore
                 else
                 {
                     postOrderAction = action;
-                }
-                if (BottomUp)
-                {
-                    throw new Exception("Post order action is not valid when iterating through references bottum up.");
                 }
             }
 

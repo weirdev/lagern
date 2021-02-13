@@ -16,7 +16,7 @@ namespace CoreTest
         [TestMethod]
         public void TestCreateFromPassword()
         {
-            string password = new String((from number in Enumerable.Range(0, new Random().Next(20)) select (char)random.Next('A', 'Z' + 1)).ToArray());
+            string password = "password";
             AesHelper aesHelper = AesHelper.CreateFromPassword(password);
             Assert.IsNotNull(aesHelper);
         }

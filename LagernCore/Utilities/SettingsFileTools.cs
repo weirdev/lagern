@@ -26,7 +26,7 @@ namespace BackupCore
         public static byte[] WriteSetting(Stream? settingsfile, BackupSetting key, string value)
         {
             Dictionary<BackupSetting, string> settings;
-            if (settingsfile == null)
+            if (settingsfile != null)
             {
                 try
                 {

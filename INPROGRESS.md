@@ -2,6 +2,10 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
+Need to cleanup usage/meaning of shallow suffix in ref counts
+Replace suffix with a struct with separate flag for shallow
+
+===
 Currently working on multiple backup destinations
 Multiple destinations may be missing different blobs existing in the current backup
 	If just one previous tree used to generate delta tree, we may not scan (and thus generate blobs for) a file that is in the previous selected tree but not in another destination. Thus we need to get blobs to the destination lacking them.
@@ -55,7 +59,7 @@ Backblaze support
 	If receive Retry-After header, use specified time
 		Currently not bothering
 	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
-Replace custom settings file format with Json
+Replace custom settings file format with YAML
 	Rework how readsetting, etc are called
 Add more unit tests
 	Verify more conditions in existing unit tests
@@ -113,3 +117,4 @@ Reverse references in BlobStore?
 	Every blob knows hash of every structure that points at it?
 	Could list every backup containing file
 	Use worth the complexity?
+Switch model classes to record types

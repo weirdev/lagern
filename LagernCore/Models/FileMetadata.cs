@@ -11,7 +11,7 @@ namespace BackupCore
     /// <summary>
     /// Stores basic file metadata + list of hashes of file blocks
     /// </summary>
-    public class FileMetadata : ICustomSerializable<FileMetadata>
+    public class FileMetadata : ICustomSerializable<FileMetadata>, IEquatable<FileMetadata?>
     {
         public string FileName { get; set; }
         
@@ -136,10 +136,6 @@ namespace BackupCore
 
         public bool FileDifference(FileMetadata other)
         {
-            bool[] test = {Attributes == other.Attributes, DateAccessedUTC.Equals(other.DateAccessedUTC),
-                DateModifiedUTC.Equals(other.DateModifiedUTC), DateCreatedUTC.Equals(other.DateCreatedUTC),
-                FileSize == other.FileSize};
-
             return !(Attributes == other.Attributes && DateAccessedUTC.Equals(other.DateAccessedUTC) &&
                 DateModifiedUTC.Equals(other.DateModifiedUTC) && DateCreatedUTC.Equals(other.DateCreatedUTC) &&
                 FileSize == other.FileSize);
@@ -153,6 +149,43 @@ namespace BackupCore
                 return FileStatus.MetadataChange;
             }
             return FileStatus.Unchanged;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is FileMetadata metadata && Equals(metadata);
+
+        }
+
+        public bool Equals(FileMetadata? other)
+        {
+            return other != null &&
+                   FileName == other.FileName &&
+                   NumDateAccessedUTC == other.NumDateAccessedUTC &&
+                   NumDateModifiedUTC == other.NumDateModifiedUTC &&
+                   NumDateCreatedUTC == other.NumDateCreatedUTC &&
+                   Attributes == other.Attributes &&
+                   FileSize == other.FileSize &&
+                   ((FileHash == null || other.FileHash == null) ?
+                            FileHash == null && other.FileHash == null :
+                            FileHash.SequenceEqual(other.FileHash)) &&
+                   Status == other.Status;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(FileName, NumDateAccessedUTC, NumDateModifiedUTC, NumDateCreatedUTC, Attributes, FileSize, Status);
+        }
+
+
+        public static bool operator ==(FileMetadata? left, FileMetadata? right)
+        {
+            return EqualityComparer<FileMetadata>.Default.Equals(left, right);
+        }
+
+        public static bool operator !=(FileMetadata? left, FileMetadata? right)
+        {
+            return !(left == right);
         }
 
         public byte[] serialize()
@@ -215,7 +248,11 @@ namespace BackupCore
                 attributes = (FileAttributes)BitConverter.ToInt32(savedobjects["Attributes-v2"], 0);
             }
             
-            byte[] filehash = savedobjects["FileHash-v3"];
+            byte[]? filehash = savedobjects["FileHash-v3"];
+            if (filehash.Length == 0)
+            {
+                filehash = null;
+            }
             
             return new FileMetadata(filename,
                 new DateTime(numdateaccessed),
@@ -225,7 +262,7 @@ namespace BackupCore
                 filesize,
                 filehash);
         }
-        
+
         public enum FileStatus { Unchanged, New, DataModified, MetadataChange, Deleted }
     }
 }

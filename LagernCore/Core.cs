@@ -910,10 +910,10 @@ namespace BackupCore
         {
             if (CacheDependencies != null && DestinationAvailable)
             {
-                BackupSet? cachebset = null;
                 int count = 0;
 
                 BackupSet bset;
+                BackupSet cachebset;
                 // When Issue #24 is resolved, syncing will be done with each of the destinations, for now the code below
                 // leaves the cache in a synchronized state relative to the first backup destination
                 //(bset, cachebset) = dst.Backups.SyncCache(CacheDependencies.Backups, backupsetname, cachebset: cachebset);

@@ -46,7 +46,7 @@ namespace CoreTest
             
             foreach (var num in Enumerable.Range(0, 100))
             {
-                (hash, file) = MakeRandomFile(55_000, randomseed + num); // regular size file
+                (hash, file) = MakeRandomFile(5_000, randomseed + num); // regular size file
                 AddFileToVFS(Path.Combine("src", String.Format("reg_{0}", num)), hash, file);
             }
 
@@ -305,7 +305,31 @@ namespace CoreTest
         public void TestRemoveBackup()
         {
             //RemoveBackup(false, false);
-            RemoveBackup(true, true, 91);
+            int encryptedFails = 0;
+            int nonEncryptedFails = 0;
+
+            bool encrypt = false;
+            for (int i = 0; i < 10; i++)
+            {
+                encrypt ^= true;
+                try
+                {
+                    RemoveBackup(encrypt, true, 91);
+                }
+                catch (Exception e)
+                {
+                    if (encrypt)
+                    {
+                        encryptedFails++;
+                    }
+                    else
+                    {
+                        nonEncryptedFails++;
+                    }
+                }
+            }
+            Console.WriteLine(String.Format("{0} encrypted fails", encryptedFails));
+            Console.WriteLine(String.Format("{0} non encrypted fails", nonEncryptedFails));
         }
 
         public void TransferBackupSet(bool encrypted, bool cache)

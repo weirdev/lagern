@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace BackupCore
 {
-    public class BackupRecord : ICustomSerializable<BackupRecord>
+    public class BackupRecord : ICustomSerializable<BackupRecord>, IEquatable<BackupRecord?>
     {
         public DateTime BackupTime { get; set; }
         public string BackupMessage { get; set; }
@@ -94,6 +94,30 @@ namespace BackupCore
             }
                         
             return new BackupRecord(backuptime, backupmessage, metadatatreehash, uuid);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return Equals(obj as BackupRecord);
+        }
+
+        public bool Equals(BackupRecord? other)
+        {
+            return other != null &&
+                   BackupTime == other.BackupTime &&
+                   BackupMessage == other.BackupMessage &&
+                   UUID.SequenceEqual(other.UUID) &&
+                   MetadataTreeHash.SequenceEqual(other.MetadataTreeHash);
+        }
+
+        public static bool operator ==(BackupRecord? left, BackupRecord? right)
+        {
+            return EqualityComparer<BackupRecord>.Default.Equals(left, right);
+        }
+
+        public static bool operator !=(BackupRecord? left, BackupRecord? right)
+        {
+            return !(left == right);
         }
     }
 }
