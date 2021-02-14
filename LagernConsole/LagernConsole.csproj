@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <OutputName>lagern</OutputName>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>net5.0</TargetFramework>
     <RuntimeIdentifiers>win10-x64;osx.10.11-x64</RuntimeIdentifiers>
     <AssemblyName>lagern</AssemblyName>
     <StartupObject>BackupConsole.LagernConsole</StartupObject>
