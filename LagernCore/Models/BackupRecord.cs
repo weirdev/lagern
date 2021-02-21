@@ -8,13 +8,13 @@ namespace BackupCore
 {
     public class BackupRecord : ICustomSerializable<BackupRecord>, IEquatable<BackupRecord?>
     {
-        public DateTime BackupTime { get; set; }
-        public string BackupMessage { get; set; }
+        public DateTime BackupTime { get; private set; }
+        public string BackupMessage { get; private set; }
         private byte[] UUID { get; set; }
 
         static Random UUIDGenerator = new Random();
         
-        public byte[] MetadataTreeHash { get; set; }
+        public byte[] MetadataTreeHash { get; private set; }
 
         public BackupRecord(string message, byte[] treehash, DateTime backupTime)
         {

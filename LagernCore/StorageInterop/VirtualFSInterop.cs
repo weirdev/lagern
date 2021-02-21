@@ -133,8 +133,7 @@ namespace BackupCore
             }
             string dirpath = Path.GetDirectoryName(absolutepath) ?? throw new Exception("This path should always exist");
             var directory = VirtualFS.GetDirectory(dirpath) ?? throw new Exception("This directory should always exist");
-            directory.Files[Path.GetFileName(absolutepath)] = 
-                fileMetadata;
+            directory.Files[Path.GetFileName(absolutepath)] = fileMetadata;
         }
 
         public string[] GetSubDirectories(string absolutepath)
@@ -214,13 +213,19 @@ namespace BackupCore
         // Unlike other public methods of this class, MakeNewFileMetadata and MakeNewDirectoryMetadata
         // are not part of the IFSInterop interface. They are included as convenience methods for
         // use when creating a virtual filesystem
-        // TODO: make use DateTime.now() below
         public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[]? hash = null) => 
-            new FileMetadata(name, new DateTime(), new DateTime(), new DateTime(), FileAttributes.Normal, size, hash);
+            new FileMetadata(name, DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, size, hash);
 
 
-        public static FileMetadata MakeNewDirectoryMetadata(string name) => new FileMetadata(name, new DateTime(),
-                                new DateTime(), new DateTime(), FileAttributes.Directory, 0, null);
+        public static FileMetadata MakeNewDirectoryMetadata(string name, DateTime? dateTime = null)
+        {
+            if (dateTime == null)
+            {
+                dateTime = DateTime.Now;
+            }
+
+            return new FileMetadata(name, dateTime.Value, dateTime.Value, dateTime.Value, FileAttributes.Directory, 0, null);
+        }
 
         public Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType)
         {

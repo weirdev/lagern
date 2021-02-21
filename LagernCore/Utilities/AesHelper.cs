@@ -9,46 +9,57 @@ namespace BackupCore
 {
     public class AesHelper
     {
-        private RijndaelManaged DataKeyAesProvider;
         private RijndaelManaged DataAesProvider;
-
-        private byte[] DataKeyKey; // Dont store, generated from password
-        private byte[] PasswordSalt; // Store
-
-        private byte[] DataKeyKeyHash; // Store to verify password
-        private byte[] DataKeyKeyHashSalt; // Store
-
-        private byte[] DataKey; // Store encrypted by DataKeyKey
-        private byte[] DataKeyIV; // IV for encrypted DataKey
-
         public static readonly int IVSize = 16;
 
-        private AesHelper(byte[] datakeykey, byte[] passwordsalt, byte[] datakeykeyhash, 
-            byte[] datakeykeyhashsalt, (byte[] datakey, byte[] datakeyiv)? dataKeyAndIV = null)
+        public RijndaelManaged DataKeyAesProvider { get; private set; }
+        public byte[] DataKeyKey { get; private set; }
+        public byte[] PasswordSalt { get; private set; }
+        public byte[] DataKeyKeyHash { get; private set; }
+        public byte[] DataKeyKeyHashSalt { get; private set; }
+        public byte[] DataKeyIV { get; private set; }
+        public byte[] DataKey { get; private set; }
+
+        public AesHelper(byte[] datakeykey, byte[] passwordsalt, byte[] datakeykeyhash,
+            byte[] datakeykeyhashsalt, RijndaelManaged dataKeyAesProvider, byte[] datakeyiv, byte[]? datakey = null)
         {
             DataKeyKey = datakeykey;
             PasswordSalt = passwordsalt;
             DataKeyKeyHash = datakeykeyhash;
             DataKeyKeyHashSalt = datakeykeyhashsalt;
-            DataKeyAesProvider = new RijndaelManaged();
-            DataKeyAesProvider.Key = datakeykey;
-            DataAesProvider = new RijndaelManaged();
-            DataAesProvider.Mode = CipherMode.CBC;
-            DataAesProvider.Padding = PaddingMode.PKCS7;
-            DataAesProvider.BlockSize = 128;
-            DataAesProvider.KeySize = 128;
-            if (dataKeyAndIV != null)
+            DataKeyAesProvider = dataKeyAesProvider;
+            DataKeyIV = datakeyiv;
+            DataAesProvider = new RijndaelManaged
             {
-                DataKey = dataKeyAndIV.Value.datakey;
-                DataKeyIV = dataKeyAndIV.Value.datakeyiv;
+                Mode = CipherMode.CBC,
+                Padding = PaddingMode.PKCS7,
+                BlockSize = 128,
+                KeySize = 128
+            };
+            if (datakey != null)
+            {
+                DataKey = datakey;
                 DataAesProvider.Key = DataKey;
-                DataKeyAesProvider.IV = DataKeyIV;
             }
             else
             {
+                DataAesProvider.GenerateKey();
                 DataKey = DataAesProvider.Key;
-                DataKeyIV = DataKeyAesProvider.IV;
             }
+        }
+
+        public static RijndaelManaged CreateDataKeyAesProvider(byte[] datakeykey)
+        {
+            RijndaelManaged dataKeyAesProvider = new RijndaelManaged
+            {
+                Padding = PaddingMode.PKCS7,
+                Mode = CipherMode.CBC,
+                BlockSize = 128,
+                KeySize = 128
+            };
+            // Key must be set after construction
+            dataKeyAesProvider.Key = datakeykey;
+            return dataKeyAesProvider;
         }
 
         /// <summary>
@@ -67,9 +78,11 @@ namespace BackupCore
                 rngCsp.GetBytes(phashsalt);
             }
             var phashhasher = new Rfc2898DeriveBytes(datakeykey, phashsalt, 8192);
-            var phashhash = phashhasher.GetBytes(IVSize); 
-            
-            return new AesHelper(datakeykey, psalt, phashhash, phashsalt);
+            var phashhash = phashhasher.GetBytes(IVSize);
+
+            RijndaelManaged dataKeyAesProvider = CreateDataKeyAesProvider(datakeykey);
+            dataKeyAesProvider.GenerateIV();
+            return new AesHelper(datakeykey, psalt, phashhash, phashsalt, dataKeyAesProvider, dataKeyAesProvider.IV);
         }
 
         /// <summary>
@@ -77,20 +90,27 @@ namespace BackupCore
         /// </summary>
         /// <param name="file"></param>
         /// <param name="password"></param>
-        /// <returns></returns>
         public static AesHelper CreateFromKeyFile(byte[] file, string password)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(file);
-            var phasher = new Rfc2898DeriveBytes(password, savedobjects["passwordsalt-v1"]);
+            return CreateFromKeyFile(savedobjects["passwordsalt-v1"], savedobjects["datakeykeyhashsalt-v1"],
+                savedobjects["datakeyiv-v1"], savedobjects["datakeykeyhash-v1"], savedobjects["encrypteddatakey-v1"], password);
+        }
+
+        public static AesHelper CreateFromKeyFile(byte[] passwordSalt, byte[] dataKeyKeyHashSalt, byte[] dataKeyIV,
+            byte[] dataKeyKeyHash, byte[] encrypteddatakey, string password)
+        {
+            var phasher = new Rfc2898DeriveBytes(password, passwordSalt);
             var datakeykey = phasher.GetBytes(16);
-            var phashhasher = new Rfc2898DeriveBytes(datakeykey, savedobjects["datakeykeyhashsalt-v1"], 8192);
+            var phashhasher = new Rfc2898DeriveBytes(datakeykey, dataKeyKeyHashSalt, 8192);
             var phashhash = phashhasher.GetBytes(IVSize);
-            if (phashhash.SequenceEqual(savedobjects["datakeykeyhash-v1"]))
+            if (phashhash.SequenceEqual(dataKeyKeyHash))
             {
-                return new AesHelper(datakeykey, savedobjects["passwordsalt-v1"], savedobjects["datakeykeyhash-v1"],
-                    savedobjects["datakeykeyhashsalt-v1"],
-                    (DecryptAesDataKey(savedobjects["encrypteddatakey-v1"], datakeykey, savedobjects["datakeyiv-v1"]),
-                    savedobjects["datakeyiv-v1"]));
+                RijndaelManaged dataKeyAesProvider = CreateDataKeyAesProvider(datakeykey);
+                dataKeyAesProvider.IV = dataKeyIV;
+                return new AesHelper(datakeykey, passwordSalt, dataKeyKeyHash,
+                    dataKeyKeyHashSalt, dataKeyAesProvider, dataKeyIV,
+                    DecryptAesDataKey(encrypteddatakey, dataKeyAesProvider));
             }
             else
             {
@@ -114,33 +134,46 @@ namespace BackupCore
 
         public byte[] EncryptBytes(byte[] input)
         {
-            (ICryptoTransform encryptor, byte[] iv) = GetDataEncyptor();
-            try
+            if (input.Length == 0)
             {
-                byte[] encrypted = encryptor.TransformFinalBlock(input, 0, input.Length);
-                byte[] ivAndEncrypted = new byte[IVSize + encrypted.Length];
-                Array.Copy(iv, ivAndEncrypted, iv.Length);
-                Array.Copy(encrypted, 0, ivAndEncrypted, iv.Length, encrypted.Length);
-                return ivAndEncrypted;
+                return Array.Empty<byte>();
             }
-            finally
+            else
             {
-                encryptor.Dispose();
+                (ICryptoTransform encryptor, byte[] iv) = GetDataEncyptor();
+                try
+                {
+                    byte[] encrypted = encryptor.TransformFinalBlock(input, 0, input.Length);
+                    byte[] ivAndEncrypted = new byte[IVSize + encrypted.Length];
+                    Array.Copy(iv, ivAndEncrypted, iv.Length);
+                    Array.Copy(encrypted, 0, ivAndEncrypted, iv.Length, encrypted.Length);
+                    return ivAndEncrypted;
+                }
+                finally
+                {
+                    encryptor.Dispose();
+                }
             }
         }
 
         public byte[] DecryptBytes(byte[] input)
         {
-            byte[] iv = new byte[IVSize];
-            Array.Copy(input, iv, IVSize);
-            ICryptoTransform decryptor = GetDataDecryptor(iv);
-            try
+            if (input.Length == 0)
             {
-                return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
-            }
-            finally
+                return Array.Empty<byte>();
+            } else
             {
-                decryptor.Dispose();
+                byte[] iv = new byte[IVSize];
+                Array.Copy(input, iv, IVSize);
+                ICryptoTransform decryptor = GetDataDecryptor(iv);
+                try
+                {
+                    return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
+                }
+                finally
+                {
+                    decryptor.Dispose();
+                }
             }
         }
 
@@ -155,7 +188,7 @@ namespace BackupCore
             return DataAesProvider.CreateDecryptor(DataAesProvider.Key, iv);
         }
 
-        private byte[] EncryptAesDataKey()
+        public byte[] EncryptAesDataKey()
         {
             using (ICryptoTransform encryptor = DataKeyAesProvider.CreateEncryptor())
             {
@@ -163,17 +196,10 @@ namespace BackupCore
             }
         }
 
-        private static byte[] DecryptAesDataKey(byte[] enc_datakey, byte[] datakeykey, byte[] datakeyiv)
+        public static byte[] DecryptAesDataKey(byte[] enc_datakey, RijndaelManaged dataKeyAesProvider)
         {
-            using (var dec = Aes.Create())
-            {
-                dec.Key = datakeykey;
-                dec.IV = datakeyiv;
-                using (ICryptoTransform decryptor = dec.CreateDecryptor())
-                {
-                    return decryptor.TransformFinalBlock(enc_datakey, 0, enc_datakey.Length);
-                }
-            }
+            using ICryptoTransform decryptor = dataKeyAesProvider.CreateDecryptor();
+            return decryptor.TransformFinalBlock(enc_datakey, 0, enc_datakey.Length);
         }
 
         /// <summary>

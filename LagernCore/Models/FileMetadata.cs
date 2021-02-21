@@ -13,9 +13,9 @@ namespace BackupCore
     /// </summary>
     public class FileMetadata : ICustomSerializable<FileMetadata>, IEquatable<FileMetadata?>
     {
-        public string FileName { get; set; }
+        public string FileName { get; private set; }
         
-        public DateTime DateAccessedUTC { get; set; }
+        public DateTime DateAccessedUTC { get; private set; }
         
         private long NumDateAccessedUTC
         {
@@ -23,7 +23,7 @@ namespace BackupCore
             set { DateAccessedUTC = new DateTime(value); }
         }
         
-        public DateTime DateModifiedUTC { get; set; }
+        public DateTime DateModifiedUTC { get; private set; }
         
         private long NumDateModifiedUTC
         {
@@ -31,7 +31,7 @@ namespace BackupCore
             set { DateModifiedUTC = new DateTime(value); }
         }
         
-        public DateTime DateCreatedUTC { get; set; }
+        public DateTime DateCreatedUTC { get; private set; }
         
         private long NumDateCreatedUTC
         {
@@ -39,9 +39,9 @@ namespace BackupCore
             set { DateCreatedUTC = new DateTime(value); }
         }
 
-        public FileAttributes Attributes { get; set; }
+        public FileAttributes Attributes { get; private set; }
         
-        public long FileSize { get; set; }
+        public long FileSize { get; private set; }
         
         public byte[]? FileHash { get; set; }
 

@@ -810,6 +810,8 @@ namespace BackupCore
                 }
             }
 
+            // TODO: Supply data looks like it will fail with BottomUp = true.
+            //  Check this and if so throw an error if it is used when it shouldnt be
             public void SupplyData(byte[]? blobdata)
             {
                 if (childiterator != null)
@@ -908,9 +910,9 @@ namespace BackupCore
                                         {
                                             yield return refref;
                                         }
+                                        childiterator = null;
                                     }
                                     skipchild = false;
-                                    childiterator = null;
                                     if (BottomUp)
                                     {
                                         yield return reference; // return immediate reference

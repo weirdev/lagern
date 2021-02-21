@@ -13,40 +13,60 @@ namespace CoreTest
     {
         static System.Security.Cryptography.SHA1 Hasher = HashTools.GetSHA1Hasher();
 
-        public static MetadataNode CreateBasicVirtualFS(int destinations)
+        public static MetadataNode CreateBasicVirtualFS(int destinations, Random? random = null)
         {
-            MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
-            vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src"));
-            var dstroot = vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("dst"));
+            DateTime dateTime = DateTime.Now;
+            if (random != null)
+            {
+                dateTime = RandomDateTime(random);
+            }
+            MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c", dateTime), null);
+            vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src", dateTime));
+            var dstroot = vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("dst", dateTime));
             for (int i = 0; i < destinations; i++)
             {
-                dstroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata(i.ToString()));
+                dstroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata(i.ToString(), dateTime));
             }
-            vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("cache"));
+            vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("cache", dateTime));
             return vfsroot;
         }
 
+        private static DateTime RandomDateTime(Random? random)
+        {
+            if (random == null)
+            {
+                random = new Random();
+            }
+
+            DateTime dateTime;
+            const int thirtyYearsOfSeconds = 30 * 365 * 24 * 60 * 60;
+            int secondsSinceEpoch = random.Next(thirtyYearsOfSeconds);
+            dateTime = DateTime.UnixEpoch;
+            dateTime.AddSeconds(secondsSinceEpoch);
+            return dateTime;
+        }
+
         private static (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) AddStandardVFSFiles(
-            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore, int? randomseed=null)
+            MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore, Random? random = null, int regSizeFileCount=100)
         {
             BPlusTree<byte[]> verifydatastore = new BPlusTree<byte[]>(10);
             Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
             
-            (byte[] hash, byte[] file) = MakeRandomFile(10_000_000, randomseed); // 10 MB file
+            (byte[] hash, byte[] file) = MakeRandomFile(10_000_000, random); // 10 MB file
             AddFileToVFS(Path.Combine("src", "big"), hash, file);
 
             (hash, file) = MakeRandomFile(0); // Empty file
             AddFileToVFS(Path.Combine("src", "empty"), hash, file);
 
-            (hash, file) = MakeRandomFile(1, randomseed - 1); // 1byte file
+            (hash, file) = MakeRandomFile(1, random); // 1byte file
             AddFileToVFS(Path.Combine("src", "1b"), hash, file);
             
-            (hash, file) = MakeRandomFile(2, randomseed - 2); // 2byte file
+            (hash, file) = MakeRandomFile(2, random); // 2byte file
             AddFileToVFS(Path.Combine("src", "2b"), hash, file);
             
-            foreach (var num in Enumerable.Range(0, 100))
+            foreach (var num in Enumerable.Range(0, regSizeFileCount))
             {
-                (hash, file) = MakeRandomFile(5_000, randomseed + num); // regular size file
+                (hash, file) = MakeRandomFile(5_000, random); // regular size file
                 AddFileToVFS(Path.Combine("src", String.Format("reg_{0}", num)), hash, file);
             }
 
@@ -57,18 +77,24 @@ namespace CoreTest
                 verifydatastore.AddOrFind(filehash, filedata);
                 verifyfilepaths[path] = filehash;
                 vfsdatastore.AddOrFind(filehash, filedata);
-                vfsroot.AddFile(Path.GetDirectoryName(path), 
-                    VirtualFSInterop.MakeNewFileMetadata(Path.GetFileName(path), filedata.Length, filehash));
+                DateTime dateTime = RandomDateTime(random);
+                string? dirpath = Path.GetDirectoryName(path);
+                if (dirpath == null)
+                {
+                    throw new NullReferenceException();
+                }
+                vfsroot.AddFile(dirpath, 
+                    new FileMetadata(Path.GetFileName(path), dateTime, dateTime, dateTime, FileAttributes.Normal, filedata.Length, filehash));
             }
         }
 
         public static (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
             MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) InitializeNewCoreWithStandardFiles(int nonencrypteddsts, int encrypteddsts,
-                int? randomseed=null, bool cache=true)
+                Random? random=null, bool cache=true, int regFileCount=100)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS(nonencrypteddsts + encrypteddsts);
             BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
-            (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, randomseed);
+            (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, random, regFileCount);
             var vfsisrc = new VirtualFSInterop(vfsroot, vfsdatastore);
 
             List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
@@ -89,25 +115,20 @@ namespace CoreTest
             
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
-            ICoreDstDependencies cachedeps = null;
+            ICoreDstDependencies? cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, destinations, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
 
-        static (byte[] hash, byte[] file) MakeRandomFile(int size, int? seed=null)
+        static (byte[] hash, byte[] file) MakeRandomFile(int size, Random? random=null)
         {
             byte[] data = new byte[size];
-            Random rng;
-            if (seed==null)
+            if (random==null)
             {
-                rng = new Random();
+                random = new Random();
             }
-            else
-            {
-                rng = new Random(seed.Value);
-            }
-            rng.NextBytes(data);
+            random.NextBytes(data);
             return (Hasher.ComputeHash(data), data);
         }
 
@@ -168,7 +189,7 @@ namespace CoreTest
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
-            ICoreDstDependencies cachedeps = null;
+            ICoreDstDependencies? cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
             Core core = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
 
@@ -271,17 +292,17 @@ namespace CoreTest
             Restore(true, false);
         }
 
-        public void RemoveBackup(bool encrypted, bool cache, int? randomseed=null)
+        public void RemoveBackup(bool encrypted, bool cache, Random? random = null)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache, randomseed: randomseed);
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache, random: random);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache, randomseed: randomseed);
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache, random: random);
             }
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = testdata;
 
@@ -314,7 +335,7 @@ namespace CoreTest
                 encrypt ^= true;
                 try
                 {
-                    RemoveBackup(encrypt, true, 91);
+                    RemoveBackup(encrypt, true, new Random(91));
                 }
                 catch (Exception e)
                 {
@@ -332,27 +353,27 @@ namespace CoreTest
             Console.WriteLine(String.Format("{0} non encrypted fails", nonEncryptedFails));
         }
 
-        public void TransferBackupSet(bool encrypted, bool cache)
+        public void TransferBackupSet(bool encrypted, bool cache, Random? random=null, int regFileCount=100)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, random, cache, regFileCount);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, random, cache, regFileCount);
             }
             var (srcCore, _, _, _, _) = testdata;
             
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(0, 1, random, cache, regFileCount);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
+                testdata = InitializeNewCoreWithStandardFiles(1, 0, random, cache, regFileCount);
             }
             var (dstCore, _, _, _, _) = testdata;
 
@@ -364,8 +385,8 @@ namespace CoreTest
         [TestMethod]
         public void TestTransferBackupSet()
         {
-            TransferBackupSet(false, true);
-            TransferBackupSet(true, false);
+            TransferBackupSet(false, true, new Random(1000), 2);
+            TransferBackupSet(true, false, new Random(1000), 2);
         }
 
         [TestMethod]
