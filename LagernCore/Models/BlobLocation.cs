@@ -26,23 +26,42 @@ namespace BackupCore
         /// <summary>
         /// Maps backupset nmaes to their reference counts
         /// </summary>
-        public Dictionary<string, int> BSetReferenceCounts { get; set; }
+        private Dictionary<BackupSetReference, int> BSetReferenceCounts { get; set; }
 
         public int TotalReferenceCount => BSetReferenceCounts.Values.Sum();
 
-        public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.EndsWith(Core.ShallowSuffix)).Select(kvp => kvp.Value).Sum();
+        public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.Shallow).Select(kvp => kvp.Value).Sum();
 
-        public BlobLocation(byte[]? encryptedHash, string relpath, int bytelen) : this(encryptedHash, relpath, bytelen, null, new Dictionary<string, int>()) { }
+        public BlobLocation(byte[]? encryptedHash, string relpath, int bytelen) : this(encryptedHash, relpath, bytelen, null, new Dictionary<BackupSetReference, int>()) { }
 
-        public BlobLocation(List<byte[]>? childhashes = null) : this(null, "", 0, childhashes, new Dictionary<string, int>()) { }
+        public BlobLocation(List<byte[]>? childhashes = null) : this(null, "", 0, childhashes, new Dictionary<BackupSetReference, int>()) { }
 
-        private BlobLocation(byte[]? encryptedHash, string relpath, int bytelen, List<byte[]>? blockhashes, Dictionary<string, int> referencecounts)
+        private BlobLocation(byte[]? encryptedHash, string relpath, int bytelen, List<byte[]>? blockhashes, Dictionary<BackupSetReference, int> referencecounts)
         {
             EncryptedHash = encryptedHash;
             RelativeFilePath = relpath;
             ByteLength = bytelen;
             BSetReferenceCounts = referencecounts;
             BlockHashes = blockhashes;
+        }
+
+        public int? GetBSetReferenceCount(String backupSet, bool shallow)
+        {
+            if (BSetReferenceCounts.TryGetValue(new BackupSetReference(backupSet, shallow), out int refCount))
+            {
+                return refCount;
+            }
+            return null;
+        }
+
+        public void SetBSetReferenceCount(String backupSet, bool shallow, int count)
+        {
+            BSetReferenceCounts[new BackupSetReference(backupSet, shallow)] = count;
+        }
+
+        public void RemoveBSetReference(String backupSet, bool shallow)
+        {
+            BSetReferenceCounts.Remove(new BackupSetReference(backupSet, shallow));
         }
 
         public override bool Equals(object? obj)
@@ -72,7 +91,7 @@ namespace BackupCore
         {
             Dictionary<string, byte[]> bldata = new Dictionary<string, byte[]>();
             // -"-v1"
-            // RelativeFilePath = UTF8 encoded
+            // RelativeFilePath = Encoding.UTF8.GetBytes(string)
             // BytePosition = BitConverter.GetBytes(int)
             // ByteLength = BitConverter.GetBytes(int)
             // -"-v2"
@@ -101,7 +120,7 @@ namespace BackupCore
             bldata.Add("RelativeFilePath-v1", Encoding.UTF8.GetBytes(RelativeFilePath));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
 
-            bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Keys.Select(set => Encoding.UTF8.GetBytes(set))));
+            bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Keys.Select(bsr => bsr.serialize())));
             bldata.Add("BSetReferenceCounts.ReferenceCounts-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Values.Select(rc => BitConverter.GetBytes(rc))));
 
             bldata.Add("IsMultiBlockReference-v7", BitConverter.GetBytes(BlockHashes != null));
@@ -125,14 +144,14 @@ namespace BackupCore
             {
                 throw new Exception("Backup sets are required");
             }
-            List<string> backupsets = new List<string>();
+            List<BackupSetReference> backupsets = new List<BackupSetReference>();
             foreach (var bin in encodedBackupSets)
             {
                 if (bin == null)
                 {
                     throw new Exception("Backup sets cannot be null");
                 }
-                backupsets.Add(Encoding.UTF8.GetString(bin));
+                backupsets.Add(BackupSetReference.decode(bin));
             }
 
             List<byte[]?>? encodedRefCounts = BinaryEncoding.enum_decode(savedobjects["BSetReferenceCounts.ReferenceCounts-v5"]);
@@ -149,7 +168,7 @@ namespace BackupCore
                 }
                 referencecounts.Add(BitConverter.ToInt32(bin, 0));
             }
-            Dictionary<string, int> bsrc = new Dictionary<string, int>();
+            Dictionary<BackupSetReference, int> bsrc = new Dictionary<BackupSetReference, int>();
             for (int i = 0; i < backupsets.Count; i++)
             {
                 bsrc[backupsets[i]] = referencecounts[i];
@@ -184,6 +203,32 @@ namespace BackupCore
             BackupRecord=3,
             MetadataNode=4
             // NOTE: MUST update BlobStore.GetAllBlobReferences() for new blob types that reference other blobs
+        }
+
+        private record BackupSetReference(string BackupSet, bool Shallow) : ICustomSerializable<BackupSetReference>
+        {
+            public byte[] serialize()
+            {
+                Dictionary<string, byte[]> bsrData = new Dictionary<string, byte[]>();
+                // -"-v1"
+                // Required:
+                // BackupSet = Encoding.UTF8.GetBytes(string)
+                // Shallow = BitConverter.GetBytes(bool)
+                bsrData.Add("BackupSet-v1", Encoding.UTF8.GetBytes(BackupSet));
+                bsrData.Add("Shallow-v1", BitConverter.GetBytes(Shallow));
+
+                return BinaryEncoding.dict_encode(bsrData);
+            }
+
+            public static BackupSetReference decode(byte[] data)
+            {
+                Dictionary<string, byte[]> bsrData = BinaryEncoding.dict_decode(data);
+
+                string bset = Encoding.UTF8.GetString(bsrData["BackupSet-v1"]);
+                bool shallow = BitConverter.ToBoolean(bsrData["Shallow-v1"]);
+
+                return new BackupSetReference(bset, shallow);
+            }
         }
     }
 }

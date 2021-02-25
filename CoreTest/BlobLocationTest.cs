@@ -83,16 +83,15 @@ namespace CoreTest
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
 
             old = new BlobLocation(new byte[] { 100, 23, 6 }, "somewhere1", 40);
-            old.BSetReferenceCounts.Add("dst", 10);
-            old.BSetReferenceCounts.Add("dst2", 20);
+            old.SetBSetReferenceCount("dst", false, 10);
+            old.SetBSetReferenceCount("dst2", false, 20);
             serialized = old.serialize();
             deser = BlobLocation.deserialize(serialized);
             reserialized = deser.serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
-            Assert.IsTrue(deser.BSetReferenceCounts.Count == 2);
-            Assert.AreEqual(deser.BSetReferenceCounts.GetValueOrDefault("dst"), 10);
-            Assert.AreEqual(deser.BSetReferenceCounts.GetValueOrDefault("dst2"), 20);
+            Assert.AreEqual(deser.GetBSetReferenceCount("dst", false), 10);
+            Assert.AreEqual(deser.GetBSetReferenceCount("dst2", false), 20);
         }
     }
 }

@@ -4,7 +4,8 @@ For now this will remain the home of the project backlog.
 ====
 Need to cleanup usage/meaning of shallow suffix in ref counts
 Replace suffix with a struct with separate flag for shallow
-
+===
+More tests for reference counting
 ===
 Currently working on multiple backup destinations
 Multiple destinations may be missing different blobs existing in the current backup
@@ -118,3 +119,11 @@ Reverse references in BlobStore?
 	Could list every backup containing file
 	Use worth the complexity?
 Switch model classes to record types
+Support for using a destination without reading its index
+	Index would always be written to destination so destination is complete
+	When available, would be read from another source
+		Ie. locally or in a cloud provider with cheap reads
+	All backups using the destination would be required to use the alternate index
+		If the index in the destination were ever used, the alternate index would be unusable
+			Some way to detect this without actually reading the index?
+				Modified date?

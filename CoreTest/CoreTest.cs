@@ -459,7 +459,11 @@ namespace CoreTest
 
         public static void RandomData(byte[] data)
         {
-            Random rng = new Random();
+            RandomData(data, new Random());
+        }
+
+        public static void RandomData(byte[] data, Random rng)
+        {
             rng.NextBytes(data);
         }
     }
