@@ -1,10 +1,9 @@
-﻿using LagernCore.Utilities;
+﻿using LagernCore.Models;
+using LagernCore.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-
 
 namespace BackupCore
 {
@@ -26,17 +25,17 @@ namespace BackupCore
         /// <summary>
         /// Maps backupset nmaes to their reference counts
         /// </summary>
-        private Dictionary<BackupSetReference, int> BSetReferenceCounts { get; set; }
+        private Dictionary<BackupSetKey, int> BSetReferenceCounts { get; set; }
 
         public int TotalReferenceCount => BSetReferenceCounts.Values.Sum();
 
         public int TotalNonShallowReferenceCount => BSetReferenceCounts.Where(kvp => !kvp.Key.Shallow).Select(kvp => kvp.Value).Sum();
 
-        public BlobLocation(byte[]? encryptedHash, string relpath, int bytelen) : this(encryptedHash, relpath, bytelen, null, new Dictionary<BackupSetReference, int>()) { }
+        public BlobLocation(byte[]? encryptedHash, string relpath, int bytelen) : this(encryptedHash, relpath, bytelen, null, new Dictionary<BackupSetKey, int>()) { }
 
-        public BlobLocation(List<byte[]>? childhashes = null) : this(null, "", 0, childhashes, new Dictionary<BackupSetReference, int>()) { }
+        public BlobLocation(List<byte[]>? childhashes = null) : this(null, "", 0, childhashes, new Dictionary<BackupSetKey, int>()) { }
 
-        private BlobLocation(byte[]? encryptedHash, string relpath, int bytelen, List<byte[]>? blockhashes, Dictionary<BackupSetReference, int> referencecounts)
+        private BlobLocation(byte[]? encryptedHash, string relpath, int bytelen, List<byte[]>? blockhashes, Dictionary<BackupSetKey, int> referencecounts)
         {
             EncryptedHash = encryptedHash;
             RelativeFilePath = relpath;
@@ -45,23 +44,23 @@ namespace BackupCore
             BlockHashes = blockhashes;
         }
 
-        public int? GetBSetReferenceCount(String backupSet, bool shallow)
+        public int? GetBSetReferenceCount(BackupSetReference backupSet)
         {
-            if (BSetReferenceCounts.TryGetValue(new BackupSetReference(backupSet, shallow), out int refCount))
+            if (BSetReferenceCounts.TryGetValue(new BackupSetKey(backupSet.BackupSetName, backupSet.Shallow, backupSet.BlobListCache), out int refCount))
             {
                 return refCount;
             }
             return null;
         }
 
-        public void SetBSetReferenceCount(String backupSet, bool shallow, int count)
+        public void SetBSetReferenceCount(BackupSetReference backupSet, int count)
         {
-            BSetReferenceCounts[new BackupSetReference(backupSet, shallow)] = count;
+            BSetReferenceCounts[new BackupSetKey(backupSet.BackupSetName, backupSet.Shallow, backupSet.BlobListCache)] = count;
         }
 
-        public void RemoveBSetReference(String backupSet, bool shallow)
+        public void RemoveBSetReference(BackupSetReference backupSet)
         {
-            BSetReferenceCounts.Remove(new BackupSetReference(backupSet, shallow));
+            BSetReferenceCounts.Remove(new BackupSetKey(backupSet.BackupSetName, backupSet.Shallow, backupSet.BlobListCache));
         }
 
         public override bool Equals(object? obj)
@@ -144,14 +143,14 @@ namespace BackupCore
             {
                 throw new Exception("Backup sets are required");
             }
-            List<BackupSetReference> backupsets = new List<BackupSetReference>();
+            List<BackupSetKey> backupsets = new List<BackupSetKey>();
             foreach (var bin in encodedBackupSets)
             {
                 if (bin == null)
                 {
                     throw new Exception("Backup sets cannot be null");
                 }
-                backupsets.Add(BackupSetReference.decode(bin));
+                backupsets.Add(BackupSetKey.decode(bin));
             }
 
             List<byte[]?>? encodedRefCounts = BinaryEncoding.enum_decode(savedobjects["BSetReferenceCounts.ReferenceCounts-v5"]);
@@ -168,7 +167,7 @@ namespace BackupCore
                 }
                 referencecounts.Add(BitConverter.ToInt32(bin, 0));
             }
-            Dictionary<BackupSetReference, int> bsrc = new Dictionary<BackupSetReference, int>();
+            Dictionary<BackupSetKey, int> bsrc = new Dictionary<BackupSetKey, int>();
             for (int i = 0; i < backupsets.Count; i++)
             {
                 bsrc[backupsets[i]] = referencecounts[i];
@@ -205,29 +204,34 @@ namespace BackupCore
             // NOTE: MUST update BlobStore.GetAllBlobReferences() for new blob types that reference other blobs
         }
 
-        private record BackupSetReference(string BackupSet, bool Shallow) : ICustomSerializable<BackupSetReference>
+        public record BackupSetKey(String BackupSetName, bool Shallow, bool BlobListCache)
         {
             public byte[] serialize()
             {
-                Dictionary<string, byte[]> bsrData = new Dictionary<string, byte[]>();
-                // -"-v1"
-                // Required:
-                // BackupSet = Encoding.UTF8.GetBytes(string)
-                // Shallow = BitConverter.GetBytes(bool)
-                bsrData.Add("BackupSet-v1", Encoding.UTF8.GetBytes(BackupSet));
-                bsrData.Add("Shallow-v1", BitConverter.GetBytes(Shallow));
+                Dictionary<string, byte[]> bsrData = new Dictionary<string, byte[]>
+                {
+                    // -"-v1"
+                    // Required:
+                    // BackupSet = Encoding.UTF8.GetBytes(string)
+                    // Shallow = BitConverter.GetBytes(bool)
+                    // BlobListCache = BitConverter.GetBytes(bool)
+                    { "BackupSet-v1", Encoding.UTF8.GetBytes(BackupSetName) },
+                    { "Shallow-v1", BitConverter.GetBytes(Shallow) },
+                    { "BlobListCache-v1", BitConverter.GetBytes(BlobListCache) }
+                };
 
                 return BinaryEncoding.dict_encode(bsrData);
             }
 
-            public static BackupSetReference decode(byte[] data)
+            public static BackupSetKey decode(byte[] data)
             {
                 Dictionary<string, byte[]> bsrData = BinaryEncoding.dict_decode(data);
 
                 string bset = Encoding.UTF8.GetString(bsrData["BackupSet-v1"]);
                 bool shallow = BitConverter.ToBoolean(bsrData["Shallow-v1"]);
+                bool blobListCache = BitConverter.ToBoolean(bsrData["BlobListCache-v1"]);
 
-                return new BackupSetReference(bset, shallow);
+                return new BackupSetKey(bset, shallow, blobListCache);
             }
         }
     }

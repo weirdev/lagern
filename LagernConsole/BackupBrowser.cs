@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using CommandLine;
+using LagernCore.Models;
 
 namespace BackupConsole
 {
@@ -27,18 +28,19 @@ namespace BackupConsole
             ContinueLoop = true;
             BCore = bcore;
             BackupDst = backupdst;
+            BackupSetReference backupSetReference = new BackupSetReference("test", false, false, false);
             if (!BCore.DestinationAvailable)
             {
-                backupset += BackupCore.Core.CacheSuffix;
+                backupSetReference = backupSetReference with { Cache = true };
             }
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupset);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference);
             }
             else
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupset, backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference, backuphash, 0);
             }
             BackupHash = targetbackuphashandrecord.hash;
             BackupSet = backupset;
@@ -183,7 +185,7 @@ namespace BackupConsole
             {
                 backuphash = opts.Backup;
             }
-            var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(BackupSet, backuphash, opts.Offset);
+            var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(new BackupSetReference(BackupSet, false, false, false), backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);

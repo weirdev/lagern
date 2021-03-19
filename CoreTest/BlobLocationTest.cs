@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BackupCore;
+using LagernCore.Models;
 
 namespace CoreTest
 {
@@ -83,15 +84,15 @@ namespace CoreTest
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
 
             old = new BlobLocation(new byte[] { 100, 23, 6 }, "somewhere1", 40);
-            old.SetBSetReferenceCount("dst", false, 10);
-            old.SetBSetReferenceCount("dst2", false, 20);
+            old.SetBSetReferenceCount(new BackupSetReference("dst", false, false, false), 10);
+            old.SetBSetReferenceCount(new BackupSetReference("dst2", false, false, false), 20);
             serialized = old.serialize();
             deser = BlobLocation.deserialize(serialized);
             reserialized = deser.serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
-            Assert.AreEqual(deser.GetBSetReferenceCount("dst", false), 10);
-            Assert.AreEqual(deser.GetBSetReferenceCount("dst2", false), 20);
+            Assert.AreEqual(deser.GetBSetReferenceCount(new BackupSetReference("dst", false, false, false)), 10);
+            Assert.AreEqual(deser.GetBSetReferenceCount(new BackupSetReference("dst2", false, false, false)), 20);
         }
     }
 }

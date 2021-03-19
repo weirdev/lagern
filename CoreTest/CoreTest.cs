@@ -4,6 +4,7 @@ using BackupCore;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using LagernCore.Models;
 
 namespace CoreTest
 {
@@ -109,14 +110,14 @@ namespace CoreTest
                 {
                     vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, cache);
+                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, cache);
                 destinations.Add(dstdeps);
             }
             
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
             Core core = new Core(srcdeps, destinations, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
@@ -150,14 +151,14 @@ namespace CoreTest
                 {
                     vfsidst = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                destinations.Add(CoreDstDependencies.InitializeNew("test", vfsidst, true));
+                destinations.Add(CoreDstDependencies.InitializeNew("test", false, vfsidst, true));
             }
 
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
             if (cache)
             {
-                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
                 Core core = new Core(srcdeps, destinations, cachedeps);
             }
             else
@@ -188,9 +189,9 @@ namespace CoreTest
             }
             var vfsicache = VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", vfsidst, true);
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, true);
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test~cache", vfsicache, false);
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
             Core core = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
 
             vfsisrc = new VirtualFSInterop(vfsroot, datastore);
@@ -379,7 +380,7 @@ namespace CoreTest
 
             var bh1 = srcCore.RunBackup("test", "run1");
 
-            srcCore.TransferBackupSet("test", dstCore, true);
+            srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
         }
         
         [TestMethod]
