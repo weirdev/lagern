@@ -4,6 +4,7 @@ using System.Linq;
 using System.IO;
 using CommandLine;
 using BackupCore;
+using LagernCore.Models;
 
 namespace BackupConsole
 {
@@ -266,7 +267,7 @@ namespace BackupConsole
 
                 if (opts.Cache != null)
                 {
-                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName + Core.CacheSuffix, DiskDstFSInterop.InitializeNew(opts.Cache), false);
+                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName, true, DiskDstFSInterop.InitializeNew(opts.Cache), false);
                 }
             }
             catch (Exception e)
@@ -296,11 +297,11 @@ namespace BackupConsole
                 {
                     throw new ArgumentException("Cloud config file needed to initialize backblaze backup.");
                 }
-                CoreDstDependencies.InitializeNew(bsname, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
             }
             else
             {
-                CoreDstDependencies.InitializeNew(bsname, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
             }
 
 
@@ -472,7 +473,7 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(bsname, backups[i].backuphash);
+                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(new BackupSetReference(bsname, false, false, false), backups[i].backuphash);
                     string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
@@ -662,7 +663,7 @@ namespace BackupConsole
             var bcore = LoadCore();
             string backupsetname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
+            bcore.TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
         }
 
         public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);

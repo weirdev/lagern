@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LagernCore.Models;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -20,7 +21,7 @@ namespace BackupCore
             DstFSInterop = dstinterop;
         }
 
-        public static CoreDstDependencies InitializeNew(string bsname, IDstFSInterop dstinterop, bool cacheused=false)
+        public static CoreDstDependencies InitializeNew(string bsname, bool cache, IDstFSInterop dstinterop, bool cacheused=false)
         {
             CoreDstDependencies destdeps = new CoreDstDependencies(dstinterop);
 
@@ -40,7 +41,7 @@ namespace BackupCore
             }
             BackupStoreDependencies backupStoreDependencies = new BackupStoreDependencies(destdeps.DstFSInterop, destdeps.Blobs);
             destdeps.Backups = new BackupStore(backupStoreDependencies);
-            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), bsname);
+            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), new BackupSetReference(bsname, false, false, false));
             return destdeps;
         }
 

@@ -2,8 +2,8 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ====
-Need to cleanup usage/meaning of shallow suffix in ref counts
-Replace suffix with a struct with separate flag for shallow
+Need to cleanup usage/meaning of chache suffix in ref counts
+Replace suffix with another flag in bset reference struct
 ===
 More tests for reference counting
 ===

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using LagernCore.Models;
 
 namespace BackupCore
 {
@@ -8,8 +6,8 @@ namespace BackupCore
     {
         BlobStore Blobs { get; }
 
-        byte[] LoadBackupSetData(string backupsetname);
+        byte[] LoadBackupSetData(BackupSetReference backupsetname);
 
-        void StoreBackupSetData(string backupsetname, byte[] bsdata);
+        void StoreBackupSetData(BackupSetReference backupsetname, byte[] bsdata);
     }
 }
