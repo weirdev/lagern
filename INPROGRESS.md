@@ -1,11 +1,10 @@
 I intend to transition to githubs issue based project management eventually. 
 For now this will remain the home of the project backlog.
 
-====
-Need to cleanup usage/meaning of chache suffix in ref counts
-Replace suffix with another flag in bset reference struct
 ===
-More tests for reference counting
+More tests for reference counting, ensure blobs stay present while a reference to them exists across multiple backups, transfers, backup deletions, etc
+	A quick manual verification of reference counting logic
+Create a helper method for verifying entire metadata trees and optionally child files are stored correctly in the blob store
 ===
 Currently working on multiple backup destinations
 Multiple destinations may be missing different blobs existing in the current backup

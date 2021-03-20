@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using LagernCore.Models;
+using LagernCore.BackupCalculation;
 
 namespace CoreTest
 {
@@ -21,7 +22,7 @@ namespace CoreTest
             {
                 dateTime = RandomDateTime(random);
             }
-            MetadataNode vfsroot = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c", dateTime), null);
+            MetadataNode vfsroot = new(VirtualFSInterop.MakeNewDirectoryMetadata("c", dateTime), null);
             vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("src", dateTime));
             var dstroot = vfsroot.AddDirectory(VirtualFSInterop.MakeNewDirectoryMetadata("dst", dateTime));
             for (int i = 0; i < destinations; i++)
@@ -50,8 +51,8 @@ namespace CoreTest
         private static (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) AddStandardVFSFiles(
             MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore, Random? random = null, int regSizeFileCount=100)
         {
-            BPlusTree<byte[]> verifydatastore = new BPlusTree<byte[]>(10);
-            Dictionary<string, byte[]> verifyfilepaths = new Dictionary<string, byte[]>();
+            BPlusTree<byte[]> verifydatastore = new(10);
+            Dictionary<string, byte[]> verifyfilepaths = new();
             
             (byte[] hash, byte[] file) = MakeRandomFile(10_000_000, random); // 10 MB file
             AddFileToVFS(Path.Combine("src", "big"), hash, file);
@@ -94,11 +95,11 @@ namespace CoreTest
                 Random? random=null, bool cache=true, int regFileCount=100)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS(nonencrypteddsts + encrypteddsts);
-            BPlusTree<byte[]> vfsdatastore = new BPlusTree<byte[]>(10);
+            BPlusTree<byte[]> vfsdatastore = new(10);
             (BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths) = AddStandardVFSFiles(vfsroot, vfsdatastore, random, regFileCount);
             var vfsisrc = new VirtualFSInterop(vfsroot, vfsdatastore);
 
-            List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
+            List<ICoreDstDependencies> destinations = new();
             for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
                 IDstFSInterop vfsidst;
@@ -118,7 +119,7 @@ namespace CoreTest
             ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies? cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
-            Core core = new Core(srcdeps, destinations, cachedeps);
+            Core core = new(srcdeps, destinations, cachedeps);
             return (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore);
         }
 
@@ -133,13 +134,13 @@ namespace CoreTest
             return (Hasher.ComputeHash(data), data);
         }
 
-        public void InitializeNew(bool cache, int nonencrypteddsts, int encrypteddsts)
+        public static void InitializeNew(bool cache, int nonencrypteddsts, int encrypteddsts)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS(nonencrypteddsts + encrypteddsts);
-            BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
+            BPlusTree<byte[]> datastore = new(10);
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
 
-            List<ICoreDstDependencies> destinations = new List<ICoreDstDependencies>();
+            List<ICoreDstDependencies> destinations = new();
             for (int i = 0; i < nonencrypteddsts + encrypteddsts; i++)
             {
                 IDstFSInterop vfsidst;
@@ -159,11 +160,11 @@ namespace CoreTest
             if (cache)
             {
                 ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
-                Core core = new Core(srcdeps, destinations, cachedeps);
+                Core core = new(srcdeps, destinations, cachedeps);
             }
             else
             {
-                Core core = new Core(srcdeps, destinations);
+                Core core = new(srcdeps, destinations);
             }
         }
 
@@ -174,10 +175,10 @@ namespace CoreTest
             InitializeNew(false, 0, 1);
         }
 
-        public void LoadCore_NewlyInitialized(bool encrypted, bool cache)
+        public static void LoadCore_NewlyInitialized(bool encrypted, bool cache)
         {
             MetadataNode vfsroot = CreateBasicVirtualFS(1);
-            BPlusTree<byte[]> datastore = new BPlusTree<byte[]>(10);
+            BPlusTree<byte[]> datastore = new(10);
             var vfsisrc = new VirtualFSInterop(vfsroot, datastore);
             IDstFSInterop vfsidst;
             if (encrypted)
@@ -192,7 +193,7 @@ namespace CoreTest
             ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, true);
             ICoreDstDependencies? cachedeps = null;
             if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
-            Core core = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
+            Core core = new(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
 
             vfsisrc = new VirtualFSInterop(vfsroot, datastore);
             if (encrypted)
@@ -218,7 +219,7 @@ namespace CoreTest
             LoadCore_NewlyInitialized(true, true);
         }
 
-        public void RunBackup(bool cache, int nonencrypteddsts, int encrypteddsts)
+        public static void RunBackup(bool cache, int nonencrypteddsts, int encrypteddsts)
         {
             var (core, verifydatastore, verifyfilepaths, vfsroot, vfsdatastore) = 
                 InitializeNewCoreWithStandardFiles(nonencrypteddsts, encrypteddsts, cache: cache);
@@ -242,7 +243,7 @@ namespace CoreTest
             RunBackup(true, 2, 2);
         }
 
-        public void GetWTStatus(bool encrypted, bool cache)
+        public static void GetWTStatus(bool encrypted, bool cache)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
@@ -265,7 +266,7 @@ namespace CoreTest
             GetWTStatus(true, true);
         }
 
-        public void Restore(bool encrypted, bool cache)
+        public static void Restore(bool encrypted, bool cache)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
@@ -293,7 +294,7 @@ namespace CoreTest
             Restore(true, false);
         }
 
-        public void RemoveBackup(bool encrypted, bool cache, Random? random = null)
+        public static void RemoveBackup(bool encrypted, bool cache, Random? random = null)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
@@ -354,7 +355,7 @@ namespace CoreTest
             Console.WriteLine(String.Format("{0} non encrypted fails", nonEncryptedFails));
         }
 
-        public void TransferBackupSet(bool encrypted, bool cache, Random? random=null, int regFileCount=100)
+        public static void TransferBackupSet(bool encrypted, bool cache, Random? random=null, int regFileCount=100)
         {
             (Core core, BPlusTree<byte[]> verifydatastore, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
@@ -395,13 +396,13 @@ namespace CoreTest
         {
             string path1 = "a/b/c/d/efg/h.i";
             string pattern1 = "*c*g*";
-            Assert.IsTrue(Core.PatternMatchesPath(path1, pattern1));
+            Assert.IsTrue(BackupCalculation.PatternMatchesPath(path1, pattern1));
         }
 
         [TestMethod]
         public void TestCheckTrackFile()
         {
-            List<(int, string)> patterns = new List<(int, string)>
+            List<(int, string)> patterns = new()
             {
                 (2, "*"),
                 (3, "*/cats/*"),
@@ -424,14 +425,14 @@ namespace CoreTest
             int[] correctoutput = new int[] { 0, 0, 0, 0, 3, 2, 1, 1 };
             for (int i = 0; i < files.Length; i++)
             {
-                Assert.AreEqual(Core.FileTrackClass(files[i], patterns), correctoutput[i]);
+                Assert.AreEqual(BackupCalculation.FileTrackClass(files[i], patterns), correctoutput[i]);
             }
         }
         
         [TestMethod]
         public void TestCheckTrackAnyDirectoryChild()
         {
-            List<(int, string)> patterns = new List<(int, string)>
+            List<(int, string)> patterns = new()
             {
                 (2, "*"),
                 (1, "*/cats"),
@@ -453,7 +454,7 @@ namespace CoreTest
             bool[] correctoutput = new bool[] { true, true, true, false, true, false };
             for (int i = 0; i < directories.Length; i++)
             {
-                var res = Core.CheckTrackAnyDirectoryChild(directories[i], patterns);
+                var res = BackupCalculation.CheckTrackAnyDirectoryChild(directories[i], patterns);
                 Assert.AreEqual(res, correctoutput[i]);
             }
         }
