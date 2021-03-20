@@ -1,15 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.IO;
-using System.Xml;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Security.Cryptography;
 using BackupCore.Models;
 using LagernCore.Models;
+using LagernCore.BackupCalculation;
 
 namespace BackupCore
 {
@@ -43,7 +39,7 @@ namespace BackupCore
                 }
                 else
                 {
-                    throw new ArgumentNullException("Dst and cache are null, cannot initialize");
+                    throw new ArgumentNullException(nameof(cache), "Dst and cache are null, cannot initialize");
                 }
             }
             else
@@ -63,7 +59,7 @@ namespace BackupCore
         public static Core LoadDiskCore(string? src, IEnumerable<(string dst_path, string? password)> dsts, string? cache=null)
         {
             FSCoreSrcDependencies srcdep = FSCoreSrcDependencies.Load(src, new DiskFSInterop());
-            List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+            List<ICoreDstDependencies> dstdeps = new();
             foreach (var (dst_path, password) in dsts)
             {
                 try
@@ -89,7 +85,7 @@ namespace BackupCore
         public static Core InitializeNewDiskCore(string bsname, string? src, IEnumerable<(string dst_path, string? password)> dsts, string? cache = null)
         {
             ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), cache);
-            List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+            List<ICoreDstDependencies> dstdeps = new();
             foreach (var (dst_path, password) in dsts)
             {
                 dstdeps.Add(CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(dst_path, password), cache != null));
@@ -113,7 +109,7 @@ namespace BackupCore
         public List<(string path, FileMetadata.FileStatus change)> GetWTStatus(string backupsetname, bool differentialbackup = true,
             List<(int trackclass, string pattern)>? trackpatterns = null, string? prev_backup_hash_prefix = null)
         {
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+            BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
@@ -144,19 +140,19 @@ namespace BackupCore
                 {
                     MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
                         previousbackup.MetadataTreeHash);
-                    deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, new List<MetadataNode?>() { previousmtree })[0];
+                    deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, new List<MetadataNode?>() { previousmtree })[0];
                 }
                 else
                 {
                     differentialbackup = false;
-                    deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, null)[0];
+                    deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null)[0];
                 }
             }
             else
             {
-                deltatree = GetDeltaMetadataTree(backupsetname, trackpatterns, null)[0];
+                deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null)[0];
             }
-            List<(string path, FileMetadata.FileStatus change)> changes = new List<(string path, FileMetadata.FileStatus change)>();
+            List<(string path, FileMetadata.FileStatus change)> changes = new();
             GetDeltaNodeChanges(Path.DirectorySeparatorChar.ToString(), deltatree);
 
             return changes;
@@ -210,491 +206,6 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Gets the working tree status
-        /// </summary>
-        /// <param name="backupsetname"></param>
-        /// <param name="trackpatterns"></param>
-        /// <param name="previousmtrees"></param>
-        /// <returns>A delta tree mapping </returns>
-        private List<MetadataNode> GetDeltaMetadataTree(string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
-            List<MetadataNode?>? previousmtrees=null)
-        {
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
-            if (!DestinationAvailable)
-            {
-                backupSetReference = backupSetReference with { Cache = true };
-            }
-
-            Queue<string> deltamnodequeue = new Queue<string>();
-            FileMetadata rootdirmetadata = SrcDependencies.GetFileMetadata("");
-
-            // Non differential backup equivalent to differential backup to single destination without a previous tree
-            if (previousmtrees == null)
-            {
-                previousmtrees = new List<MetadataNode?>() { null };
-            }
-
-            List<MetadataNode> deltamtrees = previousmtrees.Select((_) => new MetadataNode(rootdirmetadata, null)).ToList();
-
-            foreach (var (previousmtree, deltamtree) in previousmtrees.Zip(deltamtrees, (p, d) => (p, d)))
-            {
-                if (previousmtree != null)
-                {
-                    // We always assume the matching of deltatree root to fs backup root is valid
-                    // So make the name equal, and set status to metadatachange if they were different
-                    if (previousmtree.DirMetadata.FileName != rootdirmetadata.FileName)
-                    {
-                        deltamtree.DirMetadata.Status = FileMetadata.FileStatus.MetadataChange;
-                    }
-                    else
-                    {
-                        deltamtree.DirMetadata.Status = FileMetadata.FileStatus.Unchanged;
-                    }
-                }
-                else
-                {
-                    deltamtree.DirMetadata.Status = FileMetadata.FileStatus.New;
-                }
-            }
-
-            deltamnodequeue.Enqueue(Path.DirectorySeparatorChar.ToString());
-
-            while (deltamnodequeue.Count > 0)
-            {
-                string reldirpath = deltamnodequeue.Dequeue();
-                List<MetadataNode?> posdeltanodes = deltamtrees.Select((dmt) => dmt.GetDirectory(reldirpath)).ToList();
-                List<MetadataNode?> previousmnodes = previousmtrees.Select((mt) => mt?.GetDirectory(reldirpath)).ToList();
-
-                // Null delta nodes indicate that a directory is not to be backed up for that backup,
-                // so we exclude the deltanode and corresponding previousmnode
-                List<MetadataNode> filtereddn = new List<MetadataNode>();
-                List<MetadataNode?> filteredpn = new List<MetadataNode?>();
-                for (int i = 0; i < posdeltanodes.Count; i++)
-                {
-                    MetadataNode? deltaNode = posdeltanodes[i];
-                    if (deltaNode != null)
-                    {
-                        filtereddn.Add(deltaNode);
-                        filteredpn.Add(previousmnodes[i]);
-                    }
-                }
-                List<MetadataNode> deltanodes = filtereddn;
-                previousmnodes = filteredpn;
-
-                // Now handle files
-                List<string> fsfiles;
-                try
-                {
-                    fsfiles = new List<string>(SrcDependencies.GetDirectoryFiles(reldirpath));
-                    fsfiles.Sort();
-                }
-                catch (Exception e) when (e is DirectoryNotFoundException || e is UnauthorizedAccessException) // TODO: More user friendly output here
-                {
-                    throw new Exception("Fetching file system files failed", e);
-                }
-                catch (Exception e)
-                {
-                    throw new Exception("Fetching file system files failed", e);
-                }
-
-                // Used this slightly ackward cache pattern to more easily efficiently handle per-destination tracking classes in a future release
-                Dictionary<string, FileMetadata> filemetadatacache = new Dictionary<string, FileMetadata>();
-
-                for (int prevmnidx = 0; prevmnidx < previousmnodes.Count; prevmnidx++)
-                {
-                    var previousmnode = previousmnodes[prevmnidx];
-                    var deltamnode = deltanodes[prevmnidx];
-                    List<string> previousfiles;
-
-
-                    int previdx = 0;
-                    int fsidx = 0;
-                    if (previousmnode != null)
-                    {
-                        previousfiles = new List<string>(previousmnode.Files.Keys);
-                        previousfiles.Sort();
-
-                        while (previdx < previousfiles.Count && fsidx < fsfiles.Count)
-                        {
-                            if (previousfiles[previdx] == fsfiles[fsidx]) // Names match
-                            {
-                                string filename = previousfiles[previdx];
-                                int trackclass = 2; // TODO: make this an application wide constant
-                                if (trackpatterns != null)
-                                {
-                                    trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
-                                }
-                                try // We (may) read the file's metadata here so wrap errors
-                                {
-                                    if (trackclass != 0)
-                                    {
-                                        FileMetadata prevfm = previousmnode.Files[filename];
-                                        FileMetadata curfm;
-                                        if (filemetadatacache.ContainsKey(filename))
-                                        {
-                                            curfm = filemetadatacache[filename];
-                                        }
-                                        else
-                                        {
-                                            curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                            filemetadatacache[filename] = curfm;
-                                        }
-                                        // Create a copy FileMetada to hold the changes
-                                        curfm = new FileMetadata(curfm);
-
-                                        switch (trackclass)
-                                        {
-                                            case 1: // Dont scan if we have a previous version
-                                                if (curfm.FileDifference(prevfm))
-                                                {
-                                                    curfm.Status = FileMetadata.FileStatus.MetadataChange;
-                                                }
-                                                else
-                                                {
-                                                    curfm.Status = FileMetadata.FileStatus.Unchanged;
-                                                }
-                                                break;
-                                            case 2: // Dont scan if we have a previous version and its metadata indicates no change
-                                                    // If file size and datemodified unchanged we assume no change
-                                                if (prevfm.FileSize == curfm.FileSize && prevfm.DateModifiedUTC == curfm.DateModifiedUTC)
-                                                {
-                                                    // Still update metadata if necessary (ie dateaccessed changed)
-                                                    if (curfm.FileDifference(prevfm))
-                                                    {
-                                                        curfm.Status = FileMetadata.FileStatus.MetadataChange;
-                                                    }
-                                                    else
-                                                    {
-                                                        curfm.Status = FileMetadata.FileStatus.Unchanged;
-                                                    }
-                                                }
-                                                else // May have been a change to data
-                                                {
-                                                    curfm.Status = FileMetadata.FileStatus.DataModified;
-                                                }
-                                                break;
-                                            case 3: // Scan file
-                                                curfm.Status = FileMetadata.FileStatus.DataModified;
-                                                break;
-                                            default:
-                                                break;
-                                        }
-                                        deltamnode.AddFile(curfm);
-                                    }
-                                    else // file exists in previous, but now has tracking class 0, thus is effectively deleted
-                                    {
-                                        FileMetadata prevfm = previousmnode.Files[filename];
-                                        prevfm = new FileMetadata(prevfm)
-                                        {
-                                            Status = FileMetadata.FileStatus.Deleted
-                                        };
-                                        deltamnode.AddFile(prevfm);
-                                    }
-                                }
-                                catch (Exception e)
-                                {
-                                    Console.WriteLine(e.Message);
-                                }
-                                previdx++;
-                                fsidx++;
-                            }
-                            else if (previousfiles[previdx].CompareTo(fsfiles[fsidx]) < 0) // deltafiles[deltaidx] earlier in alphabet than fsfiles[fsidx]
-                            {
-                                // File in old tree but no longer in filesystem
-                                string filename = previousfiles[previdx];
-                                FileMetadata prevfm = previousmnode.Files[filename];
-                                prevfm = new FileMetadata(prevfm)
-                                {
-                                    Status = FileMetadata.FileStatus.Deleted
-                                };
-                                deltamnode.AddFile(prevfm);
-                                previdx++;
-                            }
-                            else // deltafiles[deltaidx] later in alphabet than fsfiles[fsidx]
-                            {
-                                // File on filesystem not in old tree
-                                string filename = fsfiles[fsidx];
-                                int trackclass = 2;
-                                if (trackpatterns != null)
-                                {
-                                    trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
-                                }
-
-                                try
-                                {
-                                    switch (trackclass)
-                                    {
-                                        case 0: // dont add if untracked
-                                            break;
-                                        default:
-                                            FileMetadata curfm;
-                                            if (filemetadatacache.ContainsKey(filename))
-                                            {
-                                                curfm = filemetadatacache[filename];
-                                            }
-                                            else
-                                            {
-                                                curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                                filemetadatacache[filename] = curfm;
-                                            }
-                                            curfm = new FileMetadata(curfm)
-                                            {
-                                                Status = FileMetadata.FileStatus.New
-                                            };
-                                            deltamnode.AddFile(curfm);
-                                            break;
-                                    }
-                                }
-                                catch (Exception e)
-                                {
-                                    Console.WriteLine(e.Message);
-                                }
-                                fsidx++;
-                            }
-                        }
-                        for (; previdx < previousfiles.Count; previdx++)
-                        {
-                            // File in old tree but no longer in filesystem
-                            string filename = previousfiles[previdx];
-                            FileMetadata prevfm = previousmnode.Files[filename];
-                            prevfm = new FileMetadata(prevfm)
-                            {
-                                Status = FileMetadata.FileStatus.Deleted
-                            };
-                            deltamnode.AddFile(prevfm);
-                        }
-                    } 
-                    else
-                    {
-                        previousfiles = new List<string>(0);
-                    }
-                    
-                    for (; fsidx < fsfiles.Count; fsidx++)
-                    {
-                        // File on filesystem not in old tree
-                        string filename = fsfiles[fsidx];
-                        int trackclass = 2;
-                        if (trackpatterns != null)
-                        {
-                            trackclass = FileTrackClass(Path.Combine(reldirpath.Substring(1), filename), trackpatterns);
-                        }
-                        try
-                        {
-                            switch (trackclass)
-                            {
-                                case 0: // dont add if untracked
-                                    break;
-                                default:
-                                    FileMetadata curfm;
-                                    if (filemetadatacache.ContainsKey(filename))
-                                    {
-                                        curfm = filemetadatacache[filename];
-                                    }
-                                    else
-                                    {
-                                        curfm = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                        filemetadatacache[filename] = curfm;
-                                    }
-                                    curfm = new FileMetadata(curfm)
-                                    {
-                                        Status = FileMetadata.FileStatus.New
-                                    };
-                                    deltamnode.AddFile(curfm);
-                                    break;
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e.Message);
-                        }
-                    }
-                }
-
-
-                // Handle directories
-                List<string> fssubdirs;
-                try
-                {
-                    // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(SrcDependencies.GetSubDirectories(reldirpath));
-                    fssubdirs.Sort();
-                }
-                catch (UnauthorizedAccessException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-                catch (DirectoryNotFoundException e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    continue;
-                }
-
-                Dictionary<string, FileMetadata> dirmetadatacache = new Dictionary<string, FileMetadata>();
-
-                HashSet<string> dirsToQueue = new HashSet<string>();
-
-                for (int prevmnidx = 0; prevmnidx < previousmnodes.Count; prevmnidx++)
-                {
-                    MetadataNode? previousmnode = previousmnodes[prevmnidx];
-                    var deltamnode = deltanodes[prevmnidx];
-
-                    int previdx = 0;
-                    int fsidx = 0;
-                    List<string> previoussubdirs;
-                    if (previousmnode != null)
-                    {
-                        previoussubdirs = new List<string>(previousmnode.Directories.Keys);
-                        previoussubdirs.Sort();
-
-                        while (previdx < previoussubdirs.Count && fsidx < fssubdirs.Count)
-                        {
-                            if (previoussubdirs[previdx] == fssubdirs[fsidx]) // Names match
-                            {
-                                string dirname = fssubdirs[fsidx];
-                                if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, dirname), trackpatterns))
-                                {
-                                    FileMetadata fssubdirmetadata;
-                                    if (dirmetadatacache.ContainsKey(dirname))
-                                    {
-                                        fssubdirmetadata = dirmetadatacache[dirname];
-                                    }
-                                    else
-                                    {
-                                        fssubdirmetadata = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
-                                        dirmetadatacache[dirname] = fssubdirmetadata;
-                                    }
-                                    FileMetadata previousdirmetadata = previousmnode.Directories[dirname].DirMetadata;
-                                    FileMetadata.FileStatus status = fssubdirmetadata.DirectoryDifference(previousdirmetadata);
-                                    fssubdirmetadata = new FileMetadata(fssubdirmetadata)
-                                    {
-                                        Status = status
-                                    };
-                                    deltamnode.AddDirectory(fssubdirmetadata);
-                                    dirsToQueue.Add(dirname);
-                                }
-                                else // We are no longer tracking this directory's children so it has been effectively deleted
-                                {
-                                    FileMetadata prevfm = previousmnode.Directories[dirname].DirMetadata;
-                                    if (!dirmetadatacache.ContainsKey(dirname))
-                                    {
-                                        dirmetadatacache[dirname] = prevfm;
-                                    }
-                                    prevfm = new FileMetadata(prevfm)
-                                    {
-                                        Status = FileMetadata.FileStatus.Deleted
-                                    };
-                                    deltamnode.AddDirectory(prevfm);
-                                }
-                                previdx++;
-                                fsidx++;
-                            }
-                            else if (previoussubdirs[previdx].CompareTo(fssubdirs[fsidx]) < 0) // deltasubdirs[deltaidx] earlier in alphabet than fssubdirs[fsidx]
-                            {
-                                // Directory in oldmtree not but no longer in filesystem
-                                string dirname = previoussubdirs[previdx];
-                                FileMetadata prevfm = previousmnode.Directories[dirname].DirMetadata;
-                                if (!dirmetadatacache.ContainsKey(dirname))
-                                {
-                                    dirmetadatacache[dirname] = prevfm;
-                                }
-                                prevfm = new FileMetadata(prevfm)
-                                {
-                                    Status = FileMetadata.FileStatus.Deleted
-                                };
-                                deltamnode.AddDirectory(prevfm);
-                                // Dont queue because deleted
-                                previdx++;
-                            }
-                            else
-                            {
-                                // Directory in filesystem not in old tree
-                                if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
-                                {
-                                    string dirname = fssubdirs[fsidx];
-                                    FileMetadata fssubdirmetadata;
-                                    if (dirmetadatacache.ContainsKey(dirname))
-                                    {
-                                        fssubdirmetadata = dirmetadatacache[dirname];
-                                    }
-                                    else
-                                    {
-                                        fssubdirmetadata = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
-                                        dirmetadatacache[dirname] = fssubdirmetadata;
-                                    }
-                                    fssubdirmetadata = new FileMetadata(fssubdirmetadata)
-                                    {
-                                        Status = FileMetadata.FileStatus.New
-                                    };
-                                    deltamnode.AddDirectory(fssubdirmetadata);
-                                    dirsToQueue.Add(dirname);
-                                }
-                                fsidx++;
-                            }
-                        }
-                        for (; previdx < previoussubdirs.Count; previdx++)
-                        {
-                            // Directory in oldmtree not but no longer in filesystem
-                            string dirname = previoussubdirs[previdx];
-                            FileMetadata prevfm = previousmnode.Directories[dirname].DirMetadata;
-                            if (!dirmetadatacache.ContainsKey(dirname))
-                            {
-                                dirmetadatacache[dirname] = prevfm;
-                            }
-                            prevfm = new FileMetadata(prevfm)
-                            {
-                                Status = FileMetadata.FileStatus.Deleted
-                            };
-                            deltamnode.AddDirectory(prevfm);
-                            // Dont queue because deleted
-                        }
-                    }
-                    else
-                    {
-                        previoussubdirs = new List<string>(0);
-                    }
-                    
-                    for (; fsidx < fssubdirs.Count; fsidx++)
-                    {
-                        // Directory in filesystem not in old tree
-                        if (trackpatterns == null || CheckTrackAnyDirectoryChild(Path.Combine(reldirpath, fssubdirs[fsidx]), trackpatterns))
-                        {
-                            string dirname = fssubdirs[fsidx];
-                            FileMetadata fssubdirmetadata;
-                            if (dirmetadatacache.ContainsKey(dirname))
-                            {
-                                fssubdirmetadata = dirmetadatacache[dirname];
-                            }
-                            else
-                            {
-                                fssubdirmetadata = SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
-                                dirmetadatacache[dirname] = fssubdirmetadata;
-                            }
-                            fssubdirmetadata = new FileMetadata(fssubdirmetadata)
-                            {
-                                Status = FileMetadata.FileStatus.New
-                            };
-                            deltamnode.AddDirectory(fssubdirmetadata);
-                            dirsToQueue.Add(dirname);
-                        }
-                    }
-                }
-
-                // Record the changes
-                foreach (var dirname in dirsToQueue)
-                {
-                    deltamnodequeue.Enqueue(Path.Combine(reldirpath, dirname));
-                }
-            }
-            return deltamtrees;
-        }
-
-        /// <summary>
         /// Performs a backup, parallelizing backup tasks and using all CPU cores as much as possible.
         /// </summary>
         /// <param name="backupsetname"></param>
@@ -709,7 +220,7 @@ namespace BackupCore
         {
             SyncCacheSaveBackupSets(backupsetname);
 
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+            BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
@@ -717,8 +228,8 @@ namespace BackupCore
 
             List<MetadataNode>? deltatrees = null;
 
-            List<BackupRecord> previousbackups = new List<BackupRecord>();
-            List<MetadataNode?> previousMTrees = new List<MetadataNode?>();
+            List<BackupRecord> previousbackups = new();
+            List<MetadataNode?> previousMTrees = new();
             for (int d = 0; d < DefaultDstDependencies.Count; d++)
             {
                 var dst = DefaultDstDependencies[d];
@@ -763,9 +274,9 @@ namespace BackupCore
                     previousMTrees.Add(null);
                 }
             }
-            deltatrees = GetDeltaMetadataTree(backupsetname, trackpatterns, previousMTrees);
+            deltatrees = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, previousMTrees);
 
-            List<Task> backupops = new List<Task>();
+            List<Task> backupops = new();
             BackupDeltaNode(Path.DirectorySeparatorChar.ToString(), deltatrees.Zip(Enumerable.Range(0, deltatrees.Count), (t, i) => (i, t)).ToList());
 
             void BackupDeltaNode(string relpath, List<(int dstidx, MetadataNode node)> indexednodes)
@@ -920,7 +431,7 @@ namespace BackupCore
 
                 if (savebackupsets)
                 {
-                    BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+                    BackupSetReference backupSetReference = new(backupsetname, false, false, false);
                     DefaultDstDependencies[0].Backups.SaveBackupSet(bset, backupSetReference);
                     foreach (var dst in DefaultDstDependencies.Skip(1))
                     {
@@ -940,7 +451,7 @@ namespace BackupCore
         /// <param name="backupindex"></param>
         public void RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, string? backuphashprefix = null, bool absoluterestorepath=false, int backupdst=0)
         {
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+            BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
@@ -982,7 +493,7 @@ namespace BackupCore
                     }
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 if (!DestinationAvailable)
                 {
@@ -993,152 +504,16 @@ namespace BackupCore
                 {
                     Console.WriteLine("Error restoring file or directory.");
                 }
-                throw e;
+                throw;
             }
         }
 
-        /// <summary>
-        /// Matches a wildcard pattern to path
-        /// </summary>
-        /// <param name="path"></param>
-        /// <param name="pattern"></param>
-        /// <returns></returns>
-        public static bool PatternMatchesPath(string path, string pattern)
+        public static List<(int trackclass, string pattern)> ReadTrackClassFile(string trackfilepath)
         {
-            if (pattern == "*")
+            List<(int, string)> trackclasses = new();
+            using (FileStream fs = new(trackfilepath, FileMode.Open))
             {
-                return true;
-            }
-            if (pattern.EndsWith("/"))
-            {
-                pattern = pattern.Substring(0, pattern.Length - 1);
-            }
-            int wildpos = pattern.IndexOf('*');
-            if (wildpos >= 0)
-            {
-                string prefix = pattern.Substring(0, wildpos);
-                if (prefix.Length > 0)
-                {
-                    if (path.Length >= prefix.Length && prefix == path.Substring(0, prefix.Length))
-                    {
-                        string wsuffix = pattern.Substring(wildpos, pattern.Length - wildpos);
-                        return PatternMatchesPath(path.Substring(prefix.Length), wsuffix);
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                }
-                else
-                {
-                    // Strip wildcard
-                    pattern = pattern.Substring(1);
-                    while (path.Length > 0)
-                    {
-                        if (PatternMatchesPath(path, pattern))
-                        {
-                            return true;
-                        }
-                        path = path.Substring(1);
-                    }
-                    return false;
-                }
-            }
-            else
-            {
-                return path == pattern;
-            }
-        }
-
-        /// <summary>
-        /// Checks whether this file is tracked based on trackpattern
-        /// </summary>
-        /// <param name="file"></param>
-        /// <param name="trackpatterns"></param>
-        /// <returns></returns>
-        public static int FileTrackClass(string file, List<(int trackclass, string pattern)> trackpatterns)
-        {
-            int trackclass = 2;
-            foreach (var trackpatter in trackpatterns)
-            {
-                if (PatternMatchesPath(file, trackpatter.pattern))
-                {
-                    trackclass = trackpatter.trackclass;
-                }
-            }
-            return trackclass;
-        }
-
-        /// <summary>
-        /// Checks whether any directory child (files, sub directories, files in sub directories...) might possibly be tracked.
-        /// </summary>
-        /// <param name="folder"></param>
-        /// <param name="trackpatterns"></param>
-        /// <returns></returns>
-        public static bool CheckTrackAnyDirectoryChild(string directory, List<(int trackpattern, string pattern)> trackpatterns)
-        {
-            bool track = true;
-            foreach (var trackpattern in trackpatterns)
-            {
-                if (track)
-                {
-                    if (trackpattern.trackpattern == 0)
-                    {
-                        // Can only exclude if there is a trailing wildcard after 
-                        // the rest of the pattern matches to this directory
-                        if (trackpattern.pattern[trackpattern.pattern.Length - 1] == '*')
-                        {
-                            if (trackpattern.pattern.Length == 1) // just "*"
-                            {
-                                track = false;
-                            }
-                            else if (PatternMatchesPath(directory, trackpattern.pattern)) 
-                            {
-                                track = false;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (trackpattern.trackpattern != 0)
-                    {
-                        int wildpos = trackpattern.pattern.IndexOf('*');
-                        if (wildpos == 0)
-                        {
-                            track = true;
-                        }
-                        else if (wildpos > 0)
-                        {
-                            string prefix = trackpattern.pattern.Substring(0, wildpos);
-                            if (prefix.Length >= directory.Length)
-                            {
-                                if (prefix.StartsWith(directory))
-                                {
-                                    track = true;
-                                }
-                            }
-                            else
-                            {
-                                if (directory.StartsWith(prefix))
-                                {
-                                    track = true;
-                                }
-                            }
-                        }
-
-                    }
-                }
-            }
-            return track;
-        }
-
-        public List<(int trackclass, string pattern)> ReadTrackClassFile(string trackfilepath)
-        {
-            List<(int, string)> trackclasses = new List<(int, string)>();
-            using (FileStream fs = new FileStream(trackfilepath, FileMode.Open))
-            {
-                using StreamReader reader = new StreamReader(fs);
+                using StreamReader reader = new(fs);
                 string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
@@ -1171,7 +546,7 @@ namespace BackupCore
             {
                 if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
                 {
-                    relpath = relpath.Substring(1);
+                    relpath = relpath[1..];
                 }
                 Stream readerbuffer = SrcDependencies.GetFileData(relpath);
                 byte[] filehash = BlobStore.StoreData(writedestinations.Select(difm => DefaultDstDependencies[difm.dstidx].Blobs), new BackupSetReference(backupset, false, false, false), readerbuffer);
@@ -1192,13 +567,13 @@ namespace BackupCore
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public (IEnumerable<(string backuphash, DateTime backuptime, string message)> backups, bool cache) GetBackups(string backupsetname, int backupdst=0)
         {
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+            BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
             }
 
-            List<(string, DateTime, string)> backups = new List<(string, DateTime, string)>();
+            List<(string, DateTime, string)> backups = new();
             foreach (var (hash, _) in DefaultDstDependencies[backupdst].Backups.LoadBackupSet(backupSetReference).Backups)
             {
                 var br = DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupSetReference, hash);
@@ -1215,7 +590,7 @@ namespace BackupCore
         /// <param name="backuphashprefix"></param>
         public void RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false, int backupdst = 0)
         {
-            BackupSetReference backupSetReference = new BackupSetReference(backupsetname, false, false, false);
+            BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             SyncCacheSaveBackupSets(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
             DefaultDstDependencies[backupdst].Backups.RemoveBackup(backupSetReference, backuphashprefix, DestinationAvailable && CacheDependencies == null, forcedelete);
             SyncCacheSaveBackupSets(backupsetname);

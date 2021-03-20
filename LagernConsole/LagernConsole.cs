@@ -362,7 +362,7 @@ namespace BackupConsole
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
+                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {
@@ -389,7 +389,7 @@ namespace BackupConsole
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = bcore.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
+                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {

@@ -62,10 +62,15 @@ namespace BackupCore
         public byte[] RetrieveData(byte[] filehash)
         {
             BlobLocation blobbl = GetBlobLocation(filehash);
-            if (blobbl.BlockHashes != null) // File is comprised of multiple blobs
+            return RetrieveData(filehash, blobbl);
+        }
+
+        public byte[] RetrieveData(byte[] filehash, BlobLocation blobLocation)
+        {
+            if (blobLocation.BlockHashes != null) // File is comprised of multiple blobs
             {
                 MemoryStream outstream = new MemoryStream();
-                foreach (var hash in blobbl.BlockHashes)
+                foreach (var hash in blobLocation.BlockHashes)
                 {
                     BlobLocation blobloc = GetBlobLocation(hash);
                     outstream.Write(LoadBlob(blobloc, hash), 0, blobloc.ByteLength);
@@ -76,10 +81,10 @@ namespace BackupCore
             }
             else // file is single blob
             {
-                return LoadBlob(blobbl, filehash);
+                return LoadBlob(blobLocation, filehash);
             }
         }
-        
+
         public void CacheBlobList(string backupsetname, BlobStore cacheblobs)
         {
             BackupSetReference bloblistcachebsname = new BackupSetReference(backupsetname, true, false, true);
