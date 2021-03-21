@@ -316,10 +316,10 @@ namespace CoreTest
             //System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             // Full hash test
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1));
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow()));
             //System.Threading.Thread.Sleep(40); // Allow async writes to finish
             // Just prefix
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2).Substring(0, 10));
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow()).Substring(0, 10));
             // All backups deleted
             Assert.AreEqual(core.GetBackups("test").backups.Count(), 0);
         }

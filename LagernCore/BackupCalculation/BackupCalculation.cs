@@ -10,13 +10,15 @@ namespace LagernCore.BackupCalculation
     public class BackupCalculation
     {
         /// <summary>
-        /// Gets the working tree status
+        /// Calculates the difference between the current filesystem status 
+        /// and the previously saved metadata trees, if any.
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="trackpatterns"></param>
         /// <param name="previousmtrees"></param>
         /// <returns>A delta tree mapping </returns>
-        public static List<MetadataNode> GetDeltaMetadataTree(Core core, string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
+        public static List<MetadataNode> GetDeltaMetadataTree(
+            Core core, string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
             List<MetadataNode?>? previousmtrees = null)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);

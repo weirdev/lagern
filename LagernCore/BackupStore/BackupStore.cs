@@ -34,7 +34,7 @@ namespace BackupCore
             BackupRecord? cachebr = null;
             BackupRecord? dstbr = null;
 
-            BackupSetReference cachebsname = new BackupSetReference(bsname, false, true, false);
+            BackupSetReference cachebsname = new(bsname, false, true, false);
 
             if (dstbset == null)
             {
@@ -124,7 +124,6 @@ namespace BackupCore
                     // After insert and increment j still referes to the same backup (dstbr)
                     cacheindex += 1;
                 }
-                cachebr = null;
             }
             while (dstindex < dstbset.Backups.Count)
             {
@@ -133,7 +132,6 @@ namespace BackupCore
                 Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
                 cacheindex += 1;
                 dstindex += 1;
-                dstbr = null;
             }
             Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
             return (dstbset, cachebset);
@@ -167,7 +165,7 @@ namespace BackupCore
             {
                 bset = LoadBackupSet(bsname);
             }
-            BackupRecord newbackup = new BackupRecord(message, metadatatreehash, backupTime);
+            BackupRecord newbackup = new(message, metadatatreehash, backupTime);
             byte[] brbytes = newbackup.serialize();
             byte[] backuphash = BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
             bset.Backups.Add((backuphash, bsname.Shallow));
@@ -222,7 +220,7 @@ namespace BackupCore
             var bset = LoadBackupSet(bsname);
             if (bset.Backups.Count > 0)
             {
-                return GetBackupRecord(bsname, bset.Backups[bset.Backups.Count - 1].hash);
+                return GetBackupRecord(bsname, bset.Backups[^1].hash);
             }
             throw new Exception("Could not find backup record specified");
         }
@@ -260,7 +258,7 @@ namespace BackupCore
         public (string, BackupRecord) GetBackupHashAndRecord(BackupSetReference bsname, int offset = 0)
         {
             var bset = LoadBackupSet(bsname);
-            return GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[bset.Backups.Count - 1].hash).ToLower(), offset);
+            return GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[^1].hash).ToLower(), offset);
         }
 
         public (string, BackupRecord) GetBackupHashAndRecord(BackupSetReference bsname, string prefix, int offset = 0)
@@ -275,7 +273,7 @@ namespace BackupCore
             int pidx = 0;
             for (int i = 0; i < bset.Backups.Count; i++)
             {
-                if (bset.Backups[i].hash.SequenceEqual(match.Value.singlematchhash))
+                if (bset.Backups[i].hash.SequenceEqual(match.Value.singlematchhash)) // TODO: Handle this possible null
                 {
                     pidx = i;
                     break;
@@ -309,8 +307,8 @@ namespace BackupCore
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
             // also if this becomes an issue, keep a s
             prefix = prefix.ToLower();
-            List<string> hashes = new List<string>(from backup in bset.Backups select HashTools.ByteArrayToHexViaLookup32(backup.hash));
-            List<string> matches = new List<string>(from h in hashes where h.ToLower().StartsWith(prefix.ToLower()) select h);
+            List<string> hashes = new(from backup in bset.Backups select HashTools.ByteArrayToHexViaLookup32(backup.hash));
+            List<string> matches = new(from h in hashes where h.ToLower().StartsWith(prefix.ToLower()) select h);
             if (matches.Count == 0)
             {
                 return null;
