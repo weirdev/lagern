@@ -6,6 +6,7 @@ using System.IO;
 using BackupCore.Models;
 using LagernCore.Models;
 using LagernCore.BackupCalculation;
+using LagernCore.Utilities;
 
 namespace BackupCore
 {
@@ -210,12 +211,15 @@ namespace BackupCore
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="message"></param>
-        /// <param name="differentialbackup">True if we attempt to avoid scanning file data when the 
-        /// data appears not to have been modified based on its metadata</param>
+        /// <param name="differential">True if we attempt to avoid scanning file data when the 
+        /// data appears not to have been modified based on its metadata, otherwise all file data is scanned.</param>
         /// <param name="trackpatterns">Rules determining which files</param>
-        /// <param name="prev_backup_hash_prefix"></param>
+        /// <param name="prev_backup_hash_prefixes">Optional list of backup hash prefixes, 
+        /// each index-aligned with a destination from DefaultDstDependencies</param>
         /// <returns>The hash of the new backup</returns>
-        public byte[] RunBackup(string backupsetname, string message, bool async = true, bool differential = true, List<(int trackclass, string pattern)>? trackpatterns = null,
+        public Result<byte[], KeyNotFoundException> RunBackup(
+            string backupsetname, string message, bool async = true, bool differential = true,
+            List<(int trackclass, string pattern)>? trackpatterns = null,
             List<string?>? prev_backup_hash_prefixes = null)
         {
             SyncCacheSaveBackupSets(backupsetname);
@@ -228,7 +232,8 @@ namespace BackupCore
 
             List<MetadataNode>? deltatrees = null;
 
-            List<BackupRecord> previousbackups = new();
+            // Aggregate a list of stored MetadataTrees index-aligned with DefaultDstDependencies,
+            // Individual trees are null if the backup doesnt exist.
             List<MetadataNode?> previousMTrees = new();
             for (int d = 0; d < DefaultDstDependencies.Count; d++)
             {
@@ -240,28 +245,14 @@ namespace BackupCore
                         try
                         {
                             BackupRecord previousbackup = dst.Backups.GetBackupRecord(backupSetReference, prev_backup_hash_prefixes[d]);
-                            if (previousbackup != null)
-                            {
-                                previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
-                            }
-                            else
-                            {
-                                throw new KeyNotFoundException();
-                            }
+                            previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
                         }
                         catch (KeyNotFoundException)
                         {
-                            BackupRecord? previousbackup = dst.Backups.GetBackupRecord(backupSetReference);
-                            if (previousbackup != null)
-                            {
-                                // TODO: if user specifies a previous backup hash, we should probably fail if it is not found
-                                previousMTrees.Add(MetadataNode.Load(dst.Blobs,
-                                    previousbackup.MetadataTreeHash));
-                            }
-                            else
-                            {
-                                previousMTrees.Add(null);
-                            }
+                            // TODO: if user specifies a previous backup hash, we should probably fail if it is not found instead of defaulting to the last backup
+                            //return Result<byte[], KeyNotFoundException>.Err(new KeyNotFoundException("No backup matches the specified hash"));
+                            BackupRecord previousbackup = dst.Backups.GetBackupRecord(backupSetReference);
+                            previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
                         }
                     }
                     else
@@ -274,6 +265,8 @@ namespace BackupCore
                     previousMTrees.Add(null);
                 }
             }
+
+            // Calculate the difference between the current file system state and each of the previous Metadata Trees
             deltatrees = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, previousMTrees);
 
             List<Task> backupops = new();
@@ -389,7 +382,7 @@ namespace BackupCore
             {
                 throw new NullReferenceException("backuphash cannot be null after a backup");
             }
-            return backuphash;
+            return Result<byte[], KeyNotFoundException>.Ok(backuphash);
         }
         
         /// <summary>

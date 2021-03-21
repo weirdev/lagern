@@ -95,6 +95,7 @@ ArgParser
 	can require only one or at least one of a set of options
 		'|' or '^' between options
 		options inside [] ?
+Use Result as method output type instead of an expected exception output
 Replace ArgParser with Knack?
 	https://github.com/Microsoft/knack
 More flexible "list" command
@@ -117,7 +118,17 @@ Reverse references in BlobStore?
 	Every blob knows hash of every structure that points at it?
 	Could list every backup containing file
 	Use worth the complexity?
-Switch model classes to record types
+Research effect on deduplication of file updates made to container files
+	Specifically zip and tar file types
+	Does making an update rewrite the entire file in such a way that, despite most of the extracted data being the same, the data on the disk is altered substantially enough that there are no longer significant runs of exactly equal data needed to generate equivalent splits?
+	Could offer an option configured for specific files/types that extracts the data, stores it, then dedupes it
+Blob packing
+	Ability to pack blobs together into a single file.
+	Can be used to reduce total number of files on disk and also to compress data
+	Potential packing heuristics
+		Pack blobs not in a recent back
+		Pack children of a parent blob type together
+		Pack blobs together which result in the best compression
 Support for using a destination without reading its index
 	Index would always be written to destination so destination is complete
 	When available, would be read from another source
@@ -126,3 +137,12 @@ Support for using a destination without reading its index
 		If the index in the destination were ever used, the alternate index would be unusable
 			Some way to detect this without actually reading the index?
 				Modified date?
+Support for preferring supplying data from a destination while backing up another destination
+	Would allow already created blobs in a more commonly used destination to be supplied to a less commonly used destination
+		Ie. Frequent backups to external hard drive, infrequent backups to backblaze
+	Would support plain blobs and using the metadata tree from the supplying backup to reduce the need for file scans
+	Diff tree calculation
+		Old diff (intersection) tree for backup having current state C with destination A = C ?? A
+		Calc for diff tree for backup having current state C with destination A and B supplying A = C ?? (A + B)
+			This diff only applies to A, as A cannot supply B
+				Bidirectional supply should be supported as an option
