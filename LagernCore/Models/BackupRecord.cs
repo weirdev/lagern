@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -12,7 +12,7 @@ namespace BackupCore
         public string BackupMessage { get; private set; }
         private byte[] UUID { get; set; }
 
-        static Random UUIDGenerator = new Random();
+        private static readonly Random UUIDGenerator = new();
         
         public byte[] MetadataTreeHash { get; private set; }
 
@@ -35,33 +35,35 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            Dictionary<string, byte[]> brdata = new Dictionary<string, byte[]>();
-            // -"-v1"
-            // BackupTime = DateTime.Ticks
-            // BackupMessage = Encoding.UTF8.GetBytes(string)
-            // MetadataTreeHashes = enum_encode(List<byte[]>)
+            Dictionary<string, byte[]> brdata = new()
+            {
+                // -"-v1"
+                // BackupTime = DateTime.Ticks
+                // BackupMessage = Encoding.UTF8.GetBytes(string)
+                // MetadataTreeHashes = enum_encode(List<byte[]>)
 
-            // -v2
-            // Breaks compatability
-            // v1 - MetadataTreeHashes +
-            // MetadataTreeHash = byte[]
+                // -v2
+                // Breaks compatability
+                // v1 - MetadataTreeHashes +
+                // MetadataTreeHash = byte[]
 
-            // -v3
-            // v2 +
-            // UUID = byte[]
+                // -v3
+                // v2 +
+                // UUID = byte[]
 
-            // -v4
-            // MetadataTreeMultiBlock = BitConverter.GetBytes(bool)
-            // -v5
-            // removed MetadataTreeMultiBlock
+                // -v4
+                // MetadataTreeMultiBlock = BitConverter.GetBytes(bool)
+                // -v5
+                // removed MetadataTreeMultiBlock
 
 
-            brdata.Add("BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks));
-            brdata.Add("BackupMessage-v1", Encoding.UTF8.GetBytes(BackupMessage));
+                { "BackupTime-v1", BitConverter.GetBytes(BackupTime.Ticks) },
+                { "BackupMessage-v1", Encoding.UTF8.GetBytes(BackupMessage) },
 
-            brdata.Add("MetadataTreeHash-v2", MetadataTreeHash);
+                { "MetadataTreeHash-v2", MetadataTreeHash },
 
-            brdata.Add("UUID-v3", UUID);
+                { "UUID-v3", UUID }
+            };
 
             return BinaryEncoding.dict_encode(brdata);
         }
@@ -69,7 +71,7 @@ namespace BackupCore
         public static BackupRecord deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            DateTime backuptime = new DateTime(BitConverter.ToInt64(savedobjects["BackupTime-v1"], 0));
+            DateTime backuptime = new(BitConverter.ToInt64(savedobjects["BackupTime-v1"], 0));
             string backupmessage;
             if (savedobjects["BackupMessage-v1"] != null)
             {
@@ -99,6 +101,12 @@ namespace BackupCore
         public override bool Equals(object? obj)
         {
             return Equals(obj as BackupRecord);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(BackupTime, BackupMessage, new BigInteger(UUID).GetHashCode(), 
+                new BigInteger(MetadataTreeHash).GetHashCode());
         }
 
         public bool Equals(BackupRecord? other)
