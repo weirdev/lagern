@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace BackupCore
 {
@@ -57,6 +58,10 @@ namespace BackupCore
         {
             NodeSize = nodesize;
             Initialize();
+            if (Head == null)
+            {
+                throw new NullReferenceException("Head must not be null here");
+            }
             BPlusTreeNode<T> tail = Head;
             if (tail.Values == null)
             {
@@ -80,7 +85,7 @@ namespace BackupCore
 
         private void Initialize()
         {
-            BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, true, NodeSize);
+            BPlusTreeNode<T> root = new(null, true, NodeSize);
             Root = root;
             Head = Root;
             Count = 0;
@@ -113,9 +118,7 @@ namespace BackupCore
         }
 
         // Supressing warning because the out parameter in IDictionary.TryGetValue is not marked nullable
-        #pragma warning disable CS8614 // Nullability of reference types in type of parameter doesn't match implicitly implemented member.
-        public bool TryGetValue(byte[] hash, out T? value)
-        #pragma warning restore CS8614 // Nullability of reference types in type of parameter doesn't match implicitly implemented member.
+        public bool TryGetValue(byte[] hash, [MaybeNullWhen(false)] out T value)
         {
             value = GetRecord(hash);
             return value != null;
@@ -183,7 +186,7 @@ namespace BackupCore
             if (node.Parent == null) // node=Root is leaf (only node)
             {
                 // Create new left node root
-                BPlusTreeNode<T> newroot = new BPlusTreeNode<T>(null, false, NodeSize);
+                BPlusTreeNode<T> newroot = new(null, false, NodeSize);
                 Root = newroot;
                 node.Parent = Root;
                 if (Root.Children == null)
@@ -199,10 +202,10 @@ namespace BackupCore
             }
 
             // Create a new node and add half of this node's keys/ values to it
-            BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, true, NodeSize, node.Next);
+            BPlusTreeNode<T> newnode = new(node.Parent, true, NodeSize, node.Next);
             node.Next = newnode;
-            List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-            List<T> oldvalues = new List<T>(node.Values);
+            List<byte[]> oldkeys = new(node.Keys);
+            List<T> oldvalues = new(node.Values);
             newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
             newnode.Values = new ObservableCollection<T>(oldvalues.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
             oldkeys.RemoveRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2));
@@ -231,9 +234,9 @@ namespace BackupCore
             if (node.Keys.Count > (NodeSize - 1)) // Nodesize-1 for keys
             {
                 // Create a new node and add half of this node's keys/ children to it
-                BPlusTreeNode<T> newnode = new BPlusTreeNode<T>(node.Parent, false, NodeSize);
-                List<byte[]> oldkeys = new List<byte[]>(node.Keys);
-                List<BPlusTreeNode<T>> oldchildren = new List<BPlusTreeNode<T>>(node.Children);
+                BPlusTreeNode<T> newnode = new(node.Parent, false, NodeSize);
+                List<byte[]> oldkeys = new(node.Keys);
+                List<BPlusTreeNode<T>> oldchildren = new(node.Children);
                 newnode.Keys = new ObservableCollection<byte[]>(oldkeys.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2)));
                 newnode.Children = new ObservableCollection<BPlusTreeNode<T>>(oldchildren.GetRange(node.Keys.Count / 2, node.Keys.Count - (node.Keys.Count / 2) + 1));
                 int keycount = node.Keys.Count;
@@ -241,7 +244,7 @@ namespace BackupCore
                 node.Keys = new ObservableCollection<byte[]>(oldkeys);
                 oldchildren.RemoveRange(keycount / 2, keycount - (keycount / 2) + 1);
                 node.Children = new ObservableCollection<BPlusTreeNode<T>>(oldchildren);
-                byte[] split = node.Keys[node.Keys.Count - 1];
+                byte[] split = node.Keys[^1];
                 node.Keys.RemoveAt(node.Keys.Count - 1);
 
                 // Make all newly split out Children refer to newnode as their parent
@@ -261,7 +264,7 @@ namespace BackupCore
                 else
                 {
                     // We just split the root, so make a new one
-                    BPlusTreeNode<T> root = new BPlusTreeNode<T>(null, false, NodeSize);
+                    BPlusTreeNode<T> root = new(null, false, NodeSize);
                     if (root.Children == null)
                     {
                         throw new Exception("Root should be interior node");
@@ -282,7 +285,7 @@ namespace BackupCore
             lock (this)
             {
             // indexing may be off here
-            Stack<int> parentpositions = new Stack<int>();
+            Stack<int> parentpositions = new();
             BPlusTreeNode<T> node = Root;
             while (!node.IsLeafNode)
             {
@@ -333,7 +336,7 @@ namespace BackupCore
                         throw new Exception("Sibling of this node should also be a leaf node");
                     }
                     // Steal entry from left neighbor
-                    node.Keys.Insert(0, lneighbor.Keys[lneighbor.Keys.Count - 1]);
+                    node.Keys.Insert(0, lneighbor.Keys[^1]);
                     node.Values.Insert(0, lneighbor.Values[lneighbor.Keys.Count - 1]);
                     lneighbor.Keys.RemoveAt(lneighbor.Keys.Count - 1);
                     lneighbor.Values.RemoveAt(lneighbor.Values.Count - 1);
@@ -446,8 +449,8 @@ namespace BackupCore
                     {
                         throw new Exception("Siblings must be internal nodes");
                     }
-                    node.Children.Insert(0, nephews[nephews.Count - 1]);
-                    node.Parent.Keys[parentpos - 1] = siblings[parentpos - 1].Keys[siblings[parentpos - 1].Keys.Count - 1];
+                    node.Children.Insert(0, nephews[^1]);
+                    node.Parent.Keys[parentpos - 1] = siblings[parentpos - 1].Keys[^1];
                     siblings[parentpos - 1].Keys.RemoveAt(siblings[parentpos - 1].Keys.Count - 1);
                     nephews.RemoveAt(nephews.Count - 1);
                 }
@@ -511,7 +514,7 @@ namespace BackupCore
             }
         }
 
-        private T? GetRecordFromNode(BPlusTreeNode<T> node, byte[] hash)
+        private static T? GetRecordFromNode(BPlusTreeNode<T> node, byte[] hash)
         {
             if (node.IsLeafNode != true || node.Values == null)
             {
@@ -542,26 +545,23 @@ namespace BackupCore
         
         private void PrintTree()
         {
-            using (StreamWriter file =
-            new StreamWriter(@"C:\Users\Wesley\Desktop\tree.txt", true))
+            using StreamWriter file = new(@"C:\Users\Wesley\Desktop\tree.txt", true);
+            Queue<BPlusTreeNode<T>> printqueue = new();
+            printqueue.Enqueue(Root);
+            file.WriteLine('*');
+            while (printqueue.Count > 0)
             {
-                Queue<BPlusTreeNode<T>> printqueue = new Queue<BPlusTreeNode<T>>();
-                printqueue.Enqueue(Root);
-                file.WriteLine('*');
-                while (printqueue.Count > 0)
+                var node = printqueue.Dequeue();
+                foreach (var key in node.Keys)
                 {
-                    var node = printqueue.Dequeue();
-                    foreach (var key in node.Keys)
+                    file.WriteLine(key[0]);
+                }
+                file.WriteLine('-');
+                if (!node.IsLeafNode && node.Children != null)
+                {
+                    foreach (var child in node.Children)
                     {
-                        file.WriteLine(key[0]);
-                    }
-                    file.WriteLine('-');
-                    if (!node.IsLeafNode && node.Children != null)
-                    {
-                        foreach (var child in node.Children)
-                        {
-                            printqueue.Enqueue(child);
-                        }
+                        printqueue.Enqueue(child);
                     }
                 }
             }
@@ -572,7 +572,7 @@ namespace BackupCore
         {
             lock (this)
             {
-                return GetRecordFromNode(FindLeafNode(hash), hash);
+                return BPlusTree<T>.GetRecordFromNode(FindLeafNode(hash), hash);
             }
         }
         

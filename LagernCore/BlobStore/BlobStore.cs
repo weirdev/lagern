@@ -14,7 +14,7 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    public class BlobStore
+    public class BlobStore : ICustomSerializable<BlobStore>
     {
         public BPlusTree<BlobLocation> IndexStore { get; private set; }
 
@@ -38,11 +38,11 @@ namespace BackupCore
         /// <returns>A list of hashes representing the file contents.</returns>
         public static byte[] StoreData(IEnumerable<BlobStore> blobStores, BackupSetReference backupset, Stream readerbuffer)
         {
-            BlockingCollection<HashBlobPair> fileblobqueue = new BlockingCollection<HashBlobPair>();
+            BlockingCollection<HashBlobPair> fileblobqueue = new();
             byte[] filehash = new byte[20]; // Overall hash of file
             SplitData(readerbuffer, filehash, fileblobqueue);
 
-            List<byte[]> blobshashes = new List<byte[]>();
+            List<byte[]> blobshashes = new();
             while (!fileblobqueue.IsCompleted)
             {
                 if (fileblobqueue.TryTake(out HashBlobPair? blob))
@@ -69,7 +69,7 @@ namespace BackupCore
         {
             if (blobLocation.BlockHashes != null) // File is comprised of multiple blobs
             {
-                MemoryStream outstream = new MemoryStream();
+                MemoryStream outstream = new();
                 foreach (var hash in blobLocation.BlockHashes)
                 {
                     BlobLocation blobloc = GetBlobLocation(hash);
@@ -87,7 +87,7 @@ namespace BackupCore
 
         public void CacheBlobList(string backupsetname, BlobStore cacheblobs)
         {
-            BackupSetReference bloblistcachebsname = new BackupSetReference(backupsetname, true, false, true);
+            BackupSetReference bloblistcachebsname = new(backupsetname, true, false, true);
             cacheblobs.RemoveAllBackupSetReferences(bloblistcachebsname);
             foreach (KeyValuePair<byte[], BlobLocation> hashblob in GetAllHashesAndBlobLocations(new BackupSetReference(backupsetname, true, false, false)))
             {
@@ -143,7 +143,7 @@ namespace BackupCore
                             blobReferences.SkipChildrenOfCurrent();
                         }
                     }
-                    catch (KeyNotFoundException e)
+                    catch (KeyNotFoundException)
                     {
                         throw;
                     }
@@ -406,7 +406,7 @@ namespace BackupCore
                         {
                             // If we are saving to a cache and the bloblist cache indicates the destination has the data
                             // Then dont store, Else save
-                            BackupSetReference blobListCacheReference = backupset with { BlobListCache = true };
+                            //BackupSetReference blobListCacheReference = backupset with { BlobListCache = true };
                             if (!(backupset.Cache
                                 && existingbloc.GetBSetReferenceCount(backupset).HasValue))
                             {
@@ -470,7 +470,7 @@ namespace BackupCore
                 // Loop through children
                 foreach (byte[] reference in blobReferences)
                 {
-                    BlobLocation blocation = GetBlobLocation(blobhash);
+                    BlobLocation blocation = GetBlobLocation(reference);
                     if (blocation.TotalReferenceCount > 0) // This was already stored
                     {
                         blobReferences.SkipChildrenOfCurrent();
@@ -497,7 +497,7 @@ namespace BackupCore
 
         private BlobLocation AddMultiBlobReferenceBlob(BackupSetReference backupset, byte[] hash, List<byte[]> hashlist)
         {
-            HashBlobPair referenceblob = new HashBlobPair(hash, null);
+            HashBlobPair referenceblob = new(hash, null);
             return AddBlob(backupset, referenceblob, hashlist);
         }
 
@@ -563,7 +563,7 @@ namespace BackupCore
         public static void SplitData(Stream inputstream, byte[] filehash, BlockingCollection<HashBlobPair> hashblobqueue)
         {
             // https://rsync.samba.org/tech_report/node3.html
-            List<byte> newblob = new List<byte>();
+            List<byte> newblob = new();
             byte[] alphachksum = new byte[2];
             byte[] betachksum = new byte[2];
             SHA1 sha1filehasher = HashTools.GetSHA1Hasher();
@@ -590,12 +590,12 @@ namespace BackupCore
                     for (int j = 0; j < readin.Length; j++) // Byte by byte
                     {
                         newblob.Add(readin[j]);
-                        HashTools.ByteSum(alphachksum, newblob[newblob.Count - 1]);
+                        HashTools.ByteSum(alphachksum, newblob[^1]);
                         if (newblob.Count > rollwindowsize)
                         {
                             HashTools.ByteDifference(alphachksum, newblob[newblob.Count - rollwindowsize - 1]);
-                            shifted[0] = (byte)((newblob[newblob.Count - 1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
-                            shifted[1] = (byte)((newblob[newblob.Count - 1] >> 3) & 0xFF); // 8-5 = 3
+                            shifted[0] = (byte)((newblob[^1] << 5) & 0xFF); // rollwindowsize = 32 = 2^5 => 5
+                            shifted[1] = (byte)((newblob[^1] >> 3) & 0xFF); // 8-5 = 3
                             HashTools.BytesDifference(betachksum, shifted);
                         }
                         HashTools.BytesSum(betachksum, alphachksum);
@@ -627,9 +627,13 @@ namespace BackupCore
             }
             else
             {
-                byte[] blob = new byte[0];
+                byte[] blob = Array.Empty<byte>();
                 sha1filehasher.TransformFinalBlock(blob, 0, blob.Length);
                 hashblobqueue.Add(new HashBlobPair(sha1blobhasher.ComputeHash(blob), blob));
+            }
+            if (sha1filehasher.Hash == null)
+            {
+                throw new NullReferenceException("Hash cannot be null here");
             }
             Array.Copy(sha1filehasher.Hash, filehash, sha1filehasher.Hash.Length);
             hashblobqueue.CompleteAdding();
@@ -642,7 +646,7 @@ namespace BackupCore
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
         public (int allreferences, int uniquereferences) GetSizes(byte[] blobhash, BlobLocation.BlobType blobtype)
         {
-            Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize = new Dictionary<string, (int, BlobLocation)>();
+            Dictionary<string, (int frequency, BlobLocation blocation)> hashfreqsize = new();
             GetBlobReferenceFrequencies(blobhash, blobtype, hashfreqsize);
             int allreferences = 0;
             int uniquereferences = 0;
@@ -695,7 +699,7 @@ namespace BackupCore
 
         public byte[] serialize()
         {
-            Dictionary<string, byte[]> bptdata = new Dictionary<string, byte[]>();
+            Dictionary<string, byte[]> bptdata = new();
             // -"-v1"
             // keysize = BitConverter.GetBytes(int) (only used for decoding HashBLocationPairs)
             // HashBLocationPairs = enum_encode(List<byte[]> [hash,... & backuplocation.serialize(),...])
@@ -706,7 +710,7 @@ namespace BackupCore
 
             bptdata.Add("keysize-v1", BitConverter.GetBytes(20));
 
-            List<byte[]> binkeyvals = new List<byte[]>();
+            List<byte[]> binkeyvals = new();
             foreach (KeyValuePair<byte[], BlobLocation> kvp in IndexStore)
             {
                 byte[] keybytes = kvp.Key;
@@ -727,7 +731,7 @@ namespace BackupCore
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
 
-            BlobStore bs = new BlobStore(dependencies);
+            BlobStore bs = new(dependencies);
             bs.IndexStore = new BPlusTree<BlobLocation>(DeconstructHashBlocationPairs(savedobjects["HashBLocationPairs-v1"], keysize), 
                                 bs.IndexStore.NodeSize);
             return bs;

@@ -15,8 +15,9 @@ namespace LagernCore.BackupCalculation
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="trackpatterns"></param>
-        /// <param name="previousmtrees"></param>
-        /// <returns>A delta tree mapping </returns>
+        /// <param name="previousmtrees">Optional list of previously backed up metadata trees,
+        /// each tree in the list is also optional.</param>
+        /// <returns>A delta tree mapping</returns>
         public static List<MetadataNode> GetDeltaMetadataTree(
             Core core, string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
             List<MetadataNode?>? previousmtrees = null)
@@ -27,23 +28,28 @@ namespace LagernCore.BackupCalculation
                 backupSetReference = backupSetReference with { Cache = true };
             }
 
-            Queue<string> deltamnodequeue = new();
-            FileMetadata rootdirmetadata = core.SrcDependencies.GetFileMetadata("");
-
             // Non differential backup equivalent to differential backup to single destination without a previous tree
             if (previousmtrees == null)
             {
                 previousmtrees = new List<MetadataNode?>() { null };
             }
 
+            FileMetadata rootdirmetadata = core.SrcDependencies.GetFileMetadata("");
+
+            // Create a new tree to hold the deltas for each of the previous metadata trees
             List<MetadataNode> deltamtrees = previousmtrees.Select((_) => new MetadataNode(rootdirmetadata, null)).ToList();
 
-            foreach (var (previousmtree, deltamtree) in previousmtrees.Zip(deltamtrees, (p, d) => (p, d)))
+            // Now we will compare these delta trees to the current filesystem state.
+            // This involves matching directories and files in the old tree to their new versions.
+            // This is mostly done on the basis of the directory/file name, but there is some provision for detecting renames
+
+            foreach (var (previousmtree, deltamtree) in previousmtrees.Zip(deltamtrees))
             {
                 if (previousmtree != null)
                 {
                     // We always assume the matching of deltatree root to fs backup root is valid
                     // So make the name equal, and set status to metadatachange if they were different
+                    // TODO: We should probably just be ignoring the name of the root directory
                     if (previousmtree.DirMetadata.FileName != rootdirmetadata.FileName)
                     {
                         deltamtree.DirMetadata.Status = FileMetadata.FileStatus.MetadataChange;
@@ -59,36 +65,43 @@ namespace LagernCore.BackupCalculation
                 }
             }
 
-            deltamnodequeue.Enqueue(Path.DirectorySeparatorChar.ToString());
+            // A queue of paths to directories for which to examine and generate deltas
+            Queue<string> deltaMNodeQueue = new();
+            // Begin with the root node
+            deltaMNodeQueue.Enqueue(Path.DirectorySeparatorChar.ToString());
 
-            while (deltamnodequeue.Count > 0)
+            while (deltaMNodeQueue.Count > 0)
             {
-                string reldirpath = deltamnodequeue.Dequeue();
-                List<MetadataNode?> posdeltanodes = deltamtrees.Select((dmt) => dmt.GetDirectory(reldirpath)).ToList();
-                List<MetadataNode?> previousmnodes = previousmtrees.Select((mt) => mt?.GetDirectory(reldirpath)).ToList();
+                string reldirpath = deltaMNodeQueue.Dequeue();
+                List<MetadataNode?> posDeltaNodes = deltamtrees.Select(dmt => dmt.GetDirectory(reldirpath)).ToList();
+                List<MetadataNode?> previousMNodes = previousmtrees.Select(mt => mt?.GetDirectory(reldirpath)).ToList();
 
+                // Cleanup the previous metadata nodes we need to compare to
                 // Null delta nodes indicate that a directory is not to be backed up for that backup,
                 // so we exclude the deltanode and corresponding previousmnode
-                List<MetadataNode> filtereddn = new();
-                List<MetadataNode?> filteredpn = new();
-                for (int i = 0; i < posdeltanodes.Count; i++)
+                List<MetadataNode> filteredDN = new();
+                List<MetadataNode?> filteredPN = new();
+                for (int i = 0; i < posDeltaNodes.Count; i++)
                 {
-                    MetadataNode? deltaNode = posdeltanodes[i];
+                    MetadataNode? deltaNode = posDeltaNodes[i];
                     if (deltaNode != null)
                     {
-                        filtereddn.Add(deltaNode);
-                        filteredpn.Add(previousmnodes[i]);
+                        filteredDN.Add(deltaNode);
+                        filteredPN.Add(previousMNodes[i]);
                     }
                 }
-                List<MetadataNode> deltanodes = filtereddn;
-                previousmnodes = filteredpn;
+                List<MetadataNode> deltaNodes = filteredDN;
+                previousMNodes = filteredPN;
 
-                // Now handle files
-                List<string> fsfiles;
+                // Files
+                // 1. Get list of file names from disk
+                // 2. For each previous backup, match the previous backup files with the filesystem files
+                // 3. Based on the track class and the metadata comparison between 
+                List<string> fsFiles;
                 try
                 {
-                    fsfiles = new List<string>(core.SrcDependencies.GetDirectoryFiles(reldirpath));
-                    fsfiles.Sort();
+                    fsFiles = new List<string>(core.SrcDependencies.GetDirectoryFiles(reldirpath));
+                    fsFiles.Sort();
                 }
                 catch (Exception e) when (e is DirectoryNotFoundException || e is UnauthorizedAccessException) // TODO: More user friendly output here
                 {
@@ -99,52 +112,53 @@ namespace LagernCore.BackupCalculation
                     throw new Exception("Fetching file system files failed", e);
                 }
 
-                // Used this slightly ackward cache pattern to more easily efficiently handle per-destination tracking classes in a future release
-                Dictionary<string, FileMetadata> filemetadatacache = new();
+                // The files on the file system are checked in the inner loop, to avoid reloading metadata for each
+                // previous backup we are comparing against in the outer loop, we cache the loaded file metadata
+                // TODO: Reverse the loop order, so that we get the one on disk file and compare it with each of the previous backups
+                Dictionary<string, FileMetadata> fileMetadataCache = new();
 
-                for (int prevmnidx = 0; prevmnidx < previousmnodes.Count; prevmnidx++)
+                for (int prevMNIdx = 0; prevMNIdx < previousMNodes.Count; prevMNIdx++)
                 {
-                    var previousmnode = previousmnodes[prevmnidx];
-                    var deltamnode = deltanodes[prevmnidx];
-                    List<string> previousfiles;
+                    var previousMNode = previousMNodes[prevMNIdx];
+                    var deltamnode = deltaNodes[prevMNIdx];
 
-
-                    int previdx = 0;
-                    int fsidx = 0;
-                    if (previousmnode != null)
+                    List<string> previousFiles;
+                    int prevIdx = 0;
+                    int fsIdx = 0;
+                    if (previousMNode != null)
                     {
-                        previousfiles = new List<string>(previousmnode.Files.Keys);
-                        previousfiles.Sort();
+                        previousFiles = new List<string>(previousMNode.Files.Keys);
+                        previousFiles.Sort(); // Both previousFiles and fsFiles now sorted by name, iterate through them testing for matches
 
-                        while (previdx < previousfiles.Count && fsidx < fsfiles.Count)
+                        while (prevIdx < previousFiles.Count && fsIdx < fsFiles.Count)
                         {
-                            if (previousfiles[previdx] == fsfiles[fsidx]) // Names match
+                            if (previousFiles[prevIdx] == fsFiles[fsIdx]) // Names match
                             {
-                                string filename = previousfiles[previdx];
-                                int trackclass = 2; // TODO: make this an application wide constant
+                                string fileName = previousFiles[prevIdx];
+                                int trackClass = 2; // TODO: make this an application wide constant
                                 if (trackpatterns != null)
                                 {
-                                    trackclass = FileTrackClass(Path.Combine(reldirpath[1..], filename), trackpatterns);
+                                    trackClass = FileTrackClass(Path.Combine(reldirpath[1..], fileName), trackpatterns);
                                 }
                                 try // We (may) read the file's metadata here so wrap errors
                                 {
-                                    if (trackclass != 0)
+                                    if (trackClass != 0)
                                     {
-                                        FileMetadata prevfm = previousmnode.Files[filename];
+                                        FileMetadata prevfm = previousMNode.Files[fileName];
                                         FileMetadata curfm;
-                                        if (filemetadatacache.ContainsKey(filename))
+                                        if (fileMetadataCache.ContainsKey(fileName))
                                         {
-                                            curfm = filemetadatacache[filename];
+                                            curfm = fileMetadataCache[fileName];
                                         }
                                         else
                                         {
-                                            curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                            filemetadatacache[filename] = curfm;
+                                            curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName));
+                                            fileMetadataCache[fileName] = curfm;
                                         }
                                         // Create a copy FileMetada to hold the changes
                                         curfm = new FileMetadata(curfm);
 
-                                        switch (trackclass)
+                                        switch (trackClass)
                                         {
                                             case 1: // Dont scan if we have a previous version
                                                 if (curfm.FileDifference(prevfm))
@@ -160,7 +174,7 @@ namespace LagernCore.BackupCalculation
                                                     // If file size and datemodified unchanged we assume no change
                                                 if (prevfm.FileSize == curfm.FileSize && prevfm.DateModifiedUTC == curfm.DateModifiedUTC)
                                                 {
-                                                    // Still update metadata if necessary (ie dateaccessed changed)
+                                                    // Still update metadata if changed
                                                     if (curfm.FileDifference(prevfm))
                                                     {
                                                         curfm.Status = FileMetadata.FileStatus.MetadataChange;
@@ -185,7 +199,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else // file exists in previous, but now has tracking class 0, thus is effectively deleted
                                     {
-                                        FileMetadata prevfm = previousmnode.Files[filename];
+                                        FileMetadata prevfm = previousMNode.Files[fileName];
                                         prevfm = new FileMetadata(prevfm)
                                         {
                                             Status = FileMetadata.FileStatus.Deleted
@@ -197,25 +211,25 @@ namespace LagernCore.BackupCalculation
                                 {
                                     Console.WriteLine(e.Message);
                                 }
-                                previdx++;
-                                fsidx++;
+                                prevIdx++;
+                                fsIdx++;
                             }
-                            else if (previousfiles[previdx].CompareTo(fsfiles[fsidx]) < 0) // deltafiles[deltaidx] earlier in alphabet than fsfiles[fsidx]
+                            else if (previousFiles[prevIdx].CompareTo(fsFiles[fsIdx]) < 0) // deltafiles[deltaidx] earlier in alphabet than fsfiles[fsidx]
                             {
                                 // File in old tree but no longer in filesystem
-                                string filename = previousfiles[previdx];
-                                FileMetadata prevfm = previousmnode.Files[filename];
+                                string filename = previousFiles[prevIdx];
+                                FileMetadata prevfm = previousMNode.Files[filename];
                                 prevfm = new FileMetadata(prevfm)
                                 {
                                     Status = FileMetadata.FileStatus.Deleted
                                 };
                                 deltamnode.AddFile(prevfm);
-                                previdx++;
+                                prevIdx++;
                             }
                             else // deltafiles[deltaidx] later in alphabet than fsfiles[fsidx]
                             {
                                 // File on filesystem not in old tree
-                                string filename = fsfiles[fsidx];
+                                string filename = fsFiles[fsIdx];
                                 int trackclass = 2;
                                 if (trackpatterns != null)
                                 {
@@ -230,14 +244,14 @@ namespace LagernCore.BackupCalculation
                                             break;
                                         default:
                                             FileMetadata curfm;
-                                            if (filemetadatacache.ContainsKey(filename))
+                                            if (fileMetadataCache.ContainsKey(filename))
                                             {
-                                                curfm = filemetadatacache[filename];
+                                                curfm = fileMetadataCache[filename];
                                             }
                                             else
                                             {
                                                 curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                                filemetadatacache[filename] = curfm;
+                                                fileMetadataCache[filename] = curfm;
                                             }
                                             curfm = new FileMetadata(curfm)
                                             {
@@ -249,16 +263,17 @@ namespace LagernCore.BackupCalculation
                                 }
                                 catch (Exception e)
                                 {
+                                    // TODO: Get an actual logger
                                     Console.WriteLine(e.Message);
                                 }
-                                fsidx++;
+                                fsIdx++;
                             }
                         }
-                        for (; previdx < previousfiles.Count; previdx++)
+                        for (; prevIdx < previousFiles.Count; prevIdx++)
                         {
                             // File in old tree but no longer in filesystem
-                            string filename = previousfiles[previdx];
-                            FileMetadata prevfm = previousmnode.Files[filename];
+                            string filename = previousFiles[prevIdx];
+                            FileMetadata prevfm = previousMNode.Files[filename];
                             prevfm = new FileMetadata(prevfm)
                             {
                                 Status = FileMetadata.FileStatus.Deleted
@@ -268,13 +283,13 @@ namespace LagernCore.BackupCalculation
                     }
                     else
                     {
-                        previousfiles = new List<string>(0);
+                        previousFiles = new List<string>(0);
                     }
 
-                    for (; fsidx < fsfiles.Count; fsidx++)
+                    for (; fsIdx < fsFiles.Count; fsIdx++)
                     {
                         // File on filesystem not in old tree
-                        string filename = fsfiles[fsidx];
+                        string filename = fsFiles[fsIdx];
                         int trackclass = 2;
                         if (trackpatterns != null)
                         {
@@ -282,27 +297,23 @@ namespace LagernCore.BackupCalculation
                         }
                         try
                         {
-                            switch (trackclass)
+                            if (trackclass != 0) // dont add if untracked
                             {
-                                case 0: // dont add if untracked
-                                    break;
-                                default:
-                                    FileMetadata curfm;
-                                    if (filemetadatacache.ContainsKey(filename))
-                                    {
-                                        curfm = filemetadatacache[filename];
-                                    }
-                                    else
-                                    {
-                                        curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
-                                        filemetadatacache[filename] = curfm;
-                                    }
-                                    curfm = new FileMetadata(curfm)
-                                    {
-                                        Status = FileMetadata.FileStatus.New
-                                    };
-                                    deltamnode.AddFile(curfm);
-                                    break;
+                                FileMetadata curfm;
+                                if (fileMetadataCache.ContainsKey(filename))
+                                {
+                                    curfm = fileMetadataCache[filename];
+                                }
+                                else
+                                {
+                                    curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                    fileMetadataCache[filename] = curfm;
+                                }
+                                curfm = new FileMetadata(curfm)
+                                {
+                                    Status = FileMetadata.FileStatus.New
+                                };
+                                deltamnode.AddFile(curfm);
                             }
                         }
                         catch (Exception e)
@@ -312,8 +323,10 @@ namespace LagernCore.BackupCalculation
                     }
                 }
 
-
-                // Handle directories
+                // Directories
+                // Directories processed similar to files
+                // Previously backup up directories compared to filesystem directories directories
+                // Only metadata is relevant for directories so the status update is either New, Deleted, MetadataChange, Or Unchanged
                 List<string> fssubdirs;
                 try
                 {
@@ -341,10 +354,10 @@ namespace LagernCore.BackupCalculation
 
                 HashSet<string> dirsToQueue = new();
 
-                for (int prevmnidx = 0; prevmnidx < previousmnodes.Count; prevmnidx++)
+                for (int prevmnidx = 0; prevmnidx < previousMNodes.Count; prevmnidx++)
                 {
-                    MetadataNode? previousmnode = previousmnodes[prevmnidx];
-                    var deltamnode = deltanodes[prevmnidx];
+                    MetadataNode? previousmnode = previousMNodes[prevmnidx];
+                    var deltamnode = deltaNodes[prevmnidx];
 
                     int previdx = 0;
                     int fsidx = 0;
@@ -490,14 +503,15 @@ namespace LagernCore.BackupCalculation
                 // Record the changes
                 foreach (var dirname in dirsToQueue)
                 {
-                    deltamnodequeue.Enqueue(Path.Combine(reldirpath, dirname));
+                    deltaMNodeQueue.Enqueue(Path.Combine(reldirpath, dirname));
                 }
             }
             return deltamtrees;
         }
 
         /// <summary>
-        /// Checks whether this file is tracked based on trackpattern
+        /// Checks the level at which this file is tracked based on its trackpattern.
+        /// Defaults to 2 if no pattern matches.
         /// </summary>
         /// <param name="file"></param>
         /// <param name="trackpatterns"></param>

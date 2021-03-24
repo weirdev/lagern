@@ -2,6 +2,16 @@ I intend to transition to githubs issue based project management eventually.
 For now this will remain the home of the project backlog.
 
 ===
+Test backing up to two destinations
+	1. Backup to one destination
+	2. Add more files
+	3. Backup to both destinations at once
+	4. Remove some files
+	5. Backup to one destination
+	6. Backup to both destinations
+Verify that when backing up to multiple destinations, source file data is only read/processed once
+Review console support for backup up to multiple destinations
+===
 More tests for reference counting, ensure blobs stay present while a reference to them exists across multiple backups, transfers, backup deletions, etc
 	A quick manual verification of reference counting logic
 Create a helper method for verifying entire metadata trees and optionally child files are stored correctly in the blob store
