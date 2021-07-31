@@ -177,6 +177,7 @@ namespace BackupCore
             var bset = LoadBackupSet(bsname);
             if (bset.CacheUsed && dst_wo_cache && !force_delete)
             {
+                // TODO: Do we need this check in more places?
                 throw new Core.BackupRemoveException("Deleting a backup from a backup destination that uses a cache, " +
                     "without that cache present may cause errors when merging cache.");
             }

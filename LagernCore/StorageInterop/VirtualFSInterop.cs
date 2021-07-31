@@ -10,6 +10,11 @@ namespace BackupCore
     public class VirtualFSInterop : IFSInterop, IDstFSInterop
     {
         public MetadataNode VirtualFS { get; private set; }
+
+        // Note that this dataStore is just the backing key-value store for the virtual files
+        // It does not have any deduplication, although if this virtual fs is used as a dst,
+        // already deduplicated files may be stored in it. This data store also does not reference
+        // count stored data, so no data is ever deleted from it.
         private IDictionary<byte[], byte[]> DataStore { get; set; }
 
         public string DstRoot { get; private set; }
@@ -25,7 +30,7 @@ namespace BackupCore
 
         public static IDstFSInterop InitializeNewDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
         {
-            VirtualFSInterop virtualFSInterop = new VirtualFSInterop(filesystem, datastore);
+            VirtualFSInterop virtualFSInterop = new(filesystem, datastore);
             virtualFSInterop.DstRoot = dstRoot;
             if (password != null)
             {
@@ -39,7 +44,7 @@ namespace BackupCore
 
         public static IDstFSInterop LoadDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
         {
-            VirtualFSInterop virtualFSInterop = new VirtualFSInterop(filesystem, datastore);
+            VirtualFSInterop virtualFSInterop = new(filesystem, datastore);
             virtualFSInterop.DstRoot = dstRoot;
             if (password != null)
             {
