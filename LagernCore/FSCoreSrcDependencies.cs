@@ -130,6 +130,26 @@ namespace BackupCore
             }
         }
 
+        public void DeleteFile(string path, bool absolutepath = false)
+        {
+            if (!absolutepath)
+            {
+                if (BackupPathSrc == null)
+                {
+                    throw new Exception("Must be configured with source path for this operation");
+                }
+                path = Path.Combine(BackupPathSrc, path);
+            }
+            try
+            {
+                FSInterop.DeleteFile(path);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
         public void CreateDirectory(string path, bool absolutepath = false)
         {
             if (!absolutepath)

@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace BackupCore
 {
@@ -16,6 +14,8 @@ namespace BackupCore
         Stream GetFileData(string relpath);
 
         void OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false);
+
+        void DeleteFile(string path, bool absolutepath = false);
 
         void CreateDirectory(string path, bool absolutepath = false);
 
