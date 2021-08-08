@@ -559,6 +559,17 @@ namespace BackupCore
         }
 
         /// <summary>
+        /// Calculates the size of the blobs and child blobs referenced by the given hash.
+        /// </summary>
+        /// <param name="backuphashstring"></param>
+        /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
+        public (int allreferencesizes, int uniquereferencesizes) GetBackupSizes(
+            string bsname, string backuphashstring, int backupdst = 0)
+        {
+            return GetBackupSizes(new BackupSetReference(bsname, false, false, false), backuphashstring, backupdst);
+        }
+
+        /// <summary>
         /// Backup a file to all destinations and save its hash to the given filemetadata
         /// </summary>
         /// <param name="relpath"></param>
@@ -644,6 +655,17 @@ namespace BackupCore
                     dstCore.DefaultDstDependencies[backupdst_transferdst].Blobs, backupsetname, hash, includefiles & !shallow);
             }
             dstCore.DefaultDstDependencies[backupdst_transferdst].SaveBlobStoreIndex();
+        }
+
+        /// <summary>
+        /// Transfer a backupset and its data to a new location.
+        /// </summary>
+        /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
+        /// <param name="dst">The lagern directory you wish to transfer to.</param>
+        public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles,
+            int backupdst_transfersrc = 0, int backupdst_transferdst = 0)
+        {
+            TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), dstCore, includefiles, backupdst_transfersrc, backupdst_transferdst);
         }
 
         // TODO: Add method for transferring individual backup

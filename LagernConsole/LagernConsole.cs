@@ -4,7 +4,6 @@ using System.Linq;
 using System.IO;
 using CommandLine;
 using BackupCore;
-using LagernCore.Models;
 
 namespace BackupConsole
 {
@@ -13,7 +12,7 @@ namespace BackupConsole
     public class LagernConsole
     {
         // Current directory (where user launches from)
-        public static string cwd = Environment.CurrentDirectory;
+        private static readonly string CWD = Environment.CurrentDirectory;
 
         public static readonly string LagernDirectory = ".lagern";
         public static readonly string LagernSettingsFile = Path.Combine(LagernDirectory, ".settings");
@@ -263,7 +262,7 @@ namespace BackupConsole
         {
             try
             {
-                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, cwd, new DiskFSInterop(), opts.Cache);
+                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, CWD, new DiskFSInterop(), opts.Cache);
 
                 if (opts.Cache != null)
                 {
@@ -278,7 +277,7 @@ namespace BackupConsole
 
         private static void AddDestination(AddDestinationOptions opts)
         {
-            var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
+            var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
             var settings = srcdep.ReadSettings();
             bool cache_used = settings.ContainsKey(BackupSetting.cache);
             string bsname = GetBackupSetName(opts.BSName, srcdep);
@@ -357,7 +356,7 @@ namespace BackupConsole
             {
                 var bcore = LoadCore();
                 string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-                TablePrinter table = new TablePrinter();
+                TablePrinter table = new();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
                 List<(int, string)>? trackclasses;
                 try
@@ -447,7 +446,7 @@ namespace BackupConsole
 
         public static void ListBackups(ListNoNameOptions opts, string bsname, Core? bcore = null)
         {
-            ListOptions opts2 = new ListOptions
+            ListOptions opts2 = new()
             {
                 BSName = bsname,
                 MaxBackups = opts.MaxBackups,
@@ -467,13 +466,13 @@ namespace BackupConsole
             var backups = backupsenum.ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
-            TablePrinter table = new TablePrinter();
+            TablePrinter table = new();
             if (opts.ShowSizes)
             {
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(new BackupSetReference(bsname, false, false, false), backups[i].backuphash);
+                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(bsname, backups[i].backuphash);
                     string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
@@ -539,7 +538,7 @@ namespace BackupConsole
 
         public static Core LoadCore()
         {
-            var srcdep = FSCoreSrcDependencies.Load(cwd, new DiskFSInterop());
+            var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
             string? cache;
 
             string? destinations;
@@ -592,7 +591,7 @@ namespace BackupConsole
                     cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
                 }
 
-                List<ICoreDstDependencies> dstdeps = new List<ICoreDstDependencies>();
+                List<ICoreDstDependencies> dstdeps = new();
                 foreach (var destination in destinations.Split(';'))
                 {
                     string[] dst_passopt_cc = destination.Split('|');
@@ -645,9 +644,22 @@ namespace BackupConsole
             while (inputpass == "")
             {
                 Console.Write("Password: ");
-                inputpass = Console.ReadLine();
+                inputpass = ReadLineNonNull();
             }
             return inputpass;
+        }
+
+        private static string ReadLineNonNull()
+        {
+            string? ip = Console.ReadLine();
+            if (ip == null)
+            {
+                return "";
+            }
+            else
+            {
+                return ip;
+            }
         }
 
         public static void BrowseBackup(BrowseOptions opts)
@@ -663,7 +675,7 @@ namespace BackupConsole
             var bcore = LoadCore();
             string backupsetname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            bcore.TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
+            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
         }
 
         public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);
@@ -678,7 +690,7 @@ namespace BackupConsole
 
         private static string GetBUSourceDir()
         {
-            string? dir = cwd;
+            string? dir = CWD;
             do
             {
                 if (File.Exists(Path.Combine(dir, LagernSettingsFile)))
@@ -687,12 +699,12 @@ namespace BackupConsole
                 }
                 dir = Path.GetDirectoryName(dir);
             } while (dir != null);
-            return cwd;
+            return CWD;
         }
 
         private static string? GetBUDestinationDir()
         {
-            string? dir = cwd;
+            string? dir = CWD;
             do
             {
                 if (Directory.Exists(Path.Combine(dir, "index")))
@@ -708,12 +720,12 @@ namespace BackupConsole
         
         public static string[] ReadArgs()
         {
-            string command = Console.ReadLine();
+            string command = ReadLineNonNull();
             if (command != "")
             {
                 return SplitArguments(command);
             }
-            return new string[0];
+            return Array.Empty<string>();
         }
 
         /// <summary>
@@ -732,7 +744,7 @@ namespace BackupConsole
                 if (!inQuote && parmChars[index] == ' ')
                     parmChars[index] = '\n';
             }
-            string split = new string(parmChars);
+            string split = new(parmChars);
             while (split.Contains("\n\n"))
             {
                 split = split.Replace("\n\n", "\n");
