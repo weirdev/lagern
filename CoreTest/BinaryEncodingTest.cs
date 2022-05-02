@@ -117,7 +117,7 @@ namespace CoreTest
             toencode.Add(data3);
             toencode.Add(data4);
             toencode.Add(data5);
-            byte[] encoded = BackupCore.BinaryEncoding.enum_encode(toencode);
+            byte[] encoded = BackupCore.BinaryEncoding.EnumEncode(toencode);
             List<byte[]> decoded = BackupCore.BinaryEncoding.enum_decode(encoded);
 
             Assert.IsTrue(decoded[0].SequenceEqual(data));

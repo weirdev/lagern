@@ -27,13 +27,22 @@ namespace BackupCore
             Dependencies = dependencies;
         }
 
+        /// <summary>
+        /// Store some binary data into some blobstores.
+        /// Does not increment any blob references.
+        /// </summary>
+        /// <param name="blobStores"></param>
+        /// <param name="backupset"></param>
+        /// <param name="inputdata"></param>
+        /// <returns></returns>
         public static byte[] StoreData(IEnumerable<BlobStore> blobStores, BackupSetReference backupset, byte[] inputdata)
         {
             return StoreData(blobStores, backupset, new MemoryStream(inputdata));
         }
 
         /// <summary>
-        /// Backup data sychronously.
+        /// Store some binary data into some blobstores.
+        /// Does not increment any blob references.
         /// </summary>
         /// <param name="relpath"></param>
         /// <returns>A list of hashes representing the file contents.</returns>
@@ -437,6 +446,18 @@ namespace BackupCore
             }
         }
 
+        /// <summary>
+        /// Finalizes
+        /// 1. The backup record itself
+        /// 2. The metadata tree 
+        /// 3. All contained files
+        /// 
+        /// The hashes for #2 (excep root) and #3 are provided in the HashTreeNode and its children.
+        /// </summary>
+        /// <param name="bsname"></param>
+        /// <param name="backuphash"></param>
+        /// <param name="mtreehash"></param>
+        /// <param name="mtreereferences"></param>
         public void FinalizeBackupAddition(BackupSetReference bsname, byte[] backuphash, byte[] mtreehash, HashTreeNode mtreereferences)
         {
             BlobLocation backupblocation = GetBlobLocation(backuphash);
@@ -447,7 +468,7 @@ namespace BackupCore
                 int? mtreeRefCount = mtreeblocation.GetBSetReferenceCount(bsname);
                 if (!mtreeRefCount.HasValue || mtreeRefCount == 0)
                 {
-                    ISkippableChildrenIterator<byte[]> childReferences = mtreereferences.GetChildIterator();
+                    ISkippableChildrenIterator<byte[]> childReferences = mtreereferences.GetChildIterator(); // This only iterates through nested nodes, no nested files
                     foreach (var blobhash in childReferences)
                     {
                         BlobLocation blocation = GetBlobLocation(blobhash);
@@ -465,7 +486,6 @@ namespace BackupCore
                         }
                         IncrementReferenceCountNoRecurse(bsname, blocation, blobhash, 1);
                     }
-
                     IncrementReferenceCountNoRecurse(bsname, mtreeblocation, mtreehash, 1);
                 }
                 IncrementReferenceCountNoRecurse(bsname, backupblocation, backuphash, 1);
@@ -732,7 +752,7 @@ namespace BackupCore
                 Array.Copy(backuplocationbytes, 0, binkeyval, keybytes.Length, backuplocationbytes.Length);
                 binkeyvals.Add(binkeyval);
             }
-            bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
+            bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.EnumEncode(binkeyvals));
             
             return BinaryEncoding.dict_encode(bptdata);
         }

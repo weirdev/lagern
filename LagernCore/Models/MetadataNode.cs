@@ -241,8 +241,8 @@ namespace BackupCore
         /// <returns>The hash of the stored tree and a tree of its child hashes.</returns>
         public (byte[] nodehash, HashTreeNode node) Store(Func<byte[], byte[]> storeGetHash)
         {
-            List<(byte[] nodehash, HashTreeNode? node)> children = new List<(byte[] nodehash, HashTreeNode? node)>();
-            List<byte[]> dirhashes = new List<byte[]>();
+            List<(byte[] nodehash, HashTreeNode? node)> children = new();
+            List<byte[]> dirhashes = new();
             foreach (MetadataNode dir in Directories.Values)
             {
                 var (newhash, newnode) = dir.Store(storeGetHash);
@@ -257,7 +257,7 @@ namespace BackupCore
                 }
                 children.Add((fm.FileHash, null));
             }
-            Dictionary<string, byte[]> mtdata = new Dictionary<string, byte[]>();
+            Dictionary<string, byte[]> mtdata = new();
             // -"-v1"
             // DirMetadata = FileMetadata DirMetadata.serialize()
             // Directories = enum_encode([Directories.Values MetadataNode.serialize(),... ])
@@ -269,13 +269,13 @@ namespace BackupCore
             // -v4
             // removed DirectoriesMultiblock
             mtdata.Add("DirMetadata-v1", DirMetadata.Serialize());
-            mtdata.Add("Files-v1", BinaryEncoding.enum_encode(Files.Values.AsEnumerable()
+            mtdata.Add("Files-v1", BinaryEncoding.EnumEncode(Files.Values.AsEnumerable()
                                                               .Select(fm => fm.Serialize())));
 
-            mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
+            mtdata.Add("Directories-v2", BinaryEncoding.EnumEncode(dirhashes));
             
             byte[] nodehash = storeGetHash(BinaryEncoding.dict_encode(mtdata));
-            HashTreeNode node = new HashTreeNode(children);
+            HashTreeNode node = new(children);
             return (nodehash, node);
         }
 
