@@ -166,7 +166,7 @@ namespace BackupCore
                 bset = LoadBackupSet(bsname);
             }
             BackupRecord newbackup = new(message, metadatatreehash, backupTime);
-            byte[] brbytes = newbackup.serialize();
+            byte[] brbytes = newbackup.Serialize();
             byte[] backuphash = BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
             bset.Backups.Add((backuphash, bsname.Shallow));
             return backuphash;
@@ -253,7 +253,7 @@ namespace BackupCore
             {
                 return GetBackupRecord(bsname);
             }
-            return BackupRecord.deserialize(Dependencies.Blobs.RetrieveData(hash));
+            return BackupRecord.Deserialize(Dependencies.Blobs.RetrieveData(hash));
         }
 
         public (string, BackupRecord) GetBackupHashAndRecord(BackupSetReference bsname, int offset = 0)
@@ -332,7 +332,7 @@ namespace BackupCore
         /// <returns>A previously stored BackupStore object</returns>
         public BackupSet LoadBackupSet(BackupSetReference bsname)
         {
-            return BackupSet.deserialize(Dependencies.LoadBackupSetData(bsname));
+            return BackupSet.Deserialize(Dependencies.LoadBackupSetData(bsname));
         }
 
         /// <summary>
@@ -344,7 +344,7 @@ namespace BackupCore
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
-            Dependencies.StoreBackupSetData(bsname, bset.serialize());
+            Dependencies.StoreBackupSetData(bsname, bset.Serialize());
         }
     }
 }

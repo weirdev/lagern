@@ -6,7 +6,7 @@ using System.Text;
 
 namespace BackupCore
 {
-    public class BackupRecord : ICustomSerializable<BackupRecord>, IEquatable<BackupRecord?>
+    public class BackupRecord : ICustomByteTransformable<BackupRecord>, IEquatable<BackupRecord?>
     {
         public DateTime BackupTime { get; private set; }
         public string BackupMessage { get; private set; }
@@ -33,7 +33,7 @@ namespace BackupCore
             UUID = uuid;
         }
 
-        public byte[] serialize()
+        public byte[] Serialize()
         {
             Dictionary<string, byte[]> brdata = new()
             {
@@ -68,7 +68,7 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(brdata);
         }
 
-        public static BackupRecord deserialize(byte[] data)
+        public static BackupRecord Deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             DateTime backuptime = new(BitConverter.ToInt64(savedobjects["BackupTime-v1"], 0));

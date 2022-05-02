@@ -268,9 +268,9 @@ namespace BackupCore
             // DirectoriesMultiblock = enum_encode([BitConverter.GetBytes(multiblock),...])
             // -v4
             // removed DirectoriesMultiblock
-            mtdata.Add("DirMetadata-v1", DirMetadata.serialize());
+            mtdata.Add("DirMetadata-v1", DirMetadata.Serialize());
             mtdata.Add("Files-v1", BinaryEncoding.enum_encode(Files.Values.AsEnumerable()
-                                                              .Select(fm => fm.serialize())));
+                                                              .Select(fm => fm.Serialize())));
 
             mtdata.Add("Directories-v2", BinaryEncoding.enum_encode(dirhashes));
             
@@ -284,7 +284,7 @@ namespace BackupCore
             var curmn = new MetadataNode();
 
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash));
-            FileMetadata dirmetadata = FileMetadata.deserialize(savedobjects["DirMetadata-v1"]);
+            FileMetadata dirmetadata = FileMetadata.Deserialize(savedobjects["DirMetadata-v1"]);
             curmn.DirMetadata = dirmetadata;
             ConcurrentDictionary<string, FileMetadata> files = new ConcurrentDictionary<string, FileMetadata>();
             var encodedFiles = BinaryEncoding.enum_decode(savedobjects["Files-v1"]) ?? new List<byte[]?>();
@@ -294,7 +294,7 @@ namespace BackupCore
                 {
                     throw new NullReferenceException("Encoded file metadatas cannot be null");
                 }
-                FileMetadata newfm = FileMetadata.deserialize(binfm);
+                FileMetadata newfm = FileMetadata.Deserialize(binfm);
                 files[newfm.FileName] = newfm;
             }
             curmn.Files = files;
@@ -336,7 +336,7 @@ namespace BackupCore
                 {
                     throw new NullReferenceException("Encoded file data cannot be null");
                 }
-                FileMetadata fm = FileMetadata.deserialize(filedata);
+                FileMetadata fm = FileMetadata.Deserialize(filedata);
                 if (fm.FileHash == null)
                 {
                     throw new NullReferenceException("Stored file hashes cannot be null");
@@ -366,7 +366,7 @@ namespace BackupCore
                 {
                     throw new Exception("File metadata objects cannot be null here");
                 }
-                FileMetadata fm = FileMetadata.deserialize(filemdata);
+                FileMetadata fm = FileMetadata.Deserialize(filemdata);
                 if (fm.FileHash == null)
                 {
                     throw new NullReferenceException("Stored files must have file hashes");

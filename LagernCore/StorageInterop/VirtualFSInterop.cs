@@ -19,7 +19,7 @@ namespace BackupCore
 
         public string DstRoot { get; private set; }
 
-        private AesHelper? Encryptor { get; set; }
+        public AesHelper? Encryptor { get; private set; }
 
         public VirtualFSInterop(MetadataNode filesystem, BPlusTree<byte[]> datastore)
         {
@@ -156,12 +156,10 @@ namespace BackupCore
 
         public byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength)
         {
-            using (Stream file = GetFileData(absolutepath))
-            {
-                byte[] region = new byte[bytelength];
-                file.Read(region, byteposition, bytelength);
-                return region;
-            }
+            using Stream file = GetFileData(absolutepath);
+            byte[] region = new byte[bytelength];
+            file.Read(region, byteposition, bytelength);
+            return region;
         }
 
         public void WriteFileRegion(string absolutepath, int byteposition, byte[] data)
@@ -219,7 +217,7 @@ namespace BackupCore
         // are not part of the IFSInterop interface. They are included as convenience methods for
         // use when creating a virtual filesystem
         public static FileMetadata MakeNewFileMetadata(string name, int size=0, byte[]? hash = null) => 
-            new FileMetadata(name, DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, size, hash);
+            new(name, DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, size, hash);
 
 
         public static FileMetadata MakeNewDirectoryMetadata(string name, DateTime? dateTime = null)
@@ -262,11 +260,11 @@ namespace BackupCore
             return Task.Run(() => OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data));
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] encryptedhash)
+        public Task<byte[]> LoadBlobAsync(byte[] encryptedhash, bool decrypt)
         {
             return Task.Run(() => {
                 byte[] data = ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(encryptedhash)));
-                if (Encryptor != null)
+                if (Encryptor != null && decrypt)
                 {
                     data = Encryptor.DecryptBytes(data);
                 }
@@ -327,9 +325,9 @@ namespace BackupCore
             // is placed.
             // Ex. hash = 3bc6e94a89 => relpath = 3b/c6/e94a89
             string hashstring = HashTools.ByteArrayToHexViaLookup32(hash);
-            string dir1 = hashstring.Substring(0, 2);
+            string dir1 = hashstring[..2];
             string dir2 = hashstring.Substring(2, 2);
-            string fname = hashstring.Substring(4);
+            string fname = hashstring[4..];
 
             return Path.Combine(dir1, dir2, fname);
         }

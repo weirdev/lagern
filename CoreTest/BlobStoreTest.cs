@@ -115,14 +115,14 @@ namespace CoreTest
         {
             var testdata = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
             testdata.core.RunBackup("test", "initialrun");
-            byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.serialize();
+            byte[] serialized = testdata.core.DefaultDstDependencies[0].Blobs.Serialize();
 
             // Test that something was serialized
             Assert.IsTrue(serialized.Length > 0);
             // Test that some bytes are nonzero
             Assert.IsFalse(serialized.SequenceEqual(new byte[serialized.Length]));
 
-            var deserialized = BlobStore.deserialize(serialized, testdata.core.DefaultDstDependencies[0].Blobs.Dependencies);
+            var deserialized = BlobStore.Deserialize(serialized, testdata.core.DefaultDstDependencies[0].Blobs.Dependencies);
             testdata.core.DefaultDstDependencies[0].Blobs.IndexStore.Select(kv => kv.Key).DeepSequenceEqual(deserialized.IndexStore.Select(kv => kv.Key));
             testdata.core.DefaultDstDependencies[0].Blobs.IndexStore.Select(kv => kv.Value).SequenceEqual(deserialized.IndexStore.Select(kv => kv.Value));
         }
@@ -227,14 +227,14 @@ namespace CoreTest
             (byte[] nodehash, BackupCore.Models.HashTreeNode node) = rootMetadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data));
             BackupRecord backupRecord = new BackupRecord("save dis", nodehash, DateTime.Now);
 
-            byte[] backupRecordHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), backupRecord.serialize());
+            byte[] backupRecordHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), backupRecord.Serialize());
             BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), backupRecordHash, BlobLocation.BlobType.BackupRecord, false);
 
             BlobLocation backupRecordLocation = dstBS.GetBlobLocation(backupRecordHash);
             Assert.AreEqual(0, backupRecordLocation.TotalNonShallowReferenceCount);
             Assert.AreEqual(1, backupRecordLocation.TotalReferenceCount);
 
-            BackupRecord deserializedBackupRecord = BackupRecord.deserialize(dstBS.RetrieveData(backupRecordHash, backupRecordLocation));
+            BackupRecord deserializedBackupRecord = BackupRecord.Deserialize(dstBS.RetrieveData(backupRecordHash, backupRecordLocation));
             Assert.AreEqual(backupRecord, deserializedBackupRecord);
             MetadataNode deserializedNode = MetadataNode.Load(dstBS, deserializedBackupRecord.MetadataTreeHash, null);
             Assert.IsTrue(rootMetadataNode.NodeEquals(deserializedNode));

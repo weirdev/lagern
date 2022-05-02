@@ -6,7 +6,7 @@ namespace BackupCore
 {
     public interface IBlobStoreDependencies
     {
-        byte[] LoadBlob(byte[] hash);
+        byte[] LoadBlob(byte[] hash, bool decrypt=true);
 
         void DeleteBlob(byte[] hash, string fileId);
 

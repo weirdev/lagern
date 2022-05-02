@@ -10,7 +10,7 @@ namespace BackupCore
     {
         public static IDstFSInterop InitializeNew(string dstpath, string? password=null)
         {
-            DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
+            DiskDstFSInterop diskDstFSInterop = new(dstpath);
             if (password != null)
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
@@ -23,7 +23,7 @@ namespace BackupCore
 
         public static IDstFSInterop Load(string dstpath, string? password=null)
         {
-            DiskDstFSInterop diskDstFSInterop = new DiskDstFSInterop(dstpath);
+            DiskDstFSInterop diskDstFSInterop = new(dstpath);
             if (password != null)
             {
                 byte[] keyfile = diskDstFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
@@ -40,7 +40,7 @@ namespace BackupCore
 
         public string DstPath { get; private set; }
 
-        private AesHelper? Encryptor { get; set; }
+        public AesHelper? Encryptor { get; private set; }
 
         public string BlobSaveDirectory
         {
@@ -62,10 +62,10 @@ namespace BackupCore
             return Task.Run(() => File.Exists(GetIndexFilePath(bsname, fileType)));
         }
 
-        public async Task<byte[]> LoadBlobAsync(byte[] hash)
+        public async Task<byte[]> LoadBlobAsync(byte[] hash, bool decrypt)
         {
             byte[] data = await LoadFileAsync(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
-            if (Encryptor != null)
+            if (Encryptor != null && decrypt)
             {
                 data = Encryptor.DecryptBytes(data);
             }
@@ -104,26 +104,29 @@ namespace BackupCore
             return OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
         }
 
-        private Task<byte[]> LoadFileAsync(string absolutepath)
+        private static Task<byte[]> LoadFileAsync(string absolutepath)
         {
             return Task.Run(() => File.ReadAllBytes(absolutepath));
         }
 
-        public Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
+        public static Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
         {
             return Task.Run(() =>
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(absolutepath));
+                string? path = Path.GetDirectoryName(absolutepath);
+                if (path == null)
+                {
+                    throw new ArgumentException("Absolute path must have a directory"); // TODO: Do we need to require this? Or just not create directory if none given.
+                }
+                Directory.CreateDirectory(path);
 
                 // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
-                using (FileStream writer = new FileStream(absolutepath, FileMode.OpenOrCreate))
-                {
-                    writer.Write(data, 0, data.Length);
-                    // Flush the writer in order to get a correct stream position for truncating
-                    writer.Flush();
-                    // Set the stream length to the current position in order to truncate leftover data in original file
-                    writer.SetLength(writer.Position);
-                }
+                using FileStream writer = new(absolutepath, FileMode.OpenOrCreate);
+                writer.Write(data, 0, data.Length);
+                // Flush the writer in order to get a correct stream position for truncating
+                writer.Flush();
+                // Set the stream length to the current position in order to truncate leftover data in original file
+                writer.SetLength(writer.Position);
             });
         }
 
@@ -163,9 +166,9 @@ namespace BackupCore
             // is placed.
             // Ex. hash = 3bc6e94a89 => relpath = 3b/c6/e94a89
             string hashstring = HashTools.ByteArrayToHexViaLookup32(hash);
-            string dir1 = hashstring.Substring(0, 2);
+            string dir1 = hashstring[..2];
             string dir2 = hashstring.Substring(2, 2);
-            string fname = hashstring.Substring(4);
+            string fname = hashstring[4..];
 
             return Path.Combine(dir1, dir2, fname);
         }

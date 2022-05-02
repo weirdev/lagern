@@ -15,7 +15,7 @@ namespace BackupCore
     {
         private string? ConnectionSettingsFile { get; set; }
 
-        private AesHelper? Encryptor { get; set; }
+        public AesHelper? Encryptor { get; private set; }
 
         private string AccountID { get; set; }
         private string ApplicationKey { get; set; }
@@ -31,12 +31,12 @@ namespace BackupCore
 
         private static readonly int Retries = 7;
 
-        public string BlobSaveDirectory
+        public static string BlobSaveDirectory
         {
             get => "blobdata";
         }
 
-        public string IndexDirectory
+        public static string IndexDirectory
         {
             get => "index";
         }
@@ -63,7 +63,7 @@ namespace BackupCore
             string applicationkey, string bucketid, string bucketname,
             string? connectionSettingsFile=null, string? password = null)
         {
-            BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, 
+            BackblazeDstInterop backblazeDstInterop = new(accountid, applicationkey, bucketid, 
                 bucketname, connectionSettingsFile);
             if (password != null)
             {
@@ -86,7 +86,7 @@ namespace BackupCore
             string bucketid, string bucketname, string? connectionSettingsFile=null,
             string? password = null)
         {
-            BackblazeDstInterop backblazeDstInterop = new BackblazeDstInterop(accountid, applicationkey, bucketid, bucketname,
+            BackblazeDstInterop backblazeDstInterop = new(accountid, applicationkey, bucketid, bucketname,
                 connectionSettingsFile);
             if (password != null)
             {
@@ -142,7 +142,8 @@ namespace BackupCore
             }
         }
 
-        private Task StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data, preventEncryption);
+        private Task StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => 
+            StoreFileAsync(file, HashTools.GetSHA1Hasher().ComputeHash(data), data, preventEncryption);
 
         /// <summary>
         /// 
@@ -242,7 +243,7 @@ namespace BackupCore
             return hashFileId;
         }
 
-        private async Task<byte[]> LoadFileAsync(string fileName, bool preventEncrypt=false)
+        private async Task<byte[]> LoadFileAsync(string fileName, bool decrypt=true)
         {
             byte[] downloaddata = await Download();
             async Task<byte[]> Download(int attempts = 0)
@@ -264,7 +265,7 @@ namespace BackupCore
 
                     SuccessfulTransmission();
 
-                    if (Encryptor != null && !preventEncrypt)
+                    if (Encryptor != null && decrypt)
                     {
                         data = Encryptor.DecryptBytes(data);
                     }
@@ -391,7 +392,7 @@ namespace BackupCore
             return JsonConvert.DeserializeObject<BBConnectionSettings>(connectionsettings);
         }
 
-        private int Min(params int[] nums)
+        private static int Min(params int[] nums)
         {
             int min = nums[0];
             for (int i = 1; i < nums.Length; i++)
@@ -404,7 +405,7 @@ namespace BackupCore
             return min;
         }
                 
-        private int Max(params int[] nums)
+        private static int Max(params int[] nums)
         {
             int max = nums[0];
             for (int i = 1; i < nums.Length; i++)
@@ -424,7 +425,7 @@ namespace BackupCore
 
         public Task<byte[]> LoadIndexFileAsync(string? bsname, IndexFileType fileType)
         {
-            return LoadFileAsync(GetIndexFilePath(bsname, fileType), fileType == IndexFileType.EncryptorKeyFile);
+            return LoadFileAsync(GetIndexFilePath(bsname, fileType), fileType != IndexFileType.EncryptorKeyFile);
         }
 
         public Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data)
@@ -432,9 +433,9 @@ namespace BackupCore
             return StoreFileAsync(GetIndexFilePath(bsname, fileType), data, fileType==IndexFileType.EncryptorKeyFile);
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] hash)
+        public Task<byte[]> LoadBlobAsync(byte[] hash, bool decrypt)
         {
-            return LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)));
+            return LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), decrypt);
         }
 
         public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)

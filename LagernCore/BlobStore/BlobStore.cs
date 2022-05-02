@@ -1,6 +1,7 @@
 ﻿using BackupCore.Models;
 using BackupCore.Utilities;
 using LagernCore.Models;
+using LagernCore.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -14,7 +15,7 @@ namespace BackupCore
     /// <summary>
     /// Binary tree holding hashes and their corresponding locations in backup
     /// </summary>
-    public class BlobStore : ICustomSerializable<BlobStore>
+    public class BlobStore : ICustomSerializable, ICustomDeserializableWithDependencies<BlobStore, IBlobStoreDependencies>
     {
         public BPlusTree<BlobLocation> IndexStore { get; private set; }
 
@@ -107,6 +108,13 @@ namespace BackupCore
             {
                 throw new Exception("Hash must not be null");
             }
+            //byte[] encryptedData = Dependencies.LoadBlob(blocation.EncryptedHash, false);
+            //byte[] encDatahash = HashTools.GetSHA1Hasher().ComputeHash(encryptedData);
+            //if (!encDatahash.SequenceEqual(blocation.EncryptedHash))
+            //{
+            //    throw new Exception("Encrypted hash did not match");
+            //}
+            // TODO: Call sometimes fails, uuid: 795243
             byte[] data = Dependencies.LoadBlob(blocation.EncryptedHash);
             byte[] datahash = HashTools.GetSHA1Hasher().ComputeHash(data);
             if (datahash.SequenceEqual(hash))
@@ -199,6 +207,7 @@ namespace BackupCore
         // TODO: Update transfer logic with new reference counting logic
         public void TransferBackup(BlobStore dst, BackupSetReference dstbackupset, byte[] bblobhash, bool includefiles)
         {
+            // TODO: Call sometimes fails, uuid: 795243
             TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobType.BackupRecord, includefiles);
         }
 
@@ -260,7 +269,9 @@ namespace BackupCore
                         }
                         else
                         {
-                            (dstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, reference, GetBlobLocation(reference));
+                            // TODO: Call sometimes fails, uuid: 795243
+                            var srcBlobLocation = GetBlobLocation(reference);
+                            (dstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, reference, srcBlobLocation);
                         }
                         blobReferences.SupplyData(blob);
                     } 
@@ -296,6 +307,7 @@ namespace BackupCore
         {
             if (blocation.BlockHashes == null)
             {
+                // TODO: Call sometimes fails, uuid: 795243
                 byte[] blob = LoadBlob(blocation, blobhash);
                 return (dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, blob)), blob);
             }
@@ -697,7 +709,7 @@ namespace BackupCore
             }
         }
 
-        public byte[] serialize()
+        public byte[] Serialize()
         {
             Dictionary<string, byte[]> bptdata = new();
             // -"-v1"
@@ -714,7 +726,7 @@ namespace BackupCore
             foreach (KeyValuePair<byte[], BlobLocation> kvp in IndexStore)
             {
                 byte[] keybytes = kvp.Key;
-                byte[] backuplocationbytes = kvp.Value.serialize();
+                byte[] backuplocationbytes = kvp.Value.Serialize();
                 byte[] binkeyval = new byte[keybytes.Length + backuplocationbytes.Length];
                 Array.Copy(keybytes, binkeyval, keybytes.Length);
                 Array.Copy(backuplocationbytes, 0, binkeyval, keybytes.Length, backuplocationbytes.Length);
@@ -723,18 +735,6 @@ namespace BackupCore
             bptdata.Add("HashBLocationPairs-v1", BinaryEncoding.enum_encode(binkeyvals));
             
             return BinaryEncoding.dict_encode(bptdata);
-        }
-
-        public static BlobStore deserialize(byte[] data, IBlobStoreDependencies dependencies)
-        {
-
-            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
-            int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
-
-            BlobStore bs = new(dependencies);
-            bs.IndexStore = new BPlusTree<BlobLocation>(DeconstructHashBlocationPairs(savedobjects["HashBLocationPairs-v1"], keysize), 
-                                bs.IndexStore.NodeSize);
-            return bs;
         }
 
         private static IEnumerable<KeyValuePair<byte[], BlobLocation>> DeconstructHashBlocationPairs(byte[] hblp, int keysize)
@@ -755,8 +755,19 @@ namespace BackupCore
                 Array.Copy(binkvp, keybytes, keysize);
                 Array.Copy(binkvp, keysize, backuplocationbytes, 0, binkvp.Length - keysize);
 
-                yield return new KeyValuePair<byte[], BlobLocation>(keybytes, BlobLocation.deserialize(backuplocationbytes));
+                yield return new KeyValuePair<byte[], BlobLocation>(keybytes, BlobLocation.Deserialize(backuplocationbytes));
             }
+        }
+
+        public static BlobStore Deserialize(byte[] data, IBlobStoreDependencies dependencies)
+        {
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
+            int keysize = BitConverter.ToInt32(savedobjects["keysize-v1"], 0);
+
+            BlobStore bs = new(dependencies);
+            bs.IndexStore = new BPlusTree<BlobLocation>(DeconstructHashBlocationPairs(savedobjects["HashBLocationPairs-v1"], keysize),
+                                bs.IndexStore.NodeSize);
+            return bs;
         }
 
         private class BlobReferenceIterator : IBlobReferenceIterator
@@ -768,17 +779,18 @@ namespace BackupCore
             private bool IncludeFiles { get; set; }
 
             public bool BottomUp { get; set; } // Determines whether or not to return child references first
-            
+
             private bool skipchild = false;
-            private IBlobReferenceIterator? childiterator = null;
+            private BlobReferenceIterator? childiterator = null;
 
             private BlobLocation.BlobType BlobType { get; set; }
 
             private Action? postOrderAction = null;
+            private BlobLocation.BlobType? justReturnedType;
 
             private byte[]? BlobData { get; set; }
-            
-            public BlobReferenceIterator(BlobStore blobs, byte[] blobhash, BlobLocation.BlobType blobtype, 
+
+            public BlobReferenceIterator(BlobStore blobs, byte[] blobhash, BlobLocation.BlobType blobtype,
                 bool includefiles, bool bottomup)
             {
                 Blobs = blobs;
@@ -786,6 +798,25 @@ namespace BackupCore
                 BottomUp = bottomup;
                 IncludeFiles = includefiles;
                 BlobType = blobtype;
+            }
+
+            public BlobLocation.BlobType? JustReturnedType
+            {
+                get
+                {
+                    if (childiterator != null)
+                    {
+                        return childiterator.JustReturnedType;
+                    }
+                    else
+                    {
+                        return justReturnedType;
+                    }
+                }
+                set
+                {
+                    justReturnedType = value;
+                }
             }
 
             public void SkipChildrenOfCurrent()
@@ -854,9 +885,10 @@ namespace BackupCore
                         switch (BlobType)
                         {
                             case BlobLocation.BlobType.BackupRecord:
-                                BackupRecord br = BackupRecord.deserialize(blobdata);
+                                BackupRecord br = BackupRecord.Deserialize(blobdata);
                                 if (!BottomUp)
                                 {
+                                    justReturnedType = BlobLocation.BlobType.MetadataNode;
                                     yield return br.MetadataTreeHash; // return 1 immediate reference
                                 }
                                 if (!skipchild)
@@ -872,6 +904,7 @@ namespace BackupCore
                                 skipchild = false;
                                 if (BottomUp)
                                 {
+                                    justReturnedType = BlobLocation.BlobType.MetadataNode;
                                     yield return br.MetadataTreeHash; // return 1 immediate reference
                                 }
                                 break;
@@ -887,6 +920,7 @@ namespace BackupCore
                                     {
                                         if (!BottomUp)
                                         {
+                                            justReturnedType = BlobLocation.BlobType.FileBlob;
                                             yield return fref;
                                         }
                                         if (!skipchild)
@@ -902,6 +936,7 @@ namespace BackupCore
                                         skipchild = false;
                                         if (BottomUp)
                                         {
+                                            justReturnedType = BlobLocation.BlobType.FileBlob;
                                             yield return fref;
                                         }
                                     }
@@ -910,6 +945,7 @@ namespace BackupCore
                                 {
                                     if (!BottomUp)
                                     {
+                                        justReturnedType = BlobLocation.BlobType.MetadataNode;
                                         yield return reference; // return immediate reference
                                     }
                                     if (!skipchild)
@@ -925,6 +961,7 @@ namespace BackupCore
                                     skipchild = false;
                                     if (BottomUp)
                                     {
+                                        justReturnedType = BlobLocation.BlobType.MetadataNode;
                                         yield return reference; // return immediate reference
                                     }
                                 }
@@ -938,6 +975,7 @@ namespace BackupCore
                 {
                     foreach (var hash in blocation.BlockHashes)
                     {
+                        justReturnedType = BlobLocation.BlobType.Simple;
                         yield return hash;
                     }
                 }

@@ -15,11 +15,24 @@ namespace BackupCore
         Task<bool> FileExistsAsync(string file);
         */
 
+        AesHelper? Encryptor { get; }
+
         Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType);
+
         Task<byte[]> LoadIndexFileAsync(string? bsname, IndexFileType fileType);
+
         Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data);
-        Task<byte[]> LoadBlobAsync(byte[] encryptedHash);
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="encryptedHash"></param>
+        /// <param name="decrypt">Decrypt if encrypted</param>
+        /// <returns></returns>
+        Task<byte[]> LoadBlobAsync(byte[] encryptedHash, bool decrypt=true);
+
         Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] rawHash, byte[] data);
+
         Task DeleteBlobAsync(byte[] encryptedHash, string fileId);
     }
 }

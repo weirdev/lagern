@@ -63,32 +63,32 @@ namespace CoreTest
             byte[] reserialized;
 
             old = new BlobLocation(null, "somewhere1", 40);
-            serialized = old.serialize();
-            deser = BlobLocation.deserialize(serialized);
-            reserialized = deser.serialize();
+            serialized = old.Serialize();
+            deser = BlobLocation.Deserialize(serialized);
+            reserialized = deser.Serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
 
             old = new BlobLocation(new byte[] {100, 23, 6}, "somewhere1", 40);
-            serialized = old.serialize();
-            deser = BlobLocation.deserialize(serialized);
-            reserialized = deser.serialize();
+            serialized = old.Serialize();
+            deser = BlobLocation.Deserialize(serialized);
+            reserialized = deser.Serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
 
             old = new BlobLocation(new List<byte[]>() { new byte[] { 100, 40 }, new byte[] { 23 }, new byte[] { 6, 70, 10, 205 } });
-            serialized = old.serialize();
-            deser = BlobLocation.deserialize(serialized);
-            reserialized = deser.serialize();
+            serialized = old.Serialize();
+            deser = BlobLocation.Deserialize(serialized);
+            reserialized = deser.Serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
 
             old = new BlobLocation(new byte[] { 100, 23, 6 }, "somewhere1", 40);
             old.SetBSetReferenceCount(new BackupSetReference("dst", false, false, false), 10);
             old.SetBSetReferenceCount(new BackupSetReference("dst2", false, false, false), 20);
-            serialized = old.serialize();
-            deser = BlobLocation.deserialize(serialized);
-            reserialized = deser.serialize();
+            serialized = old.Serialize();
+            deser = BlobLocation.Deserialize(serialized);
+            reserialized = deser.Serialize();
             Assert.AreEqual(old, deser);
             Assert.IsTrue(serialized.AsSpan().SequenceEqual(reserialized.AsSpan()));
             Assert.AreEqual(deser.GetBSetReferenceCount(new BackupSetReference("dst", false, false, false)), 10);

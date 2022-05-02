@@ -642,19 +642,20 @@ namespace BackupCore
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
         public void TransferBackupSet(BackupSetReference backupsetname, Core dstCore, bool includefiles, 
-            int backupdst_transfersrc=0, int backupdst_transferdst=0)
+            int backupDstTransferSrc=0, int backupDstTransferDst=0)
         {
             // TODO: This function probably makes more sense transferring between backup destinations within the current Core object
-            BackupSet backupSet = DefaultDstDependencies[backupdst_transfersrc].Backups.LoadBackupSet(backupsetname);
+            BackupSet backupSet = DefaultDstDependencies[backupDstTransferSrc].Backups.LoadBackupSet(backupsetname);
             // Transfer backup set
-            dstCore.DefaultDstDependencies[backupdst_transferdst].Backups.SaveBackupSet(backupSet, backupsetname);
+            dstCore.DefaultDstDependencies[backupDstTransferDst].Backups.SaveBackupSet(backupSet, backupsetname);
             // Transfer backing data
             foreach (var (hash, shallow) in backupSet.Backups)
             {
-                DefaultDstDependencies[backupdst_transfersrc].Blobs.TransferBackup(
-                    dstCore.DefaultDstDependencies[backupdst_transferdst].Blobs, backupsetname, hash, includefiles & !shallow);
+                // TODO: Call sometimes fails, uuid: 795243
+                DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
+                    dstCore.DefaultDstDependencies[backupDstTransferDst].Blobs, backupsetname, hash, includefiles & !shallow);
             }
-            dstCore.DefaultDstDependencies[backupdst_transferdst].SaveBlobStoreIndex();
+            dstCore.DefaultDstDependencies[backupDstTransferDst].SaveBlobStoreIndex();
         }
 
         /// <summary>
@@ -663,9 +664,9 @@ namespace BackupCore
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
         public void TransferBackupSet(string backupsetname, Core dstCore, bool includefiles,
-            int backupdst_transfersrc = 0, int backupdst_transferdst = 0)
+            int backupDstTransferSrc = 0, int backupDstTransferDst = 0)
         {
-            TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), dstCore, includefiles, backupdst_transfersrc, backupdst_transferdst);
+            TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), dstCore, includefiles, backupDstTransferSrc, backupDstTransferDst);
         }
 
         // TODO: Add method for transferring individual backup

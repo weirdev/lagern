@@ -11,7 +11,7 @@ namespace BackupCore
     /// <summary>
     /// Stores basic file metadata + list of hashes of file blocks
     /// </summary>
-    public class FileMetadata : ICustomSerializable<FileMetadata>, IEquatable<FileMetadata?>
+    public class FileMetadata : ICustomByteTransformable<FileMetadata>, IEquatable<FileMetadata?>
     {
         public string FileName { get; private set; }
         
@@ -188,7 +188,7 @@ namespace BackupCore
             return !(left == right);
         }
 
-        public byte[] serialize()
+        public byte[] Serialize()
         {
             Dictionary<string, byte[]> fmdata = new Dictionary<string, byte[]>();
             // v1
@@ -233,7 +233,7 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(fmdata);
         }
 
-        public static FileMetadata deserialize(byte[] data)
+        public static FileMetadata Deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             string filename = Encoding.UTF8.GetString(savedobjects["FileName-v1"]);
