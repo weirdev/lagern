@@ -19,6 +19,8 @@ namespace BackupCore
         /// </summary>
         BackupStore Backups { get; set; }
 
+        IDstFSInterop DstFSInterop { get; }
+
         void SaveBlobStoreIndex();
         
         string ReadSetting(BackupSetting key);

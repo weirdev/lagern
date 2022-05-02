@@ -19,9 +19,10 @@ namespace BackupCore
             DstFSInterop.DeleteBlobAsync(encryptedHash, fileId).Wait();
         }
 
-        public byte[] LoadBlob(byte[] encryptedhash)
+        public byte[] LoadBlob(byte[] encryptedhash, bool decrypt)
         {
-            return DstFSInterop.LoadBlobAsync(encryptedhash).Result;
+            // Call sometimes fails, uuid: 795243
+            return DstFSInterop.LoadBlobAsync(encryptedhash, decrypt).Result;
         }
 
         public (byte[] encryptedHash, string fileId) StoreBlob(byte[] hash, byte[] blobdata)

@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace BackupCore
 {
-    public class BackupSet : ICustomSerializable<BackupSet>
+    public class BackupSet : ICustomByteTransformable<BackupSet>
     {
         // Backuphash is reference in blobs to BackupRecord
         // Backup is shallow if only metadata is stored for that backup
@@ -24,7 +24,7 @@ namespace BackupCore
             CacheUsed = cacheused;
         }        
 
-        public byte[] serialize()
+        public byte[] Serialize()
         {
             // -"-v1"
             // backuphashes = enum_encode([Backups.backuphash,...])
@@ -49,7 +49,7 @@ namespace BackupCore
             });
         }
 
-        public static BackupSet deserialize(byte[] data)
+        public static BackupSet Deserialize(byte[] data)
         {
             Dictionary<string, byte[]> saved_objects = BinaryEncoding.dict_decode(data);
             List<byte[]?> backuphashes = BinaryEncoding.enum_decode(saved_objects["backuphashes-v1"]) ?? new List<byte[]?>();

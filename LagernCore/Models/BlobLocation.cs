@@ -7,7 +7,7 @@ using System.Text;
 
 namespace BackupCore
 {
-    public class BlobLocation : ICustomSerializable<BlobLocation>
+    public class BlobLocation : ICustomByteTransformable<BlobLocation>
     {
         /// <summary>
         /// The hash under which the blob is stored on the destination,
@@ -86,7 +86,7 @@ namespace BackupCore
             return (EncryptedHash?.GetHashCode().ToString() + RelativeFilePath.ToString() + ByteLength.ToString()).GetHashCode();
         }
 
-        public byte[] serialize()
+        public byte[] Serialize()
         {
             Dictionary<string, byte[]> bldata = new Dictionary<string, byte[]>();
             // -"-v1"
@@ -131,7 +131,7 @@ namespace BackupCore
             return BinaryEncoding.dict_encode(bldata);
         }
 
-        public static BlobLocation deserialize(byte[] data)
+        public static BlobLocation Deserialize(byte[] data)
         {
             Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(data);
             byte[]? encryptedHash = savedobjects["EncryptedHash-v9"].Length == 0 ? null : savedobjects["EncryptedHash-v9"];

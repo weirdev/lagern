@@ -334,7 +334,7 @@ namespace CoreTest
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow()));
             //System.Threading.Thread.Sleep(40); // Allow async writes to finish
             // Just prefix
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow()).Substring(0, 10));
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]);
             // All backups deleted
             Assert.AreEqual(core.GetBackups("test").backups.Count(), 0);
         }
@@ -371,6 +371,7 @@ namespace CoreTest
             Console.WriteLine(String.Format("{0} non encrypted fails", nonEncryptedFails));
         }
 
+        // TODO: Sometimes fails, uuid: 795243
         public static void TransferBackupSet(bool encrypted, bool cache, Random? random=null, int regFileCount=100)
         {
             (Core core, Dictionary<string, byte[]> verifyfilepaths,
@@ -396,15 +397,21 @@ namespace CoreTest
             var (dstCore, _, _, _) = testdata;
 
             _ = srcCore.RunBackup("test", "run1");
+            var e = srcCore.DefaultDstDependencies[0].DstFSInterop.Encryptor;
 
             srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
         }
-        
+
+        // TODO: Sometimes fails, uuid: 795243
+        // Verified issue is with decryption, not data retrieval
         [TestMethod]
         public void TestTransferBackupSet()
         {
-            TransferBackupSet(false, true, new Random(1000), 2);
-            TransferBackupSet(true, false, new Random(1000), 2);
+            for (int i = 0; i < 100; i++)
+            {
+                TransferBackupSet(false, true, new Random(1000), 2);
+                TransferBackupSet(true, false, new Random(1000), 2);
+            }
         }
 
         [TestMethod]

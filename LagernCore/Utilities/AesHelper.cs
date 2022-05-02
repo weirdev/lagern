@@ -50,7 +50,7 @@ namespace BackupCore
 
         public static RijndaelManaged CreateDataKeyAesProvider(byte[] datakeykey)
         {
-            RijndaelManaged dataKeyAesProvider = new RijndaelManaged
+            RijndaelManaged dataKeyAesProvider = new()
             {
                 Padding = PaddingMode.PKCS7,
                 Mode = CipherMode.CBC,
@@ -145,6 +145,10 @@ namespace BackupCore
                 {
                     byte[] encrypted = encryptor.TransformFinalBlock(input, 0, input.Length);
                     byte[] ivAndEncrypted = new byte[IVSize + encrypted.Length];
+                    if (iv.Length != IVSize)
+                    {
+                        throw new InvalidDataException("IV is incorrect size");
+                    }
                     Array.Copy(iv, ivAndEncrypted, iv.Length);
                     Array.Copy(encrypted, 0, ivAndEncrypted, iv.Length, encrypted.Length);
                     return ivAndEncrypted;
@@ -161,14 +165,20 @@ namespace BackupCore
             if (input.Length == 0)
             {
                 return Array.Empty<byte>();
-            } else
+            } 
+            else
             {
                 byte[] iv = new byte[IVSize];
                 Array.Copy(input, iv, IVSize);
                 ICryptoTransform decryptor = GetDataDecryptor(iv);
                 try
                 {
+                    // TODO: Sometimes failure here, uuid: 795243
                     return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
+                }
+                catch
+                {
+                    throw new Exception("Decryption failure. Input size: " + input.Length);
                 }
                 finally
                 {
@@ -190,10 +200,8 @@ namespace BackupCore
 
         public byte[] EncryptAesDataKey()
         {
-            using (ICryptoTransform encryptor = DataKeyAesProvider.CreateEncryptor())
-            {
-                return encryptor.TransformFinalBlock(DataKey, 0, DataKey.Length);
-            }
+            using ICryptoTransform encryptor = DataKeyAesProvider.CreateEncryptor();
+            return encryptor.TransformFinalBlock(DataKey, 0, DataKey.Length);
         }
 
         public static byte[] DecryptAesDataKey(byte[] enc_datakey, RijndaelManaged dataKeyAesProvider)
@@ -209,7 +217,7 @@ namespace BackupCore
         /// <returns></returns>
         public byte[] CreateKeyFile()
         {
-            Dictionary<string, byte[]> kfdata = new Dictionary<string, byte[]>();
+            Dictionary<string, byte[]> kfdata = new();
             // -"-v1"
             // passwordsalt
             // datakeykeyhash

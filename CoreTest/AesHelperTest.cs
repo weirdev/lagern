@@ -126,6 +126,12 @@ namespace CoreTest
             encrypted = aesHelper.EncryptBytes(data);
             Assert.IsNotNull(encrypted);
             Assert.IsTrue(encrypted.Length > data.Length);
+
+            data = new byte[16];
+            CoreTest.RandomData(data);
+            encrypted = aesHelper.EncryptBytes(data);
+            Assert.IsNotNull(encrypted);
+            Assert.IsTrue(encrypted.Length > data.Length);
         }
 
         [TestMethod]
@@ -154,6 +160,12 @@ namespace CoreTest
             Assert.IsNotNull(decrypted);
             Assert.IsTrue(encrypted.Length > decrypted.Length);
             Assert.IsTrue(data.SequenceEqual(decrypted));
+
+            data = new byte[16];
+            CoreTest.RandomData(data);
+            encrypted = aesHelper.EncryptBytes(data);
+            Assert.IsNotNull(encrypted);
+            Assert.IsTrue(encrypted.Length > data.Length);
         }
     }
 }

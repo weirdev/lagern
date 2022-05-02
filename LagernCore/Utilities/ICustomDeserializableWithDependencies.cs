@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace LagernCore.Utilities
 {
-    public interface ICustomSerializable
+    public interface ICustomDeserializableWithDependencies<T, D>
     {
-        byte[] Serialize();
+        static abstract T Deserialize(byte[] data, D dependencies);
     }
 }

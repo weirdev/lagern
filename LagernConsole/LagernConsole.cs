@@ -605,7 +605,7 @@ namespace BackupConsole
                         password = PasswordPrompt();
                     }
 
-                    if (dst_path.ToLower() == "backblaze")
+                    if (dst_path.ToLower() == "backblaze") // TODO: Backblaze should be a specific implementation of general cloud sync support
                     {
                         try
                         {
@@ -619,8 +619,6 @@ namespace BackupConsole
                         {
                             Console.WriteLine("Failed to load backblaze");
                         }
-                            
-                            
                     }
                     else
                     {
@@ -651,15 +649,7 @@ namespace BackupConsole
 
         private static string ReadLineNonNull()
         {
-            string? ip = Console.ReadLine();
-            if (ip == null)
-            {
-                return "";
-            }
-            else
-            {
-                return ip;
-            }
+            return Console.ReadLine() ?? "";
         }
 
         public static void BrowseBackup(BrowseOptions opts)
