@@ -36,8 +36,8 @@ namespace BackupCore
             // -v4
             // removed encrypted
 
-            byte[] backuphashes = BinaryEncoding.enum_encode(from backup in Backups select backup.hash);
-            byte[] shallowflags = BinaryEncoding.enum_encode(from backup in Backups select BitConverter.GetBytes(backup.shallow));
+            byte[] backuphashes = BinaryEncoding.EnumEncode(from backup in Backups select backup.hash);
+            byte[] shallowflags = BinaryEncoding.EnumEncode(from backup in Backups select BitConverter.GetBytes(backup.shallow));
 
             byte[] cacheused = BitConverter.GetBytes(CacheUsed);
 

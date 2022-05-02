@@ -119,13 +119,13 @@ namespace BackupCore
             bldata.Add("RelativeFilePath-v1", Encoding.UTF8.GetBytes(RelativeFilePath));
             bldata.Add("ByteLength-v1", BitConverter.GetBytes(ByteLength));
 
-            bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Keys.Select(bsr => bsr.serialize())));
-            bldata.Add("BSetReferenceCounts.ReferenceCounts-v5", BinaryEncoding.enum_encode(BSetReferenceCounts.Values.Select(rc => BitConverter.GetBytes(rc))));
+            bldata.Add("BSetReferenceCounts.BackupSets-v5", BinaryEncoding.EnumEncode(BSetReferenceCounts.Keys.Select(bsr => bsr.serialize())));
+            bldata.Add("BSetReferenceCounts.ReferenceCounts-v5", BinaryEncoding.EnumEncode(BSetReferenceCounts.Values.Select(rc => BitConverter.GetBytes(rc))));
 
             bldata.Add("IsMultiBlockReference-v7", BitConverter.GetBytes(BlockHashes != null));
             if (BlockHashes != null)
             {
-                bldata.Add("BlockHashes-v8", BinaryEncoding.enum_encode(BlockHashes));
+                bldata.Add("BlockHashes-v8", BinaryEncoding.EnumEncode(BlockHashes));
             }
 
             return BinaryEncoding.dict_encode(bldata);

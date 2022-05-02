@@ -24,6 +24,7 @@ namespace BackupCore.Models
         public class HashTreeNodeSkippableChildrenIterator : ISkippableChildrenIterator<byte[]>
         {
             private HashTreeNodeSkippableChildrenIterator? ChildIterator { get; set; }
+
             private bool SkipChild { get; set; } = false;
 
             HashTreeNode Node { get; set; }

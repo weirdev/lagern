@@ -189,15 +189,15 @@ namespace BackupCore
         /// </summary>
         /// <param name="objects"></param>
         /// <returns></returns>
-        public static byte[] enum_encode(IEnumerable<byte[]> objects)
+        public static byte[] EnumEncode(IEnumerable<byte[]> objects)
         {
             if (objects == null)
             {
-                return new byte[0];
+                return Array.Empty<byte>();
             }
-            MemoryStream encodeddata = new MemoryStream();
+            MemoryStream encodeddata = new();
 
-            List<byte[]> lobjects = new List<byte[]>(objects);
+            List<byte[]> lobjects = new(objects);
             // Write header
             // array : object count, lengths of the objects we will write...
             byte[] binheader = new byte[lobjects.Count * 4 + 4]; // four bytes per int32 we write
