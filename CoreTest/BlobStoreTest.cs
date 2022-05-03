@@ -155,15 +155,17 @@ namespace CoreTest
             Assert.IsTrue(bloc.TotalNonShallowReferenceCount == 1);
             Assert.IsTrue(bloc.GetBSetReferenceCount(bsetRef) == 1);
             Assert.IsTrue(bloc.BlockHashes != null && bloc.BlockHashes.Count >= 1);
+            Assert.IsTrue(bloc.BlockHashes.All(hash => BS.GetBlobLocation(hash).GetBSetReferenceCount(bsetRef) == 1));
         }
 
         [TestMethod]
         public void TestStoreBlobTwiceAndReferencesFile()
         {
+            var bsetRef = new BackupSetReference("test", false, false, false);
+
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            var bsetRef = new BackupSetReference("test", false, false, false);
             byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
             BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
             Assert.IsTrue(BS.RetrieveData(smallFileHash).SequenceEqual(randomFile));
@@ -198,22 +200,36 @@ namespace CoreTest
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
             var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+            var bsetRef = new BackupSetReference("test", false, false, false);
 
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile);
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), smallFileHash, BlobLocation.BlobType.FileBlob, true);
+            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
+            BS.TransferBlobAndReferences(dstBS, bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob, true);
+            var srcBloc = BS.GetBlobLocation(smallFileHash);
+            var dstBloc = dstBS.GetBlobLocation(smallFileHash);
+            Assert.IsTrue(dstBloc.TotalNonShallowReferenceCount == 1);
+            Assert.IsTrue(dstBloc.GetBSetReferenceCount(bsetRef) == 1);
             Assert.IsTrue(dstBS.RetrieveData(smallFileHash).SequenceEqual(randomFile));
 
             // Likely multiblock
-            randomFile = new byte[12_000];
-            CoreTest.RandomData(randomFile);
-            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile);
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), fileHash, BlobLocation.BlobType.FileBlob, true);
+            randomFile = new byte[12_000_000];
+            CoreTest.RandomData(randomFile, new Random(58));
+            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob);
+            BS.TransferBlobAndReferences(dstBS, bsetRef, fileHash, BlobLocation.BlobType.FileBlob, true);
+            srcBloc = BS.GetBlobLocation(fileHash);
+            dstBloc = dstBS.GetBlobLocation(fileHash);
+            Assert.IsTrue(dstBloc.TotalNonShallowReferenceCount == 1);
+            Assert.IsTrue(dstBloc.GetBSetReferenceCount(bsetRef) == 1);
+            Assert.IsTrue(dstBloc.BlockHashes != null && srcBloc.BlockHashes.Count >= 1);
+            Assert.IsTrue(dstBloc.BlockHashes.All(hash => dstBS.GetBlobLocation(hash).GetBSetReferenceCount(bsetRef) == 1));
             Assert.IsTrue(dstBS.RetrieveData(fileHash).SequenceEqual(randomFile));
         }
 
+        // TODO: Test transferring and then removing.
         [TestMethod]
         public void TestTransferBlobAndReferencesMetadataNode()
         {

@@ -176,9 +176,9 @@ namespace BackupCore
                     // TODO: Sometimes failure here, uuid: 795243
                     return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
                 }
-                catch
+                catch (Exception e)
                 {
-                    throw new Exception("Decryption failure. Input size: " + input.Length);
+                    throw new Exception("Decryption failure. Input size: " + input.Length, e);
                 }
                 finally
                 {

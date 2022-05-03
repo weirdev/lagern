@@ -29,7 +29,7 @@ namespace BackupCore
 
         /// <summary>
         /// Store some binary data into some blobstores.
-        /// Does not increment any blob references.
+        /// Does not increment any blob references. Call FinalizeBlobAddition() to complete addition.
         /// </summary>
         /// <param name="blobStores"></param>
         /// <param name="backupset"></param>
@@ -786,7 +786,7 @@ namespace BackupCore
 
             BlobStore bs = new(dependencies);
             bs.IndexStore = new BPlusTree<BlobLocation>(DeconstructHashBlocationPairs(savedobjects["HashBLocationPairs-v1"], keysize),
-                                bs.IndexStore.NodeSize);
+                bs.IndexStore.NodeSize);
             return bs;
         }
 
@@ -800,15 +800,14 @@ namespace BackupCore
 
             public bool BottomUp { get; set; } // Determines whether or not to return child references first
 
-            private bool skipchild = false;
-            private BlobReferenceIterator? childiterator = null;
+            private byte[]? BlobData { get; set; }
 
             private BlobLocation.BlobType BlobType { get; set; }
 
+            private bool skipchild = false;
+            private IBlobReferenceIterator? childiterator = null;
             private Action? postOrderAction = null;
             private BlobLocation.BlobType? justReturnedType;
-
-            private byte[]? BlobData { get; set; }
 
             public BlobReferenceIterator(BlobStore blobs, byte[] blobhash, BlobLocation.BlobType blobtype,
                 bool includefiles, bool bottomup)
@@ -826,7 +825,8 @@ namespace BackupCore
                 {
                     if (childiterator != null)
                     {
-                        return childiterator.JustReturnedType;
+                        //return childiterator.JustReturnedType;
+                        return null;
                     }
                     else
                     {
@@ -993,11 +993,14 @@ namespace BackupCore
                 }
                 if (blocation.BlockHashes != null)
                 {
-                    foreach (var hash in blocation.BlockHashes)
+                    var blockHashes = blocation.BlockHashes;
+                    childiterator = new BlobReferenceIteratorDelegate(blockHashes);
+                    foreach (var hash in childiterator)
                     {
                         justReturnedType = BlobLocation.BlobType.Simple;
                         yield return hash;
                     }
+                    childiterator = null;
                 }
 
                 // Run post order action if exists
@@ -1010,13 +1013,48 @@ namespace BackupCore
             }
         }
 
-        /// <summary>
-        /// Skip iterating over any child references of current blob
-        /// </summary>
-        public interface IBlobReferenceIterator : ISkippableChildrenIterator<byte[]>
+        public class BlobReferenceIteratorDelegate : IBlobReferenceIterator
+        {
+            private readonly IEnumerable<byte[]> enumerable;
+
+            private Action? postOrderAction = null;
+
+            public BlobReferenceIteratorDelegate(IEnumerable<byte[]> enumerable)
+            {
+                this.enumerable = enumerable;
+            }
+
+            public IEnumerator<byte[]> GetEnumerator()
+            {
+                foreach (var item in enumerable)
+                {
+                    yield return item;
+                    postOrderAction?.Invoke();
+                }
+            }
+
+            public void PostOrderAction(Action action)
+            {
+                postOrderAction = action;
+            }
+
+            public void SkipChildrenOfCurrent() { }
+
+            public void SupplyData(byte[]? blobdata) { }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+        }
+
+        public interface IPostOrderActionEnumerable<T> : IEnumerable<T>
         {
             void PostOrderAction(Action action);
+        }
 
+        public interface IBlobReferenceIterator : ISkippableChildrenIterator<byte[]>, IPostOrderActionEnumerable<byte[]>
+        {
             void SupplyData(byte[]? blobdata);
         }
     }
