@@ -9,7 +9,8 @@ namespace BackupCore
 {
     public class AesHelper
     {
-        private RijndaelManaged DataAesProvider;
+        //private readonly RijndaelManaged DataAesProvider;// TODO: Possible thread safety issues producing IV and then needing to immediately use it
+        private readonly Func<RijndaelManaged> DataAesProviderFunc;
         public static readonly int IVSize = 16;
 
         public RijndaelManaged DataKeyAesProvider { get; private set; }
@@ -29,23 +30,38 @@ namespace BackupCore
             DataKeyKeyHashSalt = datakeykeyhashsalt;
             DataKeyAesProvider = dataKeyAesProvider;
             DataKeyIV = datakeyiv;
-            DataAesProvider = new RijndaelManaged
+
+            static RijndaelManaged rmFunc(byte[]? dk)
             {
-                Mode = CipherMode.CBC,
-                Padding = PaddingMode.PKCS7,
-                BlockSize = 128,
-                KeySize = 128
-            };
+                var rm = new RijndaelManaged
+                {
+                    Mode = CipherMode.CBC,
+                    Padding = PaddingMode.PKCS7,
+                    BlockSize = 128,
+                    KeySize = 128
+                };
+                if (dk != null)
+                {
+                    rm.Key = dk;
+                }
+                else
+                {
+                    rm.GenerateKey();
+                }
+                return rm;
+            }
+
             if (datakey != null)
             {
                 DataKey = datakey;
-                DataAesProvider.Key = DataKey;
             }
             else
             {
-                DataAesProvider.GenerateKey();
-                DataKey = DataAesProvider.Key;
+                var rm = rmFunc(null);
+                rm.GenerateKey();
+                DataKey = rm.Key;
             }
+            DataAesProviderFunc = () => rmFunc(DataKey);
         }
 
         public static RijndaelManaged CreateDataKeyAesProvider(byte[] datakeykey)
@@ -189,13 +205,15 @@ namespace BackupCore
 
         private (ICryptoTransform encryptor, byte[] iv) GetDataEncyptor()
         {
-            DataAesProvider.GenerateIV();
-            return (DataAesProvider.CreateEncryptor(), DataAesProvider.IV);
+            var dataAesProvider = DataAesProviderFunc.Invoke();
+            dataAesProvider.GenerateIV();
+            return (dataAesProvider.CreateEncryptor(), dataAesProvider.IV);
         }
 
         private ICryptoTransform GetDataDecryptor(byte[] iv)
         {
-            return DataAesProvider.CreateDecryptor(DataAesProvider.Key, iv);
+            var dataAesProvider = DataAesProviderFunc.Invoke();
+            return dataAesProvider.CreateDecryptor(dataAesProvider.Key, iv);
         }
 
         public byte[] EncryptAesDataKey()
