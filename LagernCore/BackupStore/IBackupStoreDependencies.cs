@@ -1,4 +1,5 @@
 ﻿using LagernCore.Models;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -6,8 +7,8 @@ namespace BackupCore
     {
         BlobStore Blobs { get; }
 
-        byte[] LoadBackupSetData(BackupSetReference backupsetname);
+        Task<byte[]> LoadBackupSetData(BackupSetReference backupsetname);
 
-        void StoreBackupSetData(BackupSetReference backupsetname, byte[] bsdata);
+        Task StoreBackupSetData(BackupSetReference backupsetname, byte[] bsdata);
     }
 }
