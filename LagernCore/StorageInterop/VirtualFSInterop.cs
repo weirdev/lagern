@@ -55,13 +55,13 @@ namespace BackupCore
             return virtualFSInterop;
         }
 
-        public bool FileExists(string absolutepath) => VirtualFS.GetFile(absolutepath) != null;
+        public Task<bool> FileExists(string absolutepath) => Task.FromResult(VirtualFS.GetFile(absolutepath) != null);
 
-        public bool DirectoryExists(string absolutepath) => VirtualFS.GetDirectory(absolutepath) != null;
+        public Task<bool> DirectoryExists(string absolutepath) => Task.FromResult(VirtualFS.GetDirectory(absolutepath) != null);
 
-        public void CreateDirectoryIfNotExists(string absolutepath)
+        public async Task CreateDirectoryIfNotExists(string absolutepath)
         {
-            if (!DirectoryExists(absolutepath))
+            if (!await DirectoryExists(absolutepath))
             {
                 VirtualFS.AddDirectory(Path.GetDirectoryName(absolutepath) ?? throw new NullReferenceException("This path must exist"), 
                     MakeNewDirectoryMetadata(Path.GetFileName(absolutepath)));
@@ -73,7 +73,7 @@ namespace BackupCore
             get => Path.Combine(DstRoot, "blobdata");
         }
 
-        public byte[] ReadAllFileBytes(string absolutepath)
+        public Task<byte[]> ReadAllFileBytes(string absolutepath)
         {
             var file = VirtualFS.GetFile(absolutepath);
             if (file == null)
@@ -84,10 +84,10 @@ namespace BackupCore
             {
                 throw new NullReferenceException("Missing file hash");
             }
-            return DataStore[file.FileHash];
+            return Task.FromResult(DataStore[file.FileHash]);
         }
 
-        public FileMetadata GetFileMetadata(string absolutepath)
+        public Task<FileMetadata> GetFileMetadata(string absolutepath)
         {
             var md = VirtualFS.GetFile(absolutepath);
             if (md == null)
@@ -97,26 +97,26 @@ namespace BackupCore
                 {
                     throw new FileNotFoundException();
                 }
-                return dir.DirMetadata;
+                md = dir.DirMetadata;
             }
-            return md;
+            return Task.FromResult(md);
         }
 
-        public Stream GetFileData(string absolutepath) => new MemoryStream(ReadAllFileBytes(absolutepath));
+        public async Task<Stream> GetFileData(string absolutepath) => new MemoryStream(await ReadAllFileBytes(absolutepath));
 
-        public string[] GetDirectoryFiles(string absolutepath)
+        public Task<string[]> GetDirectoryFiles(string absolutepath)
         {
             var dir = VirtualFS.GetDirectory(absolutepath) ?? throw new NullReferenceException("Directory not found");
-            return dir.Files.Keys.Select(file => Path.Combine(absolutepath, file)).ToArray();
+            return Task.FromResult(dir.Files.Keys.Select(file => Path.Combine(absolutepath, file)).ToArray());
         }
 
-        public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null)
+        public Task OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null)
         {
             var root = VirtualFS;
             string[] path = absolutepath.Split(Path.DirectorySeparatorChar);
             path = path.Take(path.Length - 1).ToArray();
             foreach (var dir in path)
-            { 
+            {
                 if (!root.HasDirectory(dir))
                 {
                     root = root.AddDirectory(MakeNewDirectoryMetadata(dir));
@@ -139,34 +139,36 @@ namespace BackupCore
             string dirpath = Path.GetDirectoryName(absolutepath) ?? throw new Exception("This path should always exist");
             var directory = VirtualFS.GetDirectory(dirpath) ?? throw new Exception("This directory should always exist");
             directory.Files[Path.GetFileName(absolutepath)] = fileMetadata;
+            return Task.CompletedTask;
         }
 
-        public string[] GetSubDirectories(string absolutepath)
+        public Task<string[]> GetSubDirectories(string absolutepath)
         {
             var dir = VirtualFS.GetDirectory(absolutepath) ?? throw new NullReferenceException("Directory not found");
-            return dir.Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray();
+            return Task.FromResult(dir.Directories.Keys.Select(dir => Path.Combine(absolutepath, dir)).ToArray());
         }
 
-        public void DeleteFile(string absolutepath)
+        public Task DeleteFile(string absolutepath)
         {
             var dirname = Path.GetDirectoryName(absolutepath) ?? "";
             var dir = VirtualFS.GetDirectory(dirname) ?? throw new NullReferenceException("Directory not found");
             dir.Files.TryRemove(Path.GetFileName(absolutepath), out _);
+            return Task.CompletedTask;
         }
 
-        public byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength)
+        public async Task<byte[]> ReadFileRegion(string absolutepath, int byteposition, int bytelength)
         {
-            using Stream file = GetFileData(absolutepath);
+            using Stream file = await GetFileData(absolutepath);
             byte[] region = new byte[bytelength];
-            file.Read(region, byteposition, bytelength);
+            await file.ReadAsync(region.AsMemory(byteposition, bytelength));
             return region;
         }
 
-        public void WriteFileRegion(string absolutepath, int byteposition, byte[] data)
+        public async Task WriteFileRegion(string absolutepath, int byteposition, byte[] data)
         {
-            if (FileExists(absolutepath))
+            if (await FileExists(absolutepath))
             {
-                var md = GetFileMetadata(absolutepath);
+                var md = await GetFileMetadata(absolutepath);
                 if (md.FileHash == null)
                 {
                     throw new Exception("Filehash must exist on this FileMetaData object");
@@ -184,7 +186,7 @@ namespace BackupCore
             }
             else if (byteposition == 0)
             {
-                OverwriteOrCreateFile(absolutepath, data);
+                await OverwriteOrCreateFile(absolutepath, data);
             }
             else
             {
@@ -199,7 +201,7 @@ namespace BackupCore
             return datahash;
         }
 
-        public void WriteOutMetadata(string absolutepath, FileMetadata metadata)
+        public Task WriteOutMetadata(string absolutepath, FileMetadata metadata)
         {
             var dirname = Path.GetDirectoryName(absolutepath) ?? "";
             var node = VirtualFS.GetDirectory(dirname) ?? throw new NullReferenceException("Could not locate directory");
@@ -207,10 +209,11 @@ namespace BackupCore
             {
                 node.Files[Path.GetFileName(absolutepath)] = metadata;
             }
-            else if(node.Directories.ContainsKey(Path.GetFileName(absolutepath)))
+            else if (node.Directories.ContainsKey(Path.GetFileName(absolutepath)))
             {
                 node.Directories[Path.GetFileName(absolutepath)].DirMetadata = metadata;
             }
+            return Task.CompletedTask;
         }
 
         // Unlike other public methods of this class, MakeNewFileMetadata and MakeNewDirectoryMetadata
@@ -230,19 +233,19 @@ namespace BackupCore
             return new FileMetadata(name, dateTime.Value, dateTime.Value, dateTime.Value, FileAttributes.Directory, 0, null);
         }
 
-        public Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType)
+        public async Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType)
         {
-            return Task.Run(() => FileExists(GetIndexFilePath(bsname, fileType)));
+            return await FileExists(GetIndexFilePath(bsname, fileType));
         }
 
-        public Task<byte[]> LoadIndexFileAsync(string? bsname, IndexFileType fileType)
+        public async Task<byte[]> LoadIndexFileAsync(string? bsname, IndexFileType fileType)
         {
-            byte[] data = ReadAllFileBytes(GetIndexFilePath(bsname, fileType));
+            byte[] data = await ReadAllFileBytes(GetIndexFilePath(bsname, fileType));
             if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
             {
                 data = Encryptor.DecryptBytes(data);
             }
-            return Task.Run(() => data);
+            return data;
         }
 
         /// <summary>
@@ -251,28 +254,26 @@ namespace BackupCore
         /// <param name="bsname"></param>
         /// <param name="fileType"></param>
         /// <param name="data"></param>
-        public Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data)
+        public async Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data)
         {
             if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
             {
                 data = Encryptor.EncryptBytes(data);
             }
-            return Task.Run(() => OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data));
+            await OverwriteOrCreateFile(GetIndexFilePath(bsname, fileType), data);
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] encryptedhash, bool decrypt)
+        public async Task<byte[]> LoadBlobAsync(byte[] encryptedhash, bool decrypt)
         {
-            return Task.Run(() => {
-                byte[] data = ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(encryptedhash)));
-                if (Encryptor != null && decrypt)
-                {
-                    data = Encryptor.DecryptBytes(data);
-                }
-                return data;
-            });
+            byte[] data = await ReadAllFileBytes(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(encryptedhash)));
+            if (Encryptor != null && decrypt)
+            {
+                data = Encryptor.DecryptBytes(data);
+            }
+            return data;
         }
 
-        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
+        public async Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
             if (Encryptor != null)
             {
@@ -280,13 +281,13 @@ namespace BackupCore
                 hash = HashTools.GetSHA1Hasher().ComputeHash(data);
             }
             string relpath = GetBlobRelativePath(hash);
-            OverwriteOrCreateFile(Path.Combine(BlobSaveDirectory, relpath), data);
-            return Task.Run(() => (hash, relpath));
+            await OverwriteOrCreateFile(Path.Combine(BlobSaveDirectory, relpath), data);
+            return (hash, relpath);
         }
 
-        public Task DeleteBlobAsync(byte[] hash, string fileId)
+        public async Task DeleteBlobAsync(byte[] hash, string fileId)
         {
-            return Task.Run(() => DeleteFile(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+            await DeleteFile(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash)));
         }
 
         private string GetIndexFilePath(string? bsname, IndexFileType fileType)
@@ -316,7 +317,7 @@ namespace BackupCore
             return path;
         }
 
-        private string GetBlobRelativePath(byte[] hash)
+        private static string GetBlobRelativePath(byte[] hash)
         {
             // Save files with names given by their hashes
             // In order to keep the number of files per directory managable,

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using Flurl;
 using Flurl.Http;
@@ -164,10 +163,10 @@ namespace BackupCore
                 try
                 {
                     var urlresp = await AuthResp.Value.apiUrl
-                    .AppendPathSegment("/b2api/v1/b2_get_upload_url")
-                    .WithHeaders(new { Authorization = AuthResp.Value.authorizationToken })
-                    .PostJsonAsync(new { bucketId = BucketId })
-                    .ReceiveJson<GetUploadUrlResponse>().ConfigureAwait(false);
+                        .AppendPathSegment("/b2api/v1/b2_get_upload_url")
+                        .WithHeaders(new { Authorization = AuthResp.Value.authorizationToken })
+                        .PostJsonAsync(new { bucketId = BucketId })
+                        .ReceiveJson<GetUploadUrlResponse>().ConfigureAwait(false);
                     SuccessfulTransmission();
                     return urlresp;
                 }
@@ -433,14 +432,14 @@ namespace BackupCore
             return StoreFileAsync(GetIndexFilePath(bsname, fileType), data, fileType==IndexFileType.EncryptorKeyFile);
         }
 
-        public Task<byte[]> LoadBlobAsync(byte[] hash, bool decrypt)
+        public async Task<byte[]> LoadBlobAsync(byte[] hash, bool decrypt)
         {
-            return LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), decrypt);
+            return await LoadFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), decrypt);
         }
 
-        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
+        public async Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
-            return StoreFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), hash, data);
+            return await StoreFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), hash, data);
         }
 
         public Task DeleteBlobAsync(byte[] hash, string fileId)
@@ -448,7 +447,7 @@ namespace BackupCore
             return DeleteFileAsync(Path.Combine(BlobSaveDirectory, HashTools.ByteArrayToHexViaLookup32(hash)), fileId);
         }
 
-        private string GetIndexFilePath(string? bsname, IndexFileType fileType)
+        private static string GetIndexFilePath(string? bsname, IndexFileType fileType)
         {
             string filename;
             switch (fileType)

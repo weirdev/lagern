@@ -57,39 +57,41 @@ namespace BackupCore
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
-                relpath = relpath.Substring(1);
+                relpath = relpath[1..];
             }
             if (BackupPathSrc == null)
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetFileMetadata(Path.Combine(BackupPathSrc, relpath));
+            return FSInterop.GetFileMetadata(Path.Combine(BackupPathSrc, relpath)).Result;
         }
 
         public IEnumerable<string> GetDirectoryFiles(string relpath)
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
-                relpath = relpath.Substring(1);
+                relpath = relpath[1..];
             }
             if (BackupPathSrc == null)
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetDirectoryFiles(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
+            return FSInterop.GetDirectoryFiles(Path.Combine(BackupPathSrc, relpath)).Result
+                .Select(filepath => Path.GetFileName(filepath));
         }
 
         public IEnumerable<string> GetSubDirectories(string relpath)
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
-                relpath = relpath.Substring(1);
+                relpath = relpath[1..];
             }
             if (BackupPathSrc == null)
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Select(filepath => Path.GetFileName(filepath));
+            return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Result
+                .Select(filepath => Path.GetFileName(filepath));
         }
 
         public Stream GetFileData(string relpath)
@@ -107,7 +109,7 @@ namespace BackupCore
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath));
+            return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath)).Result;
         }
 
         public void OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false)
@@ -122,7 +124,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.OverwriteOrCreateFile(path, data, fileMetadata);
+                FSInterop.OverwriteOrCreateFile(path, data, fileMetadata).Wait();
             }
             catch (Exception)
             {
@@ -142,7 +144,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.DeleteFile(path);
+                FSInterop.DeleteFile(path).Wait();
             }
             catch (Exception)
             {
@@ -162,7 +164,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.CreateDirectoryIfNotExists(path);
+                FSInterop.CreateDirectoryIfNotExists(path).Wait();
             }
             catch (Exception)
             {
@@ -182,7 +184,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.WriteOutMetadata(path, metadata);
+                FSInterop.WriteOutMetadata(path, metadata).Wait();
             }
             catch (Exception)
             {
@@ -193,18 +195,14 @@ namespace BackupCore
 
         public string ReadSetting(BackupSetting key)
         {
-            using (var fs = GetSettingsFileStream())
-            {
-                return SettingsFileTools.ReadSetting(fs, key);
-            }
+            using var fs = GetSettingsFileStream();
+            return SettingsFileTools.ReadSetting(fs, key);
         }
 
         public Dictionary<BackupSetting, string> ReadSettings()
         {
-            using (var fs = GetSettingsFileStream())
-            {
-                return SettingsFileTools.ReadSettings(fs);
-            }
+            using var fs = GetSettingsFileStream();
+            return SettingsFileTools.ReadSettings(fs);
         }
 
         public void WriteSetting(BackupSetting key, string value)
@@ -222,10 +220,8 @@ namespace BackupCore
 
         public void ClearSetting(BackupSetting key)
         {
-            using (var fs = GetSettingsFileStream())
-            {
-                SettingsFileTools.ClearSetting(fs, key);
-            }
+            using var fs = GetSettingsFileStream();
+            SettingsFileTools.ClearSetting(fs, key);
         }
 
         private Stream GetSettingsFileStream()
@@ -248,7 +244,7 @@ namespace BackupCore
             {
                 try
                 {
-                    using MemoryStream ms = new MemoryStream();
+                    using MemoryStream ms = new();
                     GetRawFileData(AesKeyFile).CopyTo(ms);
                     AesTool = AesHelper.CreateFromKeyFile(ms.ToArray(), password);
                 }

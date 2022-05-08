@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace BackupCore
@@ -52,14 +50,14 @@ namespace BackupCore
             get => Path.Combine(DstPath, "index");
         }
 
-        public Task DeleteBlobAsync(byte[] hash, string fileId)
+        public async Task DeleteBlobAsync(byte[] hash, string fileId)
         {
-            return Task.Run(() => File.Delete(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
+            await Task.Run(() => File.Delete(Path.Combine(BlobSaveDirectory, GetBlobRelativePath(hash))));
         }
 
-        public Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType)
+        public async Task<bool> IndexFileExistsAsync(string? bsname, IndexFileType fileType)
         {
-            return Task.Run(() => File.Exists(GetIndexFilePath(bsname, fileType)));
+            return await Task.Run(() => File.Exists(GetIndexFilePath(bsname, fileType)));
         }
 
         public async Task<byte[]> LoadBlobAsync(byte[] hash, bool decrypt)
@@ -82,7 +80,7 @@ namespace BackupCore
             return data;
         }
 
-        public Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
+        public async Task<(byte[] encryptedHash, string fileId)> StoreBlobAsync(byte[] hash, byte[] data)
         {
             if (Encryptor != null)
             {
@@ -90,18 +88,18 @@ namespace BackupCore
                 hash = HashTools.GetSHA1Hasher().ComputeHash(data);
             }
             string relpath = GetBlobRelativePath(hash);
-            OverwriteOrCreateFileAsync(Path.Combine(BlobSaveDirectory, relpath), data);
-            return Task.Run(() => (hash, relpath));
+            await OverwriteOrCreateFileAsync(Path.Combine(BlobSaveDirectory, relpath), data);
+            return (hash, relpath);
         }
 
-        public Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data)
+        public async Task StoreIndexFileAsync(string? bsname, IndexFileType fileType, byte[] data)
         {
             // Never Encrypt Key File
             if (Encryptor != null && fileType != IndexFileType.EncryptorKeyFile)
             {
                 data = Encryptor.EncryptBytes(data);
             }
-            return OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
+            await OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
         }
 
         private static Task<byte[]> LoadFileAsync(string absolutepath)
@@ -109,25 +107,22 @@ namespace BackupCore
             return Task.Run(() => File.ReadAllBytes(absolutepath));
         }
 
-        public static Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
+        public static async Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
         {
-            return Task.Run(() =>
+            string? path = Path.GetDirectoryName(absolutepath);
+            if (path == null)
             {
-                string? path = Path.GetDirectoryName(absolutepath);
-                if (path == null)
-                {
-                    throw new ArgumentException("Absolute path must have a directory"); // TODO: Do we need to require this? Or just not create directory if none given.
-                }
-                Directory.CreateDirectory(path);
+                throw new ArgumentException("Absolute path must have a directory"); // TODO: Do we need to require this? Or just not create directory if none given.
+            }
+            Directory.CreateDirectory(path);
 
-                // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
-                using FileStream writer = new(absolutepath, FileMode.OpenOrCreate);
-                writer.Write(data, 0, data.Length);
-                // Flush the writer in order to get a correct stream position for truncating
-                writer.Flush();
-                // Set the stream length to the current position in order to truncate leftover data in original file
-                writer.SetLength(writer.Position);
-            });
+            // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
+            using FileStream writer = new(absolutepath, FileMode.OpenOrCreate);
+            await writer.WriteAsync(data);
+            // Flush the writer in order to get a correct stream position for truncating
+            writer.Flush();
+            // Set the stream length to the current position in order to truncate leftover data in original file
+            writer.SetLength(writer.Position);
         }
 
         private string GetIndexFilePath(string? bsname, IndexFileType fileType)

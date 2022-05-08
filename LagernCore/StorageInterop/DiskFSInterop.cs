@@ -1,32 +1,31 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
     public class DiskFSInterop : IFSInterop
     {
-        public bool DirectoryExists(string absolutepath) => Directory.Exists(absolutepath);
+        public Task<bool> DirectoryExists(string absolutepath) => Task.Run(() => Directory.Exists(absolutepath));
 
-        public bool FileExists(string absolutepath) => File.Exists(absolutepath);
+        public Task<bool> FileExists(string absolutepath) => Task.Run(() => File.Exists(absolutepath));
 
-        public void CreateDirectoryIfNotExists(string absolutepath) => Directory.CreateDirectory(absolutepath);
+        public Task CreateDirectoryIfNotExists(string absolutepath) => Task.Run(() => Directory.CreateDirectory(absolutepath));
 
-        public byte[] ReadAllFileBytes(string absolutepath) => File.ReadAllBytes(absolutepath);
+        public async Task<byte[]> ReadAllFileBytes(string absolutepath) => await File.ReadAllBytesAsync(absolutepath);
 
-        public FileMetadata GetFileMetadata(string absolutepath) => new FileMetadata(absolutepath);
+        public Task<FileMetadata> GetFileMetadata(string absolutepath) => Task.Run(() => new FileMetadata(absolutepath));
 
-        public Stream GetFileData(string absolutepath) => new FileStream(absolutepath, FileMode.OpenOrCreate);
+        public Task<Stream> GetFileData(string absolutepath) => Task.Run(() => (Stream) new FileStream(absolutepath, FileMode.OpenOrCreate));
 
-        public string[] GetDirectoryFiles(string absolutepath) => Directory.GetFiles(absolutepath);
+        public Task<string[]> GetDirectoryFiles(string absolutepath) => Task.Run(() => Directory.GetFiles(absolutepath));
 
-        public void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null)
+        public async Task OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null)
         {
             // The more obvious FileMode.Create causes issues with hidden files, so open, overwrite, then truncate
-            using (FileStream writer = new FileStream(absolutepath, FileMode.OpenOrCreate))
+            using (FileStream writer = new(absolutepath, FileMode.OpenOrCreate))
             {
-                writer.Write(data, 0, data.Length);
+                await writer.WriteAsync(data);
                 // Flush the writer in order to get a correct stream position for truncating
                 writer.Flush();
                 // Set the stream length to the current position in order to truncate leftover data in original file
@@ -34,11 +33,11 @@ namespace BackupCore
             }
             if (fileMetadata != null)
             {
-                WriteOutMetadata(absolutepath, fileMetadata);
+                await WriteOutMetadata(absolutepath, fileMetadata);
             }
         }
 
-        public void WriteOutMetadata(string absolutepath, FileMetadata fileMetadata)
+        public Task WriteOutMetadata(string absolutepath, FileMetadata fileMetadata)
         {
             FileSystemInfo fi = new FileInfo(absolutepath);
             if ((fileMetadata.Attributes & FileAttributes.Directory) == FileAttributes.Directory)
@@ -53,31 +52,28 @@ namespace BackupCore
             {
                 fi.Attributes = fileMetadata.Attributes;
             }
+            return Task.CompletedTask;
         }
 
-        public string[] GetSubDirectories(string absolutepath) => Directory.GetDirectories(absolutepath);
+        public Task<string[]> GetSubDirectories(string absolutepath) => Task.Run(() => Directory.GetDirectories(absolutepath));
 
-        public void DeleteFile(string absolutepath) => File.Delete(absolutepath);
+        public Task DeleteFile(string absolutepath) => Task.Run(() => File.Delete(absolutepath));
 
-        public byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength)
+        public async Task<byte[]> ReadFileRegion(string absolutepath, int byteposition, int bytelength)
         {
-            using (Stream file = GetFileData(absolutepath))
-            {
-                byte[] region = new byte[bytelength];
-                file.Read(region, byteposition, bytelength);
-                return region;
-            }
+            using Stream file = await GetFileData(absolutepath);
+            byte[] region = new byte[bytelength];
+            await file.ReadAsync(region.AsMemory(byteposition, bytelength));
+            return region;
         }
 
-        public void WriteFileRegion(string absolutepath, int byteposition, byte[] data)
+        public async Task WriteFileRegion(string absolutepath, int byteposition, byte[] data)
         {
-            using (FileStream writer = File.OpenWrite(absolutepath))
-            {
-                writer.Seek(byteposition, SeekOrigin.Begin);
-                writer.Write(data, 0, data.Length);
-                writer.Flush();
-                writer.Close();
-            }
+            using FileStream writer = File.OpenWrite(absolutepath);
+            writer.Seek(byteposition, SeekOrigin.Begin);
+            await writer.WriteAsync(data);
+            writer.Flush();
+            writer.Close();
         }
     }
 }

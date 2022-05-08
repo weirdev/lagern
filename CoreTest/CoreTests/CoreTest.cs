@@ -404,7 +404,7 @@ namespace CoreTest
         [TestMethod]
         public void TestTransferBackupSet()
         {
-            for (int i = 0; i < 100; i++)
+            for (int i = 0; i < 5; i++)
             {
                 TransferBackupSet(false, true, new Random(1000), 2);
                 TransferBackupSet(true, false, new Random(1000), 2);
