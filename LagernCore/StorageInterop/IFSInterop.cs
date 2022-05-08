@@ -1,36 +1,33 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
+﻿using System.Threading.Tasks;
 
 namespace BackupCore
 {
     public interface IFSInterop
     {
-        bool FileExists(string absolutepath);
+        Task<bool> FileExists(string absolutepath);
 
-        bool DirectoryExists(string absolutepath);
+        Task<bool> DirectoryExists(string absolutepath);
 
-        void CreateDirectoryIfNotExists(string absolutepath);
+        Task CreateDirectoryIfNotExists(string absolutepath);
 
-        byte[] ReadAllFileBytes(string absolutepath);
+        Task<byte[]> ReadAllFileBytes(string absolutepath);
 
-        FileMetadata GetFileMetadata(string absolutepath);
+        Task<FileMetadata> GetFileMetadata(string absolutepath);
 
-        System.IO.Stream GetFileData(string absolutepath);
+        Task<System.IO.Stream> GetFileData(string absolutepath);
 
-        string[] GetDirectoryFiles(string absolutepath);
+        Task<string[]> GetDirectoryFiles(string absolutepath);
 
-        void OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null);
+        Task OverwriteOrCreateFile(string absolutepath, byte[] data, FileMetadata? fileMetadata = null);
 
-        string[] GetSubDirectories(string absolutepath);
+        Task<string[]> GetSubDirectories(string absolutepath);
 
-        void DeleteFile(string absolutepath);
+        Task DeleteFile(string absolutepath);
 
-        byte[] ReadFileRegion(string absolutepath, int byteposition, int bytelength);
+        Task<byte[]> ReadFileRegion(string absolutepath, int byteposition, int bytelength);
 
-        void WriteFileRegion(string absolutepath, int byteposition, byte[] data);
+        Task WriteFileRegion(string absolutepath, int byteposition, byte[] data);
 
-        void WriteOutMetadata(string absolutepath, FileMetadata metadata);
+        Task WriteOutMetadata(string absolutepath, FileMetadata metadata);
     }
 }
