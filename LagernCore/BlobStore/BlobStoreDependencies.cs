@@ -21,7 +21,6 @@ namespace BackupCore
 
         public byte[] LoadBlob(byte[] encryptedhash, bool decrypt)
         {
-            // Call sometimes fails, uuid: 795243
             return DstFSInterop.LoadBlobAsync(encryptedhash, decrypt).Result;
         }
 

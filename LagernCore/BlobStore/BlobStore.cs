@@ -117,13 +117,15 @@ namespace BackupCore
             {
                 throw new Exception("Hash must not be null");
             }
-            //byte[] encryptedData = Dependencies.LoadBlob(blocation.EncryptedHash, false);
-            //byte[] encDatahash = HashTools.GetSHA1Hasher().ComputeHash(encryptedData);
-            //if (!encDatahash.SequenceEqual(blocation.EncryptedHash))
-            //{
-            //    throw new Exception("Encrypted hash did not match");
-            //}
-            // TODO: Call sometimes fails, uuid: 795243
+
+            /* // Addititional correctness checks
+            byte[] encryptedData = Dependencies.LoadBlob(blocation.EncryptedHash, false);
+            byte[] encDatahash = HashTools.GetSHA1Hasher().ComputeHash(encryptedData);
+            if (!encDatahash.SequenceEqual(blocation.EncryptedHash))
+            {
+                throw new Exception("Encrypted hash did not match");
+            }*/
+
             byte[] data = Dependencies.LoadBlob(blocation.EncryptedHash);
             byte[] datahash = HashTools.GetSHA1Hasher().ComputeHash(data);
             if (datahash.SequenceEqual(hash))
@@ -216,7 +218,6 @@ namespace BackupCore
         // TODO: Update transfer logic with new reference counting logic
         public void TransferBackup(BlobStore dst, BackupSetReference dstbackupset, byte[] bblobhash, bool includefiles)
         {
-            // TODO: Call sometimes fails, uuid: 795243
             TransferBlobAndReferences(dst, dstbackupset, bblobhash, BlobLocation.BlobType.BackupRecord, includefiles);
         }
 
@@ -278,7 +279,6 @@ namespace BackupCore
                         }
                         else
                         {
-                            // TODO: Call sometimes fails, uuid: 795243
                             var srcBlobLocation = GetBlobLocation(reference);
                             (dstBlobLocation, blob) = TransferBlobNoReferences(dst, dstbackupset, reference, srcBlobLocation);
                         }
@@ -290,13 +290,10 @@ namespace BackupCore
                         blobReferences.SkipChildrenOfCurrent();
                     }
 
-                    //if (!iterRefInDst) // Don't increment child reference if already present?
-                    //{
-                        // When we finish iterating over the children, increment this blob
+                    // When we finish iterating over the children, increment this blob
 #pragma warning disable CS8604 // Possible null reference argument.
-                        blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
+                    blobReferences.PostOrderAction(() => dst.IncrementReferenceCountNoRecurse(dstbackupset, dstBlobLocation, reference, 1));
 #pragma warning restore CS8604 // Possible null reference argument.
-                    //}
                 }
             }
 
@@ -316,7 +313,6 @@ namespace BackupCore
         {
             if (blocation.BlockHashes == null)
             {
-                // TODO: Call sometimes fails, uuid: 795243
                 byte[] blob = LoadBlob(blocation, blobhash);
                 return (dst.AddBlob(dstbackupset, new HashBlobPair(blobhash, blob)), blob);
             }
@@ -457,7 +453,7 @@ namespace BackupCore
         /// <param name="bsname"></param>
         /// <param name="backuphash"></param>
         /// <param name="mtreehash"></param>
-        /// <param name="mtreereferences"></param>
+        /// <param name="mtreereferences">A tree of hashes. See issue #46 for why this was needed.</param>
         public void FinalizeBackupAddition(BackupSetReference bsname, byte[] backuphash, byte[] mtreehash, HashTreeNode mtreereferences)
         {
             BlobLocation backupblocation = GetBlobLocation(backuphash);
@@ -492,6 +488,7 @@ namespace BackupCore
             }
         }
 
+        [Obsolete("See issue #46 for why we switched to FinalizeBackupAddition() which uses a tree of hashes")] // TODO: Update tests to new method and delete this
         public void FinalizeBlobAddition(BackupSetReference bsname, byte[] blobhash, BlobLocation.BlobType blobType)
         {
             // Handle root blob

@@ -371,7 +371,6 @@ namespace CoreTest
             Console.WriteLine(String.Format("{0} non encrypted fails", nonEncryptedFails));
         }
 
-        // TODO: Sometimes fails, uuid: 795243
         public static void TransferBackupSet(bool encrypted, bool cache, Random? random=null, int regFileCount=100)
         {
             (Core core, Dictionary<string, byte[]> verifyfilepaths,
@@ -402,8 +401,6 @@ namespace CoreTest
             srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
         }
 
-        // TODO: Sometimes fails, uuid: 795243
-        // Verified issue is with decryption, not data retrieval
         [TestMethod]
         public void TestTransferBackupSet()
         {
