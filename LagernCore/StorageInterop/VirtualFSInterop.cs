@@ -28,7 +28,7 @@ namespace BackupCore
             DstRoot = "<<Non dest VFS interop>>";
         }
 
-        public static IDstFSInterop InitializeNewDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
+        public static async Task<IDstFSInterop> InitializeNewDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
         {
             VirtualFSInterop virtualFSInterop = new(filesystem, datastore);
             virtualFSInterop.DstRoot = dstRoot;
@@ -36,19 +36,19 @@ namespace BackupCore
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                virtualFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
+                await virtualFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
                 virtualFSInterop.Encryptor = encryptor;
             }
             return virtualFSInterop;
         }
 
-        public static IDstFSInterop LoadDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
+        public static async Task<IDstFSInterop> LoadDst(MetadataNode filesystem, BPlusTree<byte[]> datastore, string dstRoot, string? password=null)
         {
             VirtualFSInterop virtualFSInterop = new(filesystem, datastore);
             virtualFSInterop.DstRoot = dstRoot;
             if (password != null)
             {
-                byte[] keyfile = virtualFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                byte[] keyfile = await virtualFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile);
                 AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
                 virtualFSInterop.Encryptor = encryptor;
             }

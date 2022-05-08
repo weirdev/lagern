@@ -2,6 +2,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace CoreTest.CoreTests
 {
@@ -15,7 +16,7 @@ namespace CoreTest.CoreTests
             var source = CreateNewSrc(r);
 
             var destinations = Enumerable.Range(0, 5)
-                                         .Select(_ => CreateNewDst(r))
+                                         .Select(_ => CreateNewDst(r).Result)
                                          .ToList();
 
             // Backup to destination #1
@@ -47,12 +48,12 @@ namespace CoreTest.CoreTests
             Assert.IsTrue(backupRecords.Count == 2);
         }
 
-        private static ICoreDstDependencies CreateNewDst(Random random)
+        private static async Task<ICoreDstDependencies> CreateNewDst(Random random)
         {
             DateTime dateTime = CoreTest.RandomDateTime(random);
             MetadataNode vfsroot = new(VirtualFSInterop.MakeNewDirectoryMetadata("dst", dateTime), null);
 
-            IDstFSInterop dstFSInterop = VirtualFSInterop.InitializeNewDst(vfsroot, new BPlusTree<byte[]>(10), "");
+            IDstFSInterop dstFSInterop = await VirtualFSInterop.InitializeNewDst(vfsroot, new BPlusTree<byte[]>(10), "");
 
             return CoreDstDependencies.InitializeNew("test", false, dstFSInterop);
         }

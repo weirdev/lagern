@@ -30,7 +30,7 @@ namespace CoreTest
         {
             VirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             VFSDataStore = new BPlusTree<byte[]>(10);
-            BS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(VirtualFS, VFSDataStore, "dst")));
+            BS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(VirtualFS, VFSDataStore, "dst").Result));
         }
 
         [TestMethod]
@@ -113,7 +113,7 @@ namespace CoreTest
         [TestMethod]
         public void TestBlobStoreSerializeDeserialize()
         {
-            var (core, verifyfilepaths, vfsroot, vfsdatastore) = CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
+            var (core, verifyfilepaths, vfsroot, vfsdatastore) = CoreTest.InitializeNewCoreWithStandardFiles(1, 0).Result;
             core.RunBackup("test", "initialrun");
             byte[] serialized = core.DefaultDstDependencies[0].Blobs.Serialize();
 
@@ -199,7 +199,7 @@ namespace CoreTest
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
             var bsetRef = new BackupSetReference("test", false, false, false);
 
             // FileBlob
@@ -235,7 +235,7 @@ namespace CoreTest
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
 
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
@@ -259,7 +259,7 @@ namespace CoreTest
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
 
             MetadataNode rootMetadataNode = new(new FileMetadata("src", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), null);
             MetadataNode level2MetadataNode = new(new FileMetadata("2", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), rootMetadataNode);
@@ -293,7 +293,7 @@ namespace CoreTest
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
+            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
 
             MetadataNode rootMetadataNode = new(new FileMetadata("src", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), null);
             MetadataNode level2MetadataNode = new(new FileMetadata("2", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), rootMetadataNode);
