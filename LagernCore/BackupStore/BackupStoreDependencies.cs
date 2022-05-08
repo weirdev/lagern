@@ -1,4 +1,5 @@
 ﻿using LagernCore.Models;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -14,14 +15,14 @@ namespace BackupCore
             Blobs = blobs;
         }
 
-        public byte[] LoadBackupSetData(BackupSetReference backupsetname)
+        public async Task<byte[]> LoadBackupSetData(BackupSetReference backupsetname)
         {
-            return DstFSInterop.LoadIndexFileAsync(backupsetname.StringRepr(), IndexFileType.BackupSet).Result;
+            return await DstFSInterop.LoadIndexFileAsync(backupsetname.StringRepr(), IndexFileType.BackupSet);
         }
 
-        public void StoreBackupSetData(BackupSetReference backupsetname, byte[] bsdata)
+        public async Task StoreBackupSetData(BackupSetReference backupsetname, byte[] bsdata)
         {
-            DstFSInterop.StoreIndexFileAsync(backupsetname.StringRepr(), IndexFileType.BackupSet, bsdata).Wait();
+            await DstFSInterop.StoreIndexFileAsync(backupsetname.StringRepr(), IndexFileType.BackupSet, bsdata);
         }
     }
 }

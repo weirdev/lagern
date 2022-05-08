@@ -332,7 +332,7 @@ namespace BackupCore
         /// <returns>A previously stored BackupStore object</returns>
         public BackupSet LoadBackupSet(BackupSetReference bsname)
         {
-            return BackupSet.Deserialize(Dependencies.LoadBackupSetData(bsname));
+            return BackupSet.Deserialize(Dependencies.LoadBackupSetData(bsname).Result);
         }
 
         /// <summary>
@@ -344,7 +344,7 @@ namespace BackupCore
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
-            Dependencies.StoreBackupSetData(bsname, bset.Serialize());
+            Dependencies.StoreBackupSetData(bsname, bset.Serialize()).Wait();
         }
     }
 }
