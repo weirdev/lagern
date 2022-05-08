@@ -651,7 +651,6 @@ namespace BackupCore
             // Transfer backing data
             foreach (var (hash, shallow) in backupSet.Backups)
             {
-                // TODO: Call sometimes fails, uuid: 795243
                 DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
                     dstCore.DefaultDstDependencies[backupDstTransferDst].Blobs, backupsetname, hash, includefiles & !shallow);
             }

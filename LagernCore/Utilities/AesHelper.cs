@@ -189,7 +189,6 @@ namespace BackupCore
                 ICryptoTransform decryptor = GetDataDecryptor(iv);
                 try
                 {
-                    // TODO: Sometimes failure here, uuid: 795243
                     return decryptor.TransformFinalBlock(input, IVSize, input.Length - IVSize);
                 }
                 catch (Exception e)
