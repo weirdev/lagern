@@ -21,7 +21,7 @@ namespace BackupCore
         private string BucketId { get; set; }
         private string BucketName { get; set; }
         
-        private AuthorizationResponse? AuthResp = null;
+        private AuthorizationResponse? AuthResp;
         private GetUploadUrlResponse? UploadUrlResp = null;
 
         private static readonly int MinDelayMS = 32;
@@ -41,55 +41,58 @@ namespace BackupCore
         }
 
         private BackblazeDstInterop(string accountid, string applicationkey,
-            string bucketid, string bucketname, string? connectionsettingsfile=null)
+            string bucketid, string bucketname, AuthorizationResponse authorizationResponse,
+            string? connectionsettingsfile=null)
         {
             AccountID = accountid;
             ApplicationKey = applicationkey;
             BucketId = bucketid;
             BucketName = bucketname;
             ConnectionSettingsFile = connectionsettingsfile;
-            AuthResp = AuthorizeAccount().Result;
+            AuthResp = authorizationResponse;
         }
 
-        public static IDstFSInterop InitializeNew(string connectionsettingsfile, string? password = null)
+        public static async Task<IDstFSInterop> InitializeNew(string connectionsettingsfile, string? password = null)
         {
-            BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
-            return InitializeNew(connectionsettings.accountId, connectionsettings.ApplicationKey,
+            BBConnectionSettings connectionsettings = await LoadBBConnectionSettings(connectionsettingsfile);
+            return await InitializeNew(connectionsettings.accountId, connectionsettings.ApplicationKey,
                 connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
         }
 
-        public static IDstFSInterop InitializeNew(string accountid, 
+        public static async Task<IDstFSInterop> InitializeNew(string accountid, 
             string applicationkey, string bucketid, string bucketname,
             string? connectionSettingsFile=null, string? password = null)
         {
+            var authResp = await AuthorizeAccount(accountid, applicationkey);
             BackblazeDstInterop backblazeDstInterop = new(accountid, applicationkey, bucketid, 
-                bucketname, connectionSettingsFile);
+                bucketname, authResp, connectionSettingsFile);
             if (password != null)
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
+                await backblazeDstInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
                 backblazeDstInterop.Encryptor = encryptor;
             }
             return backblazeDstInterop;
         }
 
-        public static IDstFSInterop Load(string connectionsettingsfile, string? password=null)
+        public static async Task<IDstFSInterop> Load(string connectionsettingsfile, string? password=null)
         {
-            BBConnectionSettings connectionsettings = LoadBBConnectionSettings(connectionsettingsfile);
-            return Load(connectionsettings.accountId, connectionsettings.ApplicationKey,
+            BBConnectionSettings connectionsettings = await LoadBBConnectionSettings(connectionsettingsfile);
+            return await Load(connectionsettings.accountId, connectionsettings.ApplicationKey,
                 connectionsettings.bucketId, connectionsettings.bucketName, connectionsettingsfile, password);
         }
 
-        public static IDstFSInterop Load(string accountid, string applicationkey, 
+        public static async Task<IDstFSInterop> Load(string accountid, string applicationkey, 
             string bucketid, string bucketname, string? connectionSettingsFile=null,
             string? password = null)
         {
+            var authResp = await AuthorizeAccount(accountid, applicationkey);
             BackblazeDstInterop backblazeDstInterop = new(accountid, applicationkey, bucketid, bucketname,
-                connectionSettingsFile);
+                authResp, connectionSettingsFile);
             if (password != null)
             {
-                byte[] keyfile = backblazeDstInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                byte[] keyfile = await backblazeDstInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile);
                 AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
                 backblazeDstInterop.Encryptor = encryptor;
             }
@@ -114,31 +117,34 @@ namespace BackupCore
             DelayMS = Min(DelayMS * 2, MaxDelayMS);
         }
 
-        private async Task<AuthorizationResponse> AuthorizeAccount(int attempts = 0)
+        private static async Task<AuthorizationResponse> AuthorizeAccount(string accountid, string applicationkey, int attempts = 0)
         {
-            Delay();
+            Thread.Sleep(MinDelayMS);
             try
             {
                 var authresp = await "https://api.backblazeb2.com/b2api/v1/b2_authorize_account"
                 .WithHeaders(new
                 {
                     Authorization = "Basic "
-                        + Convert.ToBase64String(Encoding.UTF8.GetBytes(AccountID
-                            + ":" + ApplicationKey))
+                        + Convert.ToBase64String(Encoding.UTF8.GetBytes(accountid
+                            + ":" + applicationkey))
                 })
                 .GetJsonAsync<AuthorizationResponse>().ConfigureAwait(false);
-                SuccessfulTransmission();
                 return authresp;
             }
             catch (FlurlHttpException)
             {
-                FailedTransmission();
                 if (attempts < Retries)
                 {
-                    return await AuthorizeAccount(attempts + 1).ConfigureAwait(false);
+                    return await AuthorizeAccount(accountid, applicationkey, attempts + 1).ConfigureAwait(false);
                 }
                 throw;
             }
+        }
+
+        private async Task<AuthorizationResponse> AuthorizeAccount(int attempts = 0)
+        {
+            return await AuthorizeAccount(AccountID, ApplicationKey, attempts);
         }
 
         private Task StoreFileAsync(string file, byte[] data, bool preventEncryption=false) => 
@@ -381,12 +387,12 @@ namespace BackupCore
             return exists;
         }
 
-        private static BBConnectionSettings LoadBBConnectionSettings(string connectionsettingsfile)
+        private static async Task<BBConnectionSettings> LoadBBConnectionSettings(string connectionsettingsfile)
         {
             string connectionsettings;
             using (var sr = new StreamReader(connectionsettingsfile))
             {
-                connectionsettings = sr.ReadToEnd();
+                connectionsettings = await sr.ReadToEndAsync();
             }
             return JsonConvert.DeserializeObject<BBConnectionSettings>(connectionsettings);
         }
