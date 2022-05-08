@@ -6,25 +6,25 @@ namespace BackupCore
 {
     public class DiskDstFSInterop : IDstFSInterop
     {
-        public static IDstFSInterop InitializeNew(string dstpath, string? password=null)
+        public static async Task<IDstFSInterop> InitializeNew(string dstpath, string? password=null)
         {
             DiskDstFSInterop diskDstFSInterop = new(dstpath);
             if (password != null)
             {
                 AesHelper encryptor = AesHelper.CreateFromPassword(password);
                 byte[] keyfile = encryptor.CreateKeyFile();
-                diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile).Wait();
+                await diskDstFSInterop.StoreIndexFileAsync(null, IndexFileType.EncryptorKeyFile, keyfile);
                 diskDstFSInterop.Encryptor = encryptor;
             }
             return diskDstFSInterop;
         }
 
-        public static IDstFSInterop Load(string dstpath, string? password=null)
+        public static async Task<IDstFSInterop> Load(string dstpath, string? password=null)
         {
             DiskDstFSInterop diskDstFSInterop = new(dstpath);
             if (password != null)
             {
-                byte[] keyfile = diskDstFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile).Result;
+                byte[] keyfile = await diskDstFSInterop.LoadIndexFileAsync(null, IndexFileType.EncryptorKeyFile);
                 AesHelper encryptor = AesHelper.CreateFromKeyFile(keyfile, password);
                 diskDstFSInterop.Encryptor = encryptor;
             }
@@ -152,7 +152,7 @@ namespace BackupCore
             return path;
         }
 
-        private string GetBlobRelativePath(byte[] hash)
+        private static string GetBlobRelativePath(byte[] hash)
         {
             // Save files with names given by their hashes
             // In order to keep the number of files per directory managable,
