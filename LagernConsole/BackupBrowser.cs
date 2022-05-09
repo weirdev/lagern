@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.IO;
 using CommandLine;
 using LagernCore.Models;
@@ -28,7 +26,7 @@ namespace BackupConsole
             ContinueLoop = true;
             BCore = bcore;
             BackupDst = backupdst;
-            BackupSetReference backupSetReference = new BackupSetReference("test", false, false, false);
+            BackupSetReference backupSetReference = new("test", false, false, false);
             if (!BCore.DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
@@ -36,11 +34,11 @@ namespace BackupConsole
             (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference).Result;
             }
             else
             {
-                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference, backuphash, 0);
+                targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(backupSetReference, backuphash, 0).Result;
             }
             BackupHash = targetbackuphashandrecord.hash;
             BackupSet = backupset;
@@ -81,7 +79,7 @@ namespace BackupConsole
                 {
                     cachewarning = "(cache)";
                 }
-                Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash.Substring(0, hashdisplen), cachewarning, CurrentNode.Path));
+                Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash[..hashdisplen], cachewarning, CurrentNode.Path));
                 string[] args = LagernConsole.ReadArgs();
                 try
                 {
@@ -100,7 +98,7 @@ namespace BackupConsole
             }
         }
 
-        private string? GetBUDestinationDir()
+        private static string? GetBUDestinationDir()
         {
             string? dir = cwd;
             do
@@ -118,7 +116,7 @@ namespace BackupConsole
         {
             BackupCore.MetadataNode dir = CurrentNode;
 
-            List<BackupCore.MetadataNode> childdirectories = new List<BackupCore.MetadataNode>(from cdir in dir.Directories select cdir.Value);
+            List<BackupCore.MetadataNode> childdirectories = new(from cdir in dir.Directories select cdir.Value);
             childdirectories.Sort(delegate (BackupCore.MetadataNode x, BackupCore.MetadataNode y)
             {
                return x.DirMetadata.FileName.CompareTo(y.DirMetadata.FileName);
@@ -128,7 +126,7 @@ namespace BackupConsole
                 Console.WriteLine(childdir.DirMetadata.FileName + Path.DirectorySeparatorChar.ToString());
             }
 
-            List<BackupCore.FileMetadata> childfiles = new List<BackupCore.FileMetadata>(dir.Files.Values);
+            List<BackupCore.FileMetadata> childfiles = new(dir.Files.Values);
             childfiles.Sort(delegate (BackupCore.FileMetadata x, BackupCore.FileMetadata y)
             {
                 return x.FileName.CompareTo(y.FileName);
@@ -185,7 +183,7 @@ namespace BackupConsole
             {
                 backuphash = opts.Backup;
             }
-            var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(new BackupSetReference(BackupSet, false, false, false), backuphash, opts.Offset);
+            var targetbackuphashandrecord = BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(new BackupSetReference(BackupSet, false, false, false), backuphash, opts.Offset).Result;
             BackupHash = targetbackuphashandrecord.Item1;
             BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
             BackupTree = BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
@@ -198,7 +196,7 @@ namespace BackupConsole
             {
                 CurrentNode = BackupTree;
             }
-            Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash.Substring(0, 6), backuprecord.BackupMessage);
+            Console.WriteLine("Switching to backup {0}: \"{1}\"", BackupHash[..6], backuprecord.BackupMessage);
         }
     }
 }

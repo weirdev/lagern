@@ -141,7 +141,7 @@ namespace CoreTest
         public static (byte[] hash, byte[] file) MakeRandomFile(int size, Random? random=null)
         {
             byte[] data = new byte[size];
-            if (random==null)
+            if (random == null)
             {
                 random = new Random();
             }
@@ -242,7 +242,6 @@ namespace CoreTest
 
             core.RunBackup("test", "run1");
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
             core.RunBackup("test", "run2");
         }
 
@@ -295,10 +294,8 @@ namespace CoreTest
                 testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache).Result;
             }
             testdata.core.RunBackup("test", "run1");
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
-            System.Threading.Thread.Sleep(40); // Allow async writes to finish
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
             // TODO: Check data match here as well
         }
@@ -325,15 +322,12 @@ namespace CoreTest
             var (core, _, vfsroot, _) = testdata;
 
             var bh1 = core.RunBackup("test", "run1");
-            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
             var bh2 = core.RunBackup("test", "run2");
-            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
 
             // Full hash test
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow()));
-            //System.Threading.Thread.Sleep(40); // Allow async writes to finish
             // Just prefix
             core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]);
             // All backups deleted

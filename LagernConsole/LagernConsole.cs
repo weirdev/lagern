@@ -266,7 +266,7 @@ namespace BackupConsole
 
                 if (opts.Cache != null)
                 {
-                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName, true, DiskDstFSInterop.InitializeNew(opts.Cache), false);
+                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName, true, DiskDstFSInterop.InitializeNew(opts.Cache).Result, false);
                 }
             }
             catch (Exception e)
@@ -296,11 +296,11 @@ namespace BackupConsole
                 {
                     throw new ArgumentException("Cloud config file needed to initialize backblaze backup.");
                 }
-                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password).Result, cache_used);
             }
             else
             {
-                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password), cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password).Result, cache_used);
             }
 
 
@@ -479,9 +479,9 @@ namespace BackupConsole
                     {
                         mlength = message.Length;
                     }
-                    table.AddBodyRow(new string[] {backups[i].backuphash.Substring(0, 7),
+                    table.AddBodyRow(new string[] {backups[i].backuphash[..7],
                         backups[i].backuptime.ToLocalTime().ToString(), Utilities.BytesFormatter(allreferencesizes),
-                        Utilities.BytesFormatter(uniquereferencesizes), message.Substring(0, mlength) });
+                        Utilities.BytesFormatter(uniquereferencesizes), message[..mlength] });
                 }
             }
             else
@@ -495,8 +495,8 @@ namespace BackupConsole
                     {
                         mlength = message.Length;
                     }
-                    table.AddBodyRow(new string[] { backups[i].backuphash.Substring(0, 7),
-                        backups[i].backuptime.ToLocalTime().ToString(), message.Substring(0, mlength) });
+                    table.AddBodyRow(new string[] { backups[i].backuphash[..7],
+                        backups[i].backuptime.ToLocalTime().ToString(), message[..mlength] });
                 }
             }
             if (cache)
@@ -588,7 +588,7 @@ namespace BackupConsole
                 ICoreDstDependencies? cachedep = null;
                 if (cache != null)
                 {
-                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache));
+                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache).Result);
                 }
 
                 List<ICoreDstDependencies> dstdeps = new();
@@ -613,7 +613,7 @@ namespace BackupConsole
                             {
                                 throw new Exception("Backblaze backups require a cloud config file to be specified");
                             }
-                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password), cache != null));
+                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password).Result, cache != null));
                         }
                         catch
                         {
@@ -624,7 +624,7 @@ namespace BackupConsole
                     {
                         try
                         {
-                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password), cache != null));
+                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password).Result, cache != null));
                         }
                         catch (Exception)
                         {
