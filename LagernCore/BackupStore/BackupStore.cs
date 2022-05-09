@@ -27,7 +27,7 @@ namespace BackupCore
         /// <param name="bsname"></param>
         /// <param name="dstbset"></param>
         /// <param name="cachebset"></param>
-        public (BackupSet dstbset, BackupSet cachebset) SyncCache(BackupStore cache, string bsname, BackupSet? dstbset=null, BackupSet? cachebset=null)
+        public async Task<(BackupSet dstbset, BackupSet cachebset)> SyncCache(BackupStore cache, string bsname, BackupSet? dstbset = null, BackupSet? cachebset = null)
         {
             int cacheindex = 0;
             int dstindex = 0;
@@ -38,11 +38,11 @@ namespace BackupCore
 
             if (dstbset == null)
             {
-                dstbset = LoadBackupSet(new BackupSetReference(bsname, false, false, false));
+                dstbset = await LoadBackupSet(new BackupSetReference(bsname, false, false, false));
             }
             if (cachebset == null)
             {
-                cachebset = cache.LoadBackupSet(new BackupSetReference(bsname, false, false, false));
+                cachebset = await cache.LoadBackupSet(new BackupSetReference(bsname, false, false, false));
             }
             if (cachebset.Backups.Count > 0 && dstbset.Backups.Count > 0)
             {
@@ -52,11 +52,11 @@ namespace BackupCore
                     {
                         if (cachebr == null)
                         {
-                            cachebr = cache.GetBackupRecord(cachebsname, cachebset.Backups[cacheindex].hash);
+                            cachebr = await cache.GetBackupRecord(cachebsname, cachebset.Backups[cacheindex].hash);
                         }
                         if (dstbr == null)
                         {
-                            dstbr = GetBackupRecord(new BackupSetReference(bsname, false, false, false), dstbset.Backups[dstindex].hash);
+                            dstbr = await GetBackupRecord(new BackupSetReference(bsname, false, false, false), dstbset.Backups[dstindex].hash);
                         }
                         if (cachebr.BackupTime < dstbr.BackupTime)
                         {
@@ -137,9 +137,9 @@ namespace BackupCore
             return (dstbset, cachebset);
         }
 
-        public IEnumerable<string> GetBackupsAndMetadataReferencesAsStrings(BackupSetReference bsname)
+        public async IAsyncEnumerable<string> GetBackupsAndMetadataReferencesAsStrings(BackupSetReference bsname)
         {
-            var bset = LoadBackupSet(bsname);
+            var bset = await LoadBackupSet(bsname);
             foreach ((byte[] backupref, bool _) in bset.Backups)
             {
                 yield return HashTools.ByteArrayToHexViaLookup32(backupref);
@@ -159,11 +159,11 @@ namespace BackupCore
         /// <param name="metadatatreehash"></param>
         /// <param name="shallow"></param>
         /// <returns>The hash of the new backup</returns>
-        public byte[] AddBackup(BackupSetReference bsname, string message, byte[] metadatatreehash, DateTime backupTime, BackupSet? bset=null)
+        public async Task<byte[]> AddBackup(BackupSetReference bsname, string message, byte[] metadatatreehash, DateTime backupTime, BackupSet? bset=null)
         {
             if (bset == null)
             {
-                bset = LoadBackupSet(bsname);
+                bset = await LoadBackupSet(bsname);
             }
             BackupRecord newbackup = new(message, metadatatreehash, backupTime);
             byte[] brbytes = newbackup.Serialize();
@@ -172,16 +172,16 @@ namespace BackupCore
             return backuphash;
         }
 
-        public void RemoveBackup(BackupSetReference bsname, string backuphashprefix, bool dst_wo_cache, bool force_delete = false)
+        public async Task RemoveBackup(BackupSetReference bsname, string backuphashprefix, bool dst_wo_cache, bool force_delete = false)
         {
-            var bset = LoadBackupSet(bsname);
+            var bset = await LoadBackupSet(bsname);
             if (bset.CacheUsed && dst_wo_cache && !force_delete)
             {
                 // TODO: Do we need this check in more places?
                 throw new Core.BackupRemoveException("Deleting a backup from a backup destination that uses a cache, " +
                     "without that cache present may cause errors when merging cache.");
             }
-            var match = HashByPrefix(bsname, backuphashprefix);
+            var match = await HashByPrefix(bsname, backuphashprefix);
             // TODO: Better error messages depending on return value of HashByPrefix()
             // TODO: Cleanup usage of strings vs byte[] for hashes between backup store and Core
             if (match == null || match.Value.multiplematches == true)
@@ -207,7 +207,7 @@ namespace BackupCore
             }
             Dependencies.Blobs.DecrementReferenceCount(bsname, backuphash, BlobLocation.BlobType.BackupRecord, !bset.Backups[i].shallow);
             bset.Backups.RemoveAt(i);
-            SaveBackupSet(bset, bsname);
+            await SaveBackupSet(bset, bsname);
         }
 
         /// <summary>
@@ -216,30 +216,30 @@ namespace BackupCore
         /// </summary>
         /// <param name="bsname"></param>
         /// <returns></returns>
-        public BackupRecord GetBackupRecord(BackupSetReference bsname)
+        public async Task<BackupRecord> GetBackupRecord(BackupSetReference bsname)
         {
-            var bset = LoadBackupSet(bsname);
+            var bset = await LoadBackupSet(bsname);
             if (bset.Backups.Count > 0)
             {
-                return GetBackupRecord(bsname, bset.Backups[^1].hash);
+                return await GetBackupRecord(bsname, bset.Backups[^1].hash);
             }
             throw new Exception("Could not find backup record specified");
         }
 
-        public BackupRecord GetBackupRecord(BackupSetReference bsname, string? prefix)
+        public async Task<BackupRecord> GetBackupRecord(BackupSetReference bsname, string? prefix)
         {
             if (prefix == null)
             {
-                return GetBackupRecord(bsname);
+                return await GetBackupRecord(bsname);
             }
-            var match = HashByPrefix(bsname, prefix);
+            var match = await HashByPrefix(bsname, prefix);
             if (match == null || match.Value.multiplematches == true)
             {
                 throw new KeyNotFoundException();
             }
             if (match.Value.singlematchhash != null)
             {
-                return GetBackupRecord(bsname, match.Value.singlematchhash);
+                return await GetBackupRecord(bsname, match.Value.singlematchhash);
             }
             else
             {
@@ -247,25 +247,25 @@ namespace BackupCore
             }
         }
 
-        public BackupRecord GetBackupRecord(BackupSetReference bsname, byte[] hash)
+        public async Task<BackupRecord> GetBackupRecord(BackupSetReference bsname, byte[] hash)
         {
             if (hash == null)
             {
-                return GetBackupRecord(bsname);
+                return await GetBackupRecord(bsname);
             }
             return BackupRecord.Deserialize(Dependencies.Blobs.RetrieveData(hash));
         }
 
-        public (string, BackupRecord) GetBackupHashAndRecord(BackupSetReference bsname, int offset = 0)
+        public async Task<(string, BackupRecord)> GetBackupHashAndRecord(BackupSetReference bsname, int offset = 0)
         {
-            var bset = LoadBackupSet(bsname);
-            return GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[^1].hash).ToLower(), offset);
+            var bset = await LoadBackupSet(bsname);
+            return await GetBackupHashAndRecord(bsname, HashTools.ByteArrayToHexViaLookup32(bset.Backups[^1].hash).ToLower(), offset);
         }
 
-        public (string, BackupRecord) GetBackupHashAndRecord(BackupSetReference bsname, string prefix, int offset = 0)
+        public async Task<(string, BackupRecord)> GetBackupHashAndRecord(BackupSetReference bsname, string prefix, int offset = 0)
         {
-            var bset = LoadBackupSet(bsname);
-            var match = HashByPrefix(bsname, prefix);
+            var bset = await LoadBackupSet(bsname);
+            var match = await HashByPrefix(bsname, prefix);
             if (match == null || match.Value.multiplematches == true)
             {
                 // TODO: throw this exception out of HashByPrefix?
@@ -283,7 +283,7 @@ namespace BackupCore
             int bidx = pidx + offset;
             if (bidx >= 0 && bidx < bset.Backups.Count)
             {
-                return (HashTools.ByteArrayToHexViaLookup32(bset.Backups[bidx].hash).ToLower(), GetBackupRecord(bsname, bset.Backups[bidx].hash));
+                return (HashTools.ByteArrayToHexViaLookup32(bset.Backups[bidx].hash).ToLower(), await GetBackupRecord(bsname, bset.Backups[bidx].hash));
             }
             else
             {
@@ -291,10 +291,10 @@ namespace BackupCore
             }
         }
 
-        public List<BackupRecord> GetAllBackupRecords(BackupSetReference bsname)
+        public async Task<List<BackupRecord>> GetAllBackupRecords(BackupSetReference bsname)
         {
-            var bset = LoadBackupSet(bsname);
-            return new List<BackupRecord>(from backup in bset.Backups select GetBackupRecord(bsname, backup.hash));
+            var bset = await LoadBackupSet(bsname);
+            return (await Task.WhenAll(bset.Backups.Select(backup => GetBackupRecord(bsname, backup.hash)))).ToList();
         }
 
         /// <summary>
@@ -302,9 +302,9 @@ namespace BackupCore
         /// </summary>
         /// <param name="prefix"></param>
         /// <returns>Null if no matches, (true, null) for multiple matches, (false, hashstring) for exact match.</returns>
-        public (bool multiplematches, byte[]? singlematchhash)? HashByPrefix(BackupSetReference bsname, string prefix)
+        public async Task<(bool multiplematches, byte[]? singlematchhash)?> HashByPrefix(BackupSetReference bsname, string prefix)
         {
-            var bset = LoadBackupSet(bsname);
+            var bset = await LoadBackupSet(bsname);
             // TODO: This implementation is pretty slow, could be improved with a better data structure like a trie or DAFSA
             // also if this becomes an issue, keep a s
             prefix = prefix.ToLower();
@@ -330,9 +330,9 @@ namespace BackupCore
         /// <param name="backuplistfile"></param>
         /// <param name="blobs"></param>
         /// <returns>A previously stored BackupStore object</returns>
-        public BackupSet LoadBackupSet(BackupSetReference bsname)
+        public async Task<BackupSet> LoadBackupSet(BackupSetReference bsname)
         {
-            return BackupSet.Deserialize(Dependencies.LoadBackupSetData(bsname).Result);
+            return BackupSet.Deserialize(await Dependencies.LoadBackupSetData(bsname));
         }
 
         /// <summary>
@@ -340,11 +340,11 @@ namespace BackupCore
         /// If saving fails an error is thrown.
         /// </summary>
         /// <param name="path"></param>
-        public void SaveBackupSet(BackupSet bset, BackupSetReference bsname)
+        public async Task SaveBackupSet(BackupSet bset, BackupSetReference bsname)
         {
             // NOTE: This overwrites the previous file every time.
             // This should be okay as the serialized BackupStore filesize should always be small.
-            Dependencies.StoreBackupSetData(bsname, bset.Serialize()).Wait();
+            await Dependencies.StoreBackupSetData(bsname, bset.Serialize());
         }
     }
 }

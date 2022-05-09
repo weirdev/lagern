@@ -42,7 +42,7 @@ namespace BackupCore
             }
             BackupStoreDependencies backupStoreDependencies = new(destdeps.DstFSInterop, destdeps.Blobs);
             destdeps.Backups = new BackupStore(backupStoreDependencies);
-            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), new BackupSetReference(bsname, false, false, false));
+            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), new BackupSetReference(bsname, false, false, false)).Wait();
             return destdeps;
         }
 

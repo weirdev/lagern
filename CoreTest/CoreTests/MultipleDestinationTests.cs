@@ -43,7 +43,7 @@ namespace CoreTest.CoreTests
             core.RunBackup("test", "to all destinations again");
 
             System.Collections.Generic.List<BackupRecord> backupRecords = destinations[3].Backups.GetAllBackupRecords(
-                new LagernCore.Models.BackupSetReference("test", false, false, false));
+                new LagernCore.Models.BackupSetReference("test", false, false, false)).Result;
 
             Assert.IsTrue(backupRecords.Count == 2);
         }
