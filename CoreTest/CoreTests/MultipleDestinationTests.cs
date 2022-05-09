@@ -21,7 +21,7 @@ namespace CoreTest.CoreTests
 
             // Backup to destination #1
             Core core = new(source, destinations.GetRange(0, 1));
-            core.RunBackup("test", "to destination 1");
+            core.RunBackup("test", "to destination 1").Wait();
 
             // Add some more data
             var (hash, file) = CoreTest.MakeRandomFile(1000, r);
@@ -29,18 +29,18 @@ namespace CoreTest.CoreTests
 
             // Backup to all
             core = new(source, destinations);
-            core.RunBackup("test", "to all destinations");
+            core.RunBackup("test", "to all destinations").Wait();
 
             // Remove a file
             source.DeleteFile("mdTestFile");
 
             // Backup to destination #2
             core = new(source, destinations.GetRange(1, 1));
-            core.RunBackup("test", "to destination 2");
+            core.RunBackup("test", "to destination 2").Wait();
 
             // Backup to all again
             core = new(source, destinations);
-            core.RunBackup("test", "to all destinations again");
+            core.RunBackup("test", "to all destinations again").Wait();
 
             System.Collections.Generic.List<BackupRecord> backupRecords = destinations[3].Backups.GetAllBackupRecords(
                 new LagernCore.Models.BackupSetReference("test", false, false, false)).Result;

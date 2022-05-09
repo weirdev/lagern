@@ -361,13 +361,13 @@ namespace BackupConsole
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
+                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile)).Result;
                 }
                 catch
                 {
                     trackclasses = null;
                 }
-                foreach (var change in bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash))
+                foreach (var change in bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash).Result)
                 {
                     table.AddBodyRow(new string[] { change.path, change.change.ToString() });
                 }
@@ -388,13 +388,13 @@ namespace BackupConsole
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
+                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile)).Result;
                 }
                 catch
                 {
                     trackclasses = null;
                 }
-                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string?> { opts.BackupHash });
+                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string?> { opts.BackupHash }).Wait();
             }
             catch (Exception e)
             {
@@ -410,7 +410,7 @@ namespace BackupConsole
                 string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
-                    bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force);
+                    bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force).Wait();
                 }
                 catch (Core.BackupRemoveException ex)
                 {
@@ -436,7 +436,7 @@ namespace BackupConsole
                     restorepath = opts.RestorePath;
                     absolutepath = true;
                 }
-                bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath);
+                bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath).Wait();
             }
             catch (Exception e)
             {
@@ -462,7 +462,7 @@ namespace BackupConsole
                 bcore = LoadCore();
             }
             string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            (var backupsenum, bool cache) = bcore.GetBackups(bsname);
+            (var backupsenum, bool cache) = bcore.GetBackups(bsname).Result;
             var backups = backupsenum.ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
@@ -472,7 +472,7 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(bsname, backups[i].backuphash);
+                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(bsname, backups[i].backuphash).Result;
                     string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
@@ -512,7 +512,7 @@ namespace BackupConsole
             {
                 var bcore = LoadCore();
                 string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-                bcore.SyncCacheSaveBackupSets(bsname);
+                bcore.SyncCacheSaveBackupSets(bsname).Wait();
                 bcore.SaveBlobIndices();
             }
             catch (Exception e)
@@ -569,7 +569,7 @@ namespace BackupConsole
                     try
                     {
                         // TODO: password support here
-                        return Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null);
+                        return Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null).Result;
                     }
                     catch
                     {
@@ -665,7 +665,7 @@ namespace BackupConsole
             var bcore = LoadCore();
             string backupsetname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
+            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }).Result, true).Wait();
         }
 
         public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);

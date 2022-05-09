@@ -67,11 +67,11 @@ namespace Testing
 
         static double BackupRun(string bsname, string src, string dst)
         {
-            var backupper = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }); // Dont count initial setup in time
+            var backupper = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }).Result; // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
-            backupper.RunBackup(bsname, null, true);
+            backupper.RunBackup(bsname, null, true).Wait();
             //backupper.RunBackupSync(null);
             
             //Console.Out.WriteLine("Done.");
@@ -84,10 +84,10 @@ namespace Testing
 
         static void GetStatus(string bsname, string src, string dst)
         {
-            var core = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) });
-            foreach (var item in core.GetWTStatus(bsname))
+            var core = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }).Result;
+            foreach (var (path, change) in core.GetWTStatus(bsname).Result)
             {
-                Console.WriteLine(string.Format("{0}:\t{1}", item.path, item.change));
+                Console.WriteLine(string.Format("{0}:\t{1}", path, change));
             }
         }
 
