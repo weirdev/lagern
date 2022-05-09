@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace LagernCore.BackupCalculation
 {
@@ -18,7 +19,7 @@ namespace LagernCore.BackupCalculation
         /// <param name="previousmtrees">Optional list of previously backed up metadata trees,
         /// each tree in the list is also optional.</param>
         /// <returns>A delta tree mapping</returns>
-        public static List<MetadataNode> GetDeltaMetadataTree(
+        public static async Task<List<MetadataNode>> GetDeltaMetadataTree(
             Core core, string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
             List<MetadataNode?>? previousmtrees = null)
         {
@@ -34,7 +35,7 @@ namespace LagernCore.BackupCalculation
                 previousmtrees = new List<MetadataNode?>() { null };
             }
 
-            FileMetadata rootdirmetadata = core.SrcDependencies.GetFileMetadata("").Result;
+            FileMetadata rootdirmetadata = await core.SrcDependencies.GetFileMetadata("");
 
             // Create a new tree to hold the deltas for each of the previous metadata trees
             List<MetadataNode> deltamtrees = previousmtrees.Select((_) => new MetadataNode(rootdirmetadata, null)).ToList();
@@ -100,7 +101,7 @@ namespace LagernCore.BackupCalculation
                 List<string> fsFiles;
                 try
                 {
-                    fsFiles = new List<string>(core.SrcDependencies.GetDirectoryFiles(reldirpath).Result);
+                    fsFiles = new List<string>(await core.SrcDependencies.GetDirectoryFiles(reldirpath));
                     fsFiles.Sort();
                 }
                 catch (Exception e) when (e is DirectoryNotFoundException || e is UnauthorizedAccessException) // TODO: More user friendly output here
@@ -152,7 +153,7 @@ namespace LagernCore.BackupCalculation
                                         }
                                         else
                                         {
-                                            curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName)).Result;
+                                            curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName));
                                             fileMetadataCache[fileName] = curfm;
                                         }
                                         // Create a copy FileMetada to hold the changes
@@ -250,7 +251,7 @@ namespace LagernCore.BackupCalculation
                                             }
                                             else
                                             {
-                                                curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename)).Result;
+                                                curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
                                                 fileMetadataCache[filename] = curfm;
                                             }
                                             curfm = new FileMetadata(curfm)
@@ -306,7 +307,7 @@ namespace LagernCore.BackupCalculation
                                 }
                                 else
                                 {
-                                    curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename)).Result;
+                                    curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
                                     fileMetadataCache[filename] = curfm;
                                 }
                                 curfm = new FileMetadata(curfm)
@@ -331,7 +332,7 @@ namespace LagernCore.BackupCalculation
                 try
                 {
                     // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(core.SrcDependencies.GetSubDirectories(reldirpath).Result);
+                    fssubdirs = new List<string>(await core.SrcDependencies.GetSubDirectories(reldirpath));
                     fssubdirs.Sort();
                 }
                 catch (UnauthorizedAccessException e)
@@ -381,7 +382,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
+                                        fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     FileMetadata previousdirmetadata = previousmnode.Directories[dirname].DirMetadata;
@@ -439,7 +440,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
+                                        fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     fssubdirmetadata = new FileMetadata(fssubdirmetadata)
@@ -487,7 +488,7 @@ namespace LagernCore.BackupCalculation
                             }
                             else
                             {
-                                fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
+                                fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                 dirmetadatacache[dirname] = fssubdirmetadata;
                             }
                             fssubdirmetadata = new FileMetadata(fssubdirmetadata)

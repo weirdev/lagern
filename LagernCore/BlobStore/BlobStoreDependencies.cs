@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -14,19 +11,19 @@ namespace BackupCore
             DstFSInterop = fsinterop;
         }
 
-        public void DeleteBlob(byte[] encryptedHash, string fileId)
+        public async Task DeleteBlob(byte[] encryptedHash, string fileId)
         {
-            DstFSInterop.DeleteBlobAsync(encryptedHash, fileId).Wait();
+            await DstFSInterop.DeleteBlobAsync(encryptedHash, fileId);
         }
 
-        public byte[] LoadBlob(byte[] encryptedhash, bool decrypt)
+        public async Task<byte[]> LoadBlob(byte[] encryptedhash, bool decrypt)
         {
-            return DstFSInterop.LoadBlobAsync(encryptedhash, decrypt).Result;
+            return await DstFSInterop.LoadBlobAsync(encryptedhash, decrypt);
         }
 
-        public (byte[] encryptedHash, string fileId) StoreBlob(byte[] hash, byte[] blobdata)
+        public async Task<(byte[] encryptedHash, string fileId)> StoreBlob(byte[] hash, byte[] blobdata)
         {
-            return DstFSInterop.StoreBlobAsync(hash, blobdata).Result;
+            return await DstFSInterop.StoreBlobAsync(hash, blobdata);
         }
     }
 }

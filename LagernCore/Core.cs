@@ -146,19 +146,19 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
+                    MetadataNode previousmtree = await MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
                         previousbackup.MetadataTreeHash);
-                    deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, 
-                        new List<MetadataNode?>() { previousmtree })[0];
+                    deltatree = (await BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, 
+                        new List<MetadataNode?>() { previousmtree }))[0];
                 }
                 else
                 {
-                    deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null)[0];
+                    deltatree = (await BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null))[0];
                 }
             }
             else
             {
-                deltatree = BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null)[0];
+                deltatree = (await BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, null))[0];
             }
             List<(string path, FileMetadata.FileStatus change)> changes = new();
             GetDeltaNodeChanges(Path.DirectorySeparatorChar.ToString(), deltatree, changes);
@@ -260,14 +260,14 @@ namespace BackupCore
                         {
                             BackupRecord previousbackup = 
                                 await dst.Backups.GetBackupRecord(backupSetReference, prev_backup_hash_prefixes[d]);
-                            previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
+                            previousMTrees.Add(await MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
                         }
                         catch (KeyNotFoundException)
                         {
                             // TODO: if user specifies a previous backup hash, we should probably fail if it is not found instead of defaulting to the last backup
                             //return Result<byte[], KeyNotFoundException>.Err(new KeyNotFoundException("No backup matches the specified hash"));
                             BackupRecord previousbackup = await dst.Backups.GetBackupRecord(backupSetReference);
-                            previousMTrees.Add(MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
+                            previousMTrees.Add(await MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash));
                         }
                     }
                     else
@@ -283,10 +283,10 @@ namespace BackupCore
 
             // Calculate the difference between the current file system state and each of the previous Metadata Trees
             List<MetadataNode> deltatrees = 
-                BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, previousMTrees);
+                await BackupCalculation.GetDeltaMetadataTree(this, backupsetname, trackpatterns, previousMTrees);
 
             List<Task> backupops = new();
-            BackupDeltaNode(Path.DirectorySeparatorChar.ToString(),
+            await BackupDeltaNode(Path.DirectorySeparatorChar.ToString(),
                 Enumerable.Range(0, deltatrees.Count).Zip(deltatrees).ToList(), // Delta trees have the same indexes as DefaultDstDependencies
                 backupsetname, async, backupops);
             
@@ -303,9 +303,10 @@ namespace BackupCore
             */
 
             List<(byte[] mtreehash, HashTreeNode references)> newmtreehashes =
-                deltatrees.Select(deltatree => deltatree.Store((byte[] data) =>
-                    BlobStore.StoreData(DefaultDstDependencies.Select(dst => dst.Blobs),
-                    backupSetReference, data))).ToList();
+                (await Task.WhenAll(deltatrees.Select(deltatree => 
+                    deltatree.Store((byte[] data) =>
+                        BlobStore.StoreData(DefaultDstDependencies.Select(dst => dst.Blobs), backupSetReference, data)))))
+                .ToList();
 
             byte[]? backuphash = null;
             DateTime backupTime = DateTime.UtcNow;
@@ -319,7 +320,7 @@ namespace BackupCore
                 // Backup record has just been stored, all data now stored
 
                 // Finalize backup by incrementing reference counts in blobstore as necessary
-                dst.Blobs.FinalizeBackupAddition(backupSetReference, backuphash, newmtreehashes[i].mtreehash, 
+                await dst.Blobs.FinalizeBackupAddition(backupSetReference, backuphash, newmtreehashes[i].mtreehash, 
                     newmtreehashes[i].references);
             }
 
@@ -334,7 +335,7 @@ namespace BackupCore
             return Result<byte[], KeyNotFoundException>.Ok(backuphash);
         }
 
-        private void BackupDeltaNode(
+        private async Task BackupDeltaNode(
             string relpath, List<(int dstidx, MetadataNode node)> indexednodes, string backupsetname, bool async,
             List<Task> backupops)
         {
@@ -373,11 +374,11 @@ namespace BackupCore
 
                 if (async)
                 {
-                    backupops.Add(Task.Run(() => BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations)));
+                    backupops.Add(BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations));
                 }
                 else
                 {
-                    BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations);
+                    await BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations);
                 }
             }
 
@@ -406,7 +407,7 @@ namespace BackupCore
             }
             foreach (var dir in alldirs)
             {
-                BackupDeltaNode($"{Path.Combine(relpath, dir.Key)}{Path.DirectorySeparatorChar}", 
+                await BackupDeltaNode($"{Path.Combine(relpath, dir.Key)}{Path.DirectorySeparatorChar}", 
                     dir.Value, backupsetname, async, backupops);
             }
         }
@@ -480,7 +481,7 @@ namespace BackupCore
             try
             {
                 var backup = await DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupSetReference, backuphashprefix);
-                MetadataNode mtree = MetadataNode.Load(DefaultDstDependencies[backupdst].Blobs, backup.MetadataTreeHash);
+                MetadataNode mtree = await MetadataNode.Load(DefaultDstDependencies[backupdst].Blobs, backup.MetadataTreeHash);
                 FileMetadata? filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
@@ -488,7 +489,7 @@ namespace BackupCore
                     {
                         throw new Exception("FileMetadata of stored files should always contain the files hash");
                     }
-                    byte[] filedata = DefaultDstDependencies[backupdst].Blobs.RetrieveData(filemeta.FileHash);
+                    byte[] filedata = await DefaultDstDependencies[backupdst].Blobs.RetrieveData(filemeta.FileHash);
                     await SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
@@ -555,7 +556,7 @@ namespace BackupCore
             BackupSetReference bsname, string backuphashstring, int backupdst=0)
         {
             var br = await DefaultDstDependencies[backupdst].Backups.GetBackupRecord(bsname, backuphashstring);
-            return DefaultDstDependencies[backupdst].Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
+            return await DefaultDstDependencies[backupdst].Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
         }
 
         /// <summary>
@@ -574,7 +575,7 @@ namespace BackupCore
         /// </summary>
         /// <param name="relpath"></param>
         /// <param name="mtree"></param>
-        protected void BackupFileSync(string backupset, string relpath, 
+        protected async Task BackupFileSync(string backupset, string relpath, 
             List<(int dstidx, FileMetadata fileMetadata)> writedestinations)
         {
             try
@@ -583,8 +584,8 @@ namespace BackupCore
                 {
                     relpath = relpath[1..];
                 }
-                Stream readerbuffer = SrcDependencies.GetFileData(relpath).Result;
-                byte[] filehash = BlobStore.StoreData(
+                Stream readerbuffer = await SrcDependencies.GetFileData(relpath);
+                byte[] filehash = await BlobStore.StoreData(
                     writedestinations.Select(difm => DefaultDstDependencies[difm.dstidx].Blobs), 
                     new BackupSetReference(backupset, false, false, false), readerbuffer);
                 foreach (var (_, fileMetadata) in writedestinations)
@@ -651,7 +652,7 @@ namespace BackupCore
             // Transfer backing data
             foreach (var (hash, shallow) in backupSet.Backups)
             {
-                DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
+                await DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
                     dstCore.DefaultDstDependencies[backupDstTransferDst].Blobs, backupsetname, hash, includefiles & !shallow);
             }
             await dstCore.DefaultDstDependencies[backupDstTransferDst].SaveBlobStoreIndex();

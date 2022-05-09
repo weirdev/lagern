@@ -82,11 +82,11 @@ namespace BackupCore
         {
             if (relpath.EndsWith(System.IO.Path.DirectorySeparatorChar.ToString()))
             {
-                relpath = relpath.Substring(0, relpath.Length - 1);
+                relpath = relpath[0..^1];
             }
             if (relpath.StartsWith(System.IO.Path.DirectorySeparatorChar.ToString()))
             {
-                relpath = relpath.Substring(1);
+                relpath = relpath[1..];
             }
             if (relpath == "")
             {
@@ -103,7 +103,7 @@ namespace BackupCore
             int slash = relpath.IndexOf(System.IO.Path.DirectorySeparatorChar);
             if (slash != -1)
             {
-                string nextdirname = relpath.Substring(0, slash);
+                string nextdirname = relpath[..slash];
                 string nextpath = relpath.Substring(slash + 1, relpath.Length - slash - 1);
                 MetadataNode? nextdir = GetDirectory(nextdirname);
                 if (nextpath == "")
@@ -134,7 +134,7 @@ namespace BackupCore
                 relpath = System.IO.Path.DirectorySeparatorChar + relpath;
                 slash = 0;
             }
-            MetadataNode? parent = GetDirectory(relpath.Substring(0, slash));
+            MetadataNode? parent = GetDirectory(relpath[..slash]);
             if (parent != null)
             {
                 string name = relpath.Substring(slash + 1, relpath.Length - slash - 1);
@@ -239,13 +239,13 @@ namespace BackupCore
         /// <param name="blobs"></param>
         /// <param name="storeGetHash">Function called to store node data, returns hash</param>
         /// <returns>The hash of the stored tree and a tree of its child hashes.</returns>
-        public (byte[] nodehash, HashTreeNode node) Store(Func<byte[], byte[]> storeGetHash)
+        public async Task<(byte[] nodehash, HashTreeNode node)> Store(Func<byte[], Task<byte[]>> storeGetHash)
         {
             List<(byte[] nodehash, HashTreeNode? node)> children = new();
             List<byte[]> dirhashes = new();
             foreach (MetadataNode dir in Directories.Values)
             {
-                var (newhash, newnode) = dir.Store(storeGetHash);
+                var (newhash, newnode) = await dir.Store(storeGetHash);
                 dirhashes.Add(newhash);
                 children.Add((newhash, newnode));
             }
@@ -274,19 +274,19 @@ namespace BackupCore
 
             mtdata.Add("Directories-v2", BinaryEncoding.EnumEncode(dirhashes));
             
-            byte[] nodehash = storeGetHash(BinaryEncoding.dict_encode(mtdata));
+            byte[] nodehash = await storeGetHash(BinaryEncoding.dict_encode(mtdata));
             HashTreeNode node = new(children);
             return (nodehash, node);
         }
 
-        public static MetadataNode Load(BlobStore blobs, byte[] hash, MetadataNode? parent = null)
+        public static async Task<MetadataNode> Load(BlobStore blobs, byte[] hash, MetadataNode? parent = null)
         {
             var curmn = new MetadataNode();
 
-            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(blobs.RetrieveData(hash));
+            Dictionary<string, byte[]> savedobjects = BinaryEncoding.dict_decode(await blobs.RetrieveData(hash));
             FileMetadata dirmetadata = FileMetadata.Deserialize(savedobjects["DirMetadata-v1"]);
             curmn.DirMetadata = dirmetadata;
-            ConcurrentDictionary<string, FileMetadata> files = new ConcurrentDictionary<string, FileMetadata>();
+            ConcurrentDictionary<string, FileMetadata> files = new();
             var encodedFiles = BinaryEncoding.enum_decode(savedobjects["Files-v1"]) ?? new List<byte[]?>();
             foreach (var binfm in encodedFiles)
             {
@@ -298,12 +298,12 @@ namespace BackupCore
                 files[newfm.FileName] = newfm;
             }
             curmn.Files = files;
-            ConcurrentDictionary<string, MetadataNode> directories = new ConcurrentDictionary<string, MetadataNode>();
+            ConcurrentDictionary<string, MetadataNode> directories = new();
             var dirs = BinaryEncoding.enum_decode(savedobjects["Directories-v2"]) ?? new List<byte[]?>();
             for (int i = 0; i < dirs.Count; i++)
             {
                 var dir = dirs[i] ?? throw new NullReferenceException("Encoded directory cannot be null");
-                MetadataNode newmn = Load(blobs, dir, curmn);
+                MetadataNode newmn = await Load(blobs, dir, curmn);
                 directories[newmn.DirMetadata.FileName] = newmn;
             }
             curmn.Parent = parent;
