@@ -240,9 +240,9 @@ namespace CoreTest
             var (core, _, vfsroot, _) = 
                 InitializeNewCoreWithStandardFiles(nonencrypteddsts, encrypteddsts, cache: cache).Result;
 
-            core.RunBackup("test", "run1");
+            core.RunBackup("test", "run1").Wait();
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            core.RunBackup("test", "run2");
+            core.RunBackup("test", "run2").Wait();
         }
 
         [TestMethod]
@@ -270,7 +270,7 @@ namespace CoreTest
                 testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache).Result;
             }
 
-            testdata.core.GetWTStatus("test");
+            testdata.core.GetWTStatus("test").Wait();
             // TODO: test output
         }
 
@@ -293,9 +293,9 @@ namespace CoreTest
             {
                 testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache).Result;
             }
-            testdata.core.RunBackup("test", "run1");
+            testdata.core.RunBackup("test", "run1").Wait();
 
-            testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
+            testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true).Wait();
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
             // TODO: Check data match here as well
         }
@@ -321,17 +321,17 @@ namespace CoreTest
             }
             var (core, _, vfsroot, _) = testdata;
 
-            var bh1 = core.RunBackup("test", "run1");
+            var bh1 = core.RunBackup("test", "run1").Result;
 
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            var bh2 = core.RunBackup("test", "run2");
+            var bh2 = core.RunBackup("test", "run2").Result;
 
             // Full hash test
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow()));
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow())).Wait();
             // Just prefix
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]);
+            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]).Wait();
             // All backups deleted
-            Assert.AreEqual(core.GetBackups("test").backups.Count(), 0);
+            Assert.AreEqual(core.GetBackups("test").Result.backups.Count(), 0);
         }
 
         [TestMethod]
@@ -390,10 +390,10 @@ namespace CoreTest
             }
             var (dstCore, _, _, _) = testdata;
 
-            _ = srcCore.RunBackup("test", "run1");
+            _ = srcCore.RunBackup("test", "run1").Result;
             var e = srcCore.DefaultDstDependencies[0].DstFSInterop.Encryptor;
 
-            srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
+            srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true).Wait();
         }
 
         [TestMethod]

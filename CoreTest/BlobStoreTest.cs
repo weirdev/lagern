@@ -12,6 +12,7 @@ using LagernCore.Models;
 
 namespace CoreTest
 {
+#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
     /// <summary>
     /// Summary description for BlobStoreTest
     /// </summary>
@@ -114,7 +115,7 @@ namespace CoreTest
         public void TestBlobStoreSerializeDeserialize()
         {
             var (core, verifyfilepaths, vfsroot, vfsdatastore) = CoreTest.InitializeNewCoreWithStandardFiles(1, 0).Result;
-            core.RunBackup("test", "initialrun");
+            core.RunBackup("test", "initialrun").Wait();
             byte[] serialized = core.DefaultDstDependencies[0].Blobs.Serialize();
 
             // Test that something was serialized
@@ -348,4 +349,5 @@ namespace CoreTest
             return file;
         }
     }
+#pragma warning restore CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
 }
