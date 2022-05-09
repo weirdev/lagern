@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -22,19 +22,19 @@ namespace BackupCore
             DstFSInterop = dstinterop;
         }
 
-        public static CoreDstDependencies InitializeNew(string bsname, bool cache, IDstFSInterop dstinterop, bool cacheused=false)
+        public static async Task<CoreDstDependencies> InitializeNew(string bsname, bool cache, IDstFSInterop dstinterop, bool cacheused=false)
         {
             CoreDstDependencies destdeps = new(dstinterop);
 
-            if (destdeps.DstFSInterop.IndexFileExistsAsync(bsname, IndexFileType.BackupSet).Result)
+            if (await destdeps.DstFSInterop.IndexFileExistsAsync(bsname, IndexFileType.BackupSet))
             {
                 throw new Exception("A backup set of the given name already exists at the destination");
             }
-            if (!destdeps.DstFSInterop.IndexFileExistsAsync(null, IndexFileType.BlobIndex).Result)
+            if (!await destdeps.DstFSInterop.IndexFileExistsAsync(null, IndexFileType.BlobIndex))
             {
                 BlobStoreDependencies blobStoreDependencies = new(destdeps.DstFSInterop);
                 destdeps.Blobs = new BlobStore(blobStoreDependencies);
-                destdeps.SaveBlobStoreIndex();
+                await destdeps.SaveBlobStoreIndex();
             }
             else
             {
@@ -42,15 +42,15 @@ namespace BackupCore
             }
             BackupStoreDependencies backupStoreDependencies = new(destdeps.DstFSInterop, destdeps.Blobs);
             destdeps.Backups = new BackupStore(backupStoreDependencies);
-            destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), new BackupSetReference(bsname, false, false, false)).Wait();
+            await destdeps.Backups.SaveBackupSet(new BackupSet(cacheused), new BackupSetReference(bsname, false, false, false));
             return destdeps;
         }
 
-        public static CoreDstDependencies Load(IDstFSInterop dstinterop, bool cacheused = false)
+        public static async Task<CoreDstDependencies> Load(IDstFSInterop dstinterop, bool cacheused = false)
         {
             CoreDstDependencies destdeps = new(dstinterop);
             // Would possibly load a cached blobindex file here
-            (destdeps.Blobs, destdeps.Backups) = destdeps.LoadIndex();
+            (destdeps.Blobs, destdeps.Backups) = await destdeps.LoadIndex();
             return destdeps;
         }
 
@@ -58,48 +58,48 @@ namespace BackupCore
         /// Loads a lagern index.
         /// </summary>
         /// <returns></returns>
-        private (BlobStore blobs, BackupStore backups) LoadIndex()
+        private async Task<(BlobStore blobs, BackupStore backups)> LoadIndex()
         {
             BlobStoreDependencies blobStoreDependencies = new(DstFSInterop);
-            BlobStore blobs = BlobStore.Deserialize(DstFSInterop.LoadIndexFileAsync(null, IndexFileType.BlobIndex).Result, blobStoreDependencies);
+            BlobStore blobs = BlobStore.Deserialize(await DstFSInterop.LoadIndexFileAsync(null, IndexFileType.BlobIndex), blobStoreDependencies);
             BackupStoreDependencies backupStoreDependencies = new(DstFSInterop, blobs);
             BackupStore backups = new(backupStoreDependencies);
             return (blobs, backups);
         }
 
-        public string ReadSetting(BackupSetting key)
+        public async Task<string> ReadSetting(BackupSetting key)
         {
-            using var fs = GetSettingsFileStream();
-            return SettingsFileTools.ReadSetting(fs, key);
+            using var fs = await GetSettingsFileStream();
+            return await SettingsFileTools.ReadSetting(fs, key);
         }
 
-        public Dictionary<BackupSetting, string> ReadSettings()
+        public async Task<Dictionary<BackupSetting, string>> ReadSettings()
         {
-            using var fs = GetSettingsFileStream();
-            return SettingsFileTools.ReadSettings(fs);
+            using var fs = await GetSettingsFileStream();
+            return await SettingsFileTools.ReadSettings(fs);
         }
 
-        public void SaveBlobStoreIndex()
+        public async Task SaveBlobStoreIndex()
         {
-            DstFSInterop.StoreIndexFileAsync(null, IndexFileType.BlobIndex, Blobs.Serialize()).Wait();
+            await DstFSInterop.StoreIndexFileAsync(null, IndexFileType.BlobIndex, Blobs.Serialize());
         }
 
-        public void WriteSetting(BackupSetting key, string value)
+        public async Task WriteSetting(BackupSetting key, string value)
         {
-            using var fs = GetSettingsFileStream();
-            WriteSettingsFileStreamAsync(SettingsFileTools.WriteSetting(fs, key, value));
+            using var fs = await GetSettingsFileStream();
+            await WriteSettingsFileStreamAsync(await SettingsFileTools.WriteSetting(fs, key, value));
         }
 
-        public void ClearSetting(BackupSetting key)
+        public async Task ClearSetting(BackupSetting key)
         {
-            using var fs = GetSettingsFileStream();
-            WriteSettingsFileStreamAsync(SettingsFileTools.ClearSetting(fs, key));
+            using var fs = await GetSettingsFileStream();
+            await WriteSettingsFileStreamAsync(await SettingsFileTools.ClearSetting(fs, key));
         }
 
-        private Stream GetSettingsFileStream() => 
-            new MemoryStream(DstFSInterop.LoadIndexFileAsync(null, IndexFileType.SettingsFile).Result);
+        private async Task<Stream> GetSettingsFileStream() => 
+            new MemoryStream(await DstFSInterop.LoadIndexFileAsync(null, IndexFileType.SettingsFile));
 
-        private void WriteSettingsFileStreamAsync(byte[] data) => 
-            DstFSInterop.StoreIndexFileAsync(null, IndexFileType.SettingsFile, data).Wait();
+        private async Task WriteSettingsFileStreamAsync(byte[] data) => 
+            await DstFSInterop.StoreIndexFileAsync(null, IndexFileType.SettingsFile, data);
     }
 }

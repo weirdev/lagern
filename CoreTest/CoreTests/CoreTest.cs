@@ -126,14 +126,14 @@ namespace CoreTest
                 {
                     vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, cache);
+                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, cache).Result;
                 destinations.Add(dstdeps);
             }
             
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache").Result;
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
             Core core = new(srcdeps, destinations, cachedeps);
             return (core, verifyfilepaths, vfsroot, vfsdatastore);
         }
@@ -167,14 +167,14 @@ namespace CoreTest
                 {
                     vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                destinations.Add(CoreDstDependencies.InitializeNew("test", false, vfsidst, true));
+                destinations.Add(CoreDstDependencies.InitializeNew("test", false, vfsidst, true).Result);
             }
 
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc).Result;
             if (cache)
             {
-                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
+                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
                 _ = new Core(srcdeps, destinations, cachedeps);
             }
             else
@@ -204,10 +204,10 @@ namespace CoreTest
                 vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"));
             }
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, true);
+            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache").Result;
+            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, true).Result;
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
+            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
             Core core = new(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
             Assert.IsTrue(core.DefaultDstDependencies.Count == 1);
 
@@ -222,9 +222,9 @@ namespace CoreTest
             }
             vfsicache = await VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
             srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
-            dstdeps = CoreDstDependencies.Load(vfsidst, true);
+            dstdeps = CoreDstDependencies.Load(vfsidst, true).Result;
             cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.Load(vfsicache, false);
+            if (cache) cachedeps = CoreDstDependencies.Load(vfsicache, false).Result;
             _ = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
         }
 

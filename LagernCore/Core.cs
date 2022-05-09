@@ -66,7 +66,7 @@ namespace BackupCore
             {
                 try
                 {
-                    dstdeps.Add(CoreDstDependencies.Load(await DiskDstFSInterop.Load(dst_path, password), cache != null));
+                    dstdeps.Add(await CoreDstDependencies.Load(await DiskDstFSInterop.Load(dst_path, password), cache != null));
                 }
                 catch (Exception)
                 {
@@ -77,7 +77,7 @@ namespace BackupCore
             CoreDstDependencies? cachedep = null;
             if (cache != null)
             {
-                cachedep = CoreDstDependencies.Load(await DiskDstFSInterop.Load(cache));
+                cachedep = await CoreDstDependencies.Load(await DiskDstFSInterop.Load(cache));
             }
             return new Core(srcdep, dstdeps, cachedep);
         }
@@ -88,17 +88,17 @@ namespace BackupCore
             IEnumerable<(string dst_path, string? password)> dsts, string? cache = null)
         {
             ICoreSrcDependencies srcdep = 
-                FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), cache);
+                await FSCoreSrcDependencies.InitializeNew(bsname, src, new DiskFSInterop(), cache);
             List<ICoreDstDependencies> dstdeps = new();
             foreach (var (dst_path, password) in dsts)
             {
-                dstdeps.Add(CoreDstDependencies.InitializeNew(bsname, false, 
+                dstdeps.Add(await CoreDstDependencies.InitializeNew(bsname, false, 
                     await DiskDstFSInterop.InitializeNew(dst_path, password), cache != null));
             }
             CoreDstDependencies? cachedep = null;
             if (cache != null)
             {
-                cachedep = CoreDstDependencies.InitializeNew(bsname, true, await DiskDstFSInterop.InitializeNew(cache), false);
+                cachedep = await CoreDstDependencies.InitializeNew(bsname, true, await DiskDstFSInterop.InitializeNew(cache), false);
             }
             return new Core(srcdep, dstdeps, cachedep);
         }
@@ -326,7 +326,7 @@ namespace BackupCore
             // TODO: Only really need to sync cache with one destination
             await SyncCacheSaveBackupSets(backupsetname);
 
-            SaveBlobIndices();
+            await SaveBlobIndices();
             if (backuphash == null)
             {
                 throw new NullReferenceException("backuphash cannot be null after a backup");
@@ -414,16 +414,16 @@ namespace BackupCore
         /// <summary>
         /// Saves both destination and cache blob indices (as available).
         /// </summary>
-        public void SaveBlobIndices()
+        public async Task SaveBlobIndices()
         {
             // Save "index"
             // Writeout all "dirty" cached index nodes
             try
             {
-                DefaultDstDependencies.ForEach(x => x.SaveBlobStoreIndex());
+                await Task.WhenAll(DefaultDstDependencies.Select(x => x.SaveBlobStoreIndex()));
                 if (CacheDependencies != null && DestinationAvailable)
                 {
-                    CacheDependencies.SaveBlobStoreIndex();
+                    await CacheDependencies.SaveBlobStoreIndex();
                 }
             }
             catch (Exception e)
@@ -489,14 +489,14 @@ namespace BackupCore
                         throw new Exception("FileMetadata of stored files should always contain the files hash");
                     }
                     byte[] filedata = DefaultDstDependencies[backupdst].Blobs.RetrieveData(filemeta.FileHash);
-                    SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
+                    await SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
                 {
                     MetadataNode? dir = mtree.GetDirectory(relfilepath);
                     if (dir != null)
                     {
-                        SrcDependencies.CreateDirectory(restorepath, absoluterestorepath);
+                        await SrcDependencies.CreateDirectory(restorepath, absoluterestorepath);
                         foreach (var childfile in dir.Files.Values)
                         {
                             await RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childfile.FileName), 
@@ -507,7 +507,7 @@ namespace BackupCore
                             await RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childdir), 
                                 Path.Combine(restorepath, childdir), backuphashprefix, absoluterestorepath);
                         }
-                        SrcDependencies.WriteOutMetadata(restorepath, dir.DirMetadata, absoluterestorepath); // Set metadata after finished changing contents (postorder)
+                        await SrcDependencies.WriteOutMetadata(restorepath, dir.DirMetadata, absoluterestorepath); // Set metadata after finished changing contents (postorder)
                     }
                     else
                     {
@@ -583,7 +583,7 @@ namespace BackupCore
                 {
                     relpath = relpath[1..];
                 }
-                Stream readerbuffer = SrcDependencies.GetFileData(relpath);
+                Stream readerbuffer = SrcDependencies.GetFileData(relpath).Result;
                 byte[] filehash = BlobStore.StoreData(
                     writedestinations.Select(difm => DefaultDstDependencies[difm.dstidx].Blobs), 
                     new BackupSetReference(backupset, false, false, false), readerbuffer);
@@ -633,7 +633,7 @@ namespace BackupCore
             await DefaultDstDependencies[backupdst].Backups.RemoveBackup(backupSetReference, backuphashprefix, 
                 DestinationAvailable && CacheDependencies == null, forcedelete);
             await SyncCacheSaveBackupSets(backupsetname);
-            SaveBlobIndices();
+            await SaveBlobIndices();
         }
 
         /// <summary>
@@ -654,7 +654,7 @@ namespace BackupCore
                 DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
                     dstCore.DefaultDstDependencies[backupDstTransferDst].Blobs, backupsetname, hash, includefiles & !shallow);
             }
-            dstCore.DefaultDstDependencies[backupDstTransferDst].SaveBlobStoreIndex();
+            await dstCore.DefaultDstDependencies[backupDstTransferDst].SaveBlobStoreIndex();
         }
 
         /// <summary>

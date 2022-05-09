@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -38,22 +39,22 @@ namespace BackupCore
             return new FSCoreSrcDependencies(src, fsinterop);
         }
 
-        public static FSCoreSrcDependencies InitializeNew(string bsname, string? src, IFSInterop fsinterop, string? cache = null)
+        public static async Task<FSCoreSrcDependencies> InitializeNew(string bsname, string? src, IFSInterop fsinterop, string? cache = null)
         {
             var srcdep = new FSCoreSrcDependencies(src, fsinterop);
-            srcdep.CreateDirectory(SettingsDirectoryName);
+            await srcdep.CreateDirectory(SettingsDirectoryName);
 
-            srcdep.WriteSetting(BackupSetting.name, bsname);
+            await srcdep.WriteSetting(BackupSetting.name, bsname);
             
             if (cache != null)
             {
-                srcdep.WriteSetting(BackupSetting.cache, cache);
+                await srcdep.WriteSetting(BackupSetting.cache, cache);
             }
            
             return srcdep;
         }
 
-        public FileMetadata GetFileMetadata(string relpath)
+        public async Task<FileMetadata> GetFileMetadata(string relpath)
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
@@ -63,10 +64,10 @@ namespace BackupCore
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetFileMetadata(Path.Combine(BackupPathSrc, relpath)).Result;
+            return await FSInterop.GetFileMetadata(Path.Combine(BackupPathSrc, relpath));
         }
 
-        public IEnumerable<string> GetDirectoryFiles(string relpath)
+        public async Task<IEnumerable<string>> GetDirectoryFiles(string relpath)
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
@@ -76,11 +77,11 @@ namespace BackupCore
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetDirectoryFiles(Path.Combine(BackupPathSrc, relpath)).Result
+            return (await FSInterop.GetDirectoryFiles(Path.Combine(BackupPathSrc, relpath)))
                 .Select(filepath => Path.GetFileName(filepath));
         }
 
-        public IEnumerable<string> GetSubDirectories(string relpath)
+        public async Task<IEnumerable<string>> GetSubDirectories(string relpath)
         {
             if (relpath.StartsWith(Path.DirectorySeparatorChar.ToString()))
             {
@@ -90,29 +91,29 @@ namespace BackupCore
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)).Result
+            return (await FSInterop.GetSubDirectories(Path.Combine(BackupPathSrc, relpath)))
                 .Select(filepath => Path.GetFileName(filepath));
         }
 
-        public Stream GetFileData(string relpath)
+        public async Task<Stream> GetFileData(string relpath)
         {
             if (AesTool != null)
             {
-                return AesTool.GetEncryptedStream(GetRawFileData(relpath));
+                return AesTool.GetEncryptedStream(await GetRawFileData(relpath));
             }
-            return GetRawFileData(relpath);
+            return await GetRawFileData(relpath);
         }
 
-        private Stream GetRawFileData(string relpath)
+        private async Task<Stream> GetRawFileData(string relpath)
         {
             if (BackupPathSrc == null)
             {
                 throw new Exception("Must be configured with source path for this operation");
             }
-            return FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath)).Result;
+            return await FSInterop.GetFileData(Path.Combine(BackupPathSrc, relpath));
         }
 
-        public void OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false)
+        public async Task OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false)
         {
             if (!absolutepath)
             {
@@ -124,7 +125,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.OverwriteOrCreateFile(path, data, fileMetadata).Wait();
+                await FSInterop.OverwriteOrCreateFile(path, data, fileMetadata);
             }
             catch (Exception)
             {
@@ -132,7 +133,7 @@ namespace BackupCore
             }
         }
 
-        public void DeleteFile(string path, bool absolutepath = false)
+        public async Task DeleteFile(string path, bool absolutepath = false)
         {
             if (!absolutepath)
             {
@@ -144,7 +145,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.DeleteFile(path).Wait();
+                await FSInterop.DeleteFile(path);
             }
             catch (Exception)
             {
@@ -152,7 +153,7 @@ namespace BackupCore
             }
         }
 
-        public void CreateDirectory(string path, bool absolutepath = false)
+        public async Task CreateDirectory(string path, bool absolutepath = false)
         {
             if (!absolutepath)
             {
@@ -164,7 +165,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.CreateDirectoryIfNotExists(path).Wait();
+                await FSInterop.CreateDirectoryIfNotExists(path);
             }
             catch (Exception)
             {
@@ -172,7 +173,7 @@ namespace BackupCore
             }
         }
 
-        public void WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false)
+        public async Task WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false)
         {
             if (!absolutepath)
             {
@@ -184,7 +185,7 @@ namespace BackupCore
             }
             try
             {
-                FSInterop.WriteOutMetadata(path, metadata).Wait();
+                await FSInterop.WriteOutMetadata(path, metadata);
             }
             catch (Exception)
             {
@@ -193,42 +194,42 @@ namespace BackupCore
             }
         }
 
-        public string ReadSetting(BackupSetting key)
+        public async Task<string> ReadSetting(BackupSetting key)
         {
-            using var fs = GetSettingsFileStream();
-            return SettingsFileTools.ReadSetting(fs, key);
+            using var fs = await GetSettingsFileStream();
+            return await SettingsFileTools.ReadSetting(fs, key);
         }
 
-        public Dictionary<BackupSetting, string> ReadSettings()
+        public async Task<Dictionary<BackupSetting, string>> ReadSettings()
         {
-            using var fs = GetSettingsFileStream();
-            return SettingsFileTools.ReadSettings(fs);
+            using var fs = await GetSettingsFileStream();
+            return await SettingsFileTools.ReadSettings(fs);
         }
 
-        public void WriteSetting(BackupSetting key, string value)
+        public async Task WriteSetting(BackupSetting key, string value)
         {
             try
             {
-                using Stream fs = GetSettingsFileStream();
-                WriteSettingsFileStream(SettingsFileTools.WriteSetting(fs, key, value));
+                using Stream fs = await GetSettingsFileStream();
+                await WriteSettingsFileStream(await SettingsFileTools.WriteSetting(fs, key, value));
             }
             catch (Exception)
             {
-                WriteSettingsFileStream(SettingsFileTools.WriteSetting(null, key, value));
+                await WriteSettingsFileStream(await SettingsFileTools.WriteSetting(null, key, value));
             }
         }
 
-        public void ClearSetting(BackupSetting key)
+        public async Task ClearSetting(BackupSetting key)
         {
-            using var fs = GetSettingsFileStream();
-            SettingsFileTools.ClearSetting(fs, key);
+            using var fs = await GetSettingsFileStream();
+            await SettingsFileTools.ClearSetting(fs, key);
         }
 
-        private Stream GetSettingsFileStream()
+        private async Task<Stream> GetSettingsFileStream()
         {
             try
             {
-                return GetRawFileData(SrcSettingsFile);
+                return await GetRawFileData(SrcSettingsFile);
             }
             catch (Exception e)
             {
@@ -236,16 +237,16 @@ namespace BackupCore
             } 
         }
 
-        private void WriteSettingsFileStream(byte[] data) => OverwriteOrCreateFile(SrcSettingsFile, data);
+        private async Task WriteSettingsFileStream(byte[] data) => await OverwriteOrCreateFile(SrcSettingsFile, data);
         
-        private void ReadAesKeyFile(string password)
+        private async Task ReadAesKeyFile(string password)
         {
             if (AesKeyFile != null)
             {
                 try
                 {
                     using MemoryStream ms = new();
-                    GetRawFileData(AesKeyFile).CopyTo(ms);
+                    (await GetRawFileData(AesKeyFile)).CopyTo(ms);
                     AesTool = AesHelper.CreateFromKeyFile(ms.ToArray(), password);
                 }
                 // TODO: Special handling for wrong passwords, no keyfile present, etc.

@@ -34,7 +34,7 @@ namespace LagernCore.BackupCalculation
                 previousmtrees = new List<MetadataNode?>() { null };
             }
 
-            FileMetadata rootdirmetadata = core.SrcDependencies.GetFileMetadata("");
+            FileMetadata rootdirmetadata = core.SrcDependencies.GetFileMetadata("").Result;
 
             // Create a new tree to hold the deltas for each of the previous metadata trees
             List<MetadataNode> deltamtrees = previousmtrees.Select((_) => new MetadataNode(rootdirmetadata, null)).ToList();
@@ -100,7 +100,7 @@ namespace LagernCore.BackupCalculation
                 List<string> fsFiles;
                 try
                 {
-                    fsFiles = new List<string>(core.SrcDependencies.GetDirectoryFiles(reldirpath));
+                    fsFiles = new List<string>(core.SrcDependencies.GetDirectoryFiles(reldirpath).Result);
                     fsFiles.Sort();
                 }
                 catch (Exception e) when (e is DirectoryNotFoundException || e is UnauthorizedAccessException) // TODO: More user friendly output here
@@ -152,7 +152,7 @@ namespace LagernCore.BackupCalculation
                                         }
                                         else
                                         {
-                                            curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName));
+                                            curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName)).Result;
                                             fileMetadataCache[fileName] = curfm;
                                         }
                                         // Create a copy FileMetada to hold the changes
@@ -250,7 +250,7 @@ namespace LagernCore.BackupCalculation
                                             }
                                             else
                                             {
-                                                curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                                curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename)).Result;
                                                 fileMetadataCache[filename] = curfm;
                                             }
                                             curfm = new FileMetadata(curfm)
@@ -306,7 +306,7 @@ namespace LagernCore.BackupCalculation
                                 }
                                 else
                                 {
-                                    curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                    curfm = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename)).Result;
                                     fileMetadataCache[filename] = curfm;
                                 }
                                 curfm = new FileMetadata(curfm)
@@ -331,7 +331,7 @@ namespace LagernCore.BackupCalculation
                 try
                 {
                     // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(core.SrcDependencies.GetSubDirectories(reldirpath));
+                    fssubdirs = new List<string>(core.SrcDependencies.GetSubDirectories(reldirpath).Result);
                     fssubdirs.Sort();
                 }
                 catch (UnauthorizedAccessException e)
@@ -381,7 +381,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     FileMetadata previousdirmetadata = previousmnode.Directories[dirname].DirMetadata;
@@ -439,7 +439,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                        fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     fssubdirmetadata = new FileMetadata(fssubdirmetadata)
@@ -487,7 +487,7 @@ namespace LagernCore.BackupCalculation
                             }
                             else
                             {
-                                fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                fssubdirmetadata = core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx])).Result;
                                 dirmetadatacache[dirname] = fssubdirmetadata;
                             }
                             fssubdirmetadata = new FileMetadata(fssubdirmetadata)
@@ -570,7 +570,7 @@ namespace LagernCore.BackupCalculation
                         }
                         else if (wildpos > 0)
                         {
-                            string prefix = trackpattern.pattern.Substring(0, wildpos);
+                            string prefix = trackpattern.pattern[..wildpos];
                             if (prefix.Length >= directory.Length)
                             {
                                 if (prefix.StartsWith(directory))
@@ -612,10 +612,10 @@ namespace LagernCore.BackupCalculation
             int wildpos = pattern.IndexOf('*');
             if (wildpos >= 0)
             {
-                string prefix = pattern.Substring(0, wildpos);
+                string prefix = pattern[..wildpos];
                 if (prefix.Length > 0)
                 {
-                    if (path.Length >= prefix.Length && prefix == path.Substring(0, prefix.Length))
+                    if (path.Length >= prefix.Length && prefix == path[..prefix.Length])
                     {
                         string wsuffix = pattern[wildpos..];
                         return PatternMatchesPath(path[prefix.Length..], wsuffix);
