@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Threading.Tasks;
 
 namespace BackupCore
 {
     public interface IBlobStoreDependencies
     {
-        byte[] LoadBlob(byte[] hash, bool decrypt=true);
+        Task<byte[]> LoadBlob(byte[] hash, bool decrypt=true);
 
-        void DeleteBlob(byte[] hash, string fileId);
+        Task DeleteBlob(byte[] hash, string fileId);
 
-        (byte[] encryptedHash, string fileId) StoreBlob(byte[] hash, byte[] blobdata);
+        Task<(byte[] encryptedHash, string fileId)> StoreBlob(byte[] hash, byte[] blobdata);
     }
 }

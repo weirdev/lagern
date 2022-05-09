@@ -1,8 +1,6 @@
 ﻿using BackupCore.Utilities;
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 
 namespace BackupCore.Models
 {
@@ -15,13 +13,13 @@ namespace BackupCore.Models
 
         List<(byte[] nodehash, HashTreeNode? node)> Children { get; set; }
 
-        public ISkippableChildrenIterator<byte[]> GetChildIterator()
+        public ISkippableChildrenEnumerable<byte[]> GetChildIterator()
         {
             return new HashTreeNodeSkippableChildrenIterator(this);
             
         }
 
-        public class HashTreeNodeSkippableChildrenIterator : ISkippableChildrenIterator<byte[]>
+        public class HashTreeNodeSkippableChildrenIterator : ISkippableChildrenEnumerable<byte[]>
         {
             private HashTreeNodeSkippableChildrenIterator? ChildIterator { get; set; }
 

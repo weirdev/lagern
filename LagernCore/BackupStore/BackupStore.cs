@@ -63,7 +63,7 @@ namespace BackupCore
                             if (cachebset.Backups[cacheindex].shallow)
                             {
                                 // Remove shallow backups from cache not present in dst
-                                cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash, 
+                                await cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash, 
                                     BlobLocation.BlobType.BackupRecord, false);
                                 cachebset.Backups.RemoveAt(cacheindex);
                             }
@@ -71,15 +71,15 @@ namespace BackupCore
                             {
                                 // Add non shallow backups from cache not present in dst
                                 dstbset.Backups.Insert(dstindex, (cachebset.Backups[cacheindex].hash, false));
-                                cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, new BackupSetReference(bsname, false, false, false), cachebset.Backups[cacheindex].hash, true);
+                                await cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, new BackupSetReference(bsname, false, false, false), cachebset.Backups[cacheindex].hash, true);
 
                                 // After transfer, make the cache backup shallow
                                 // Since no clean way to only get file references and not "parent" references,
                                 // we delete the entire backup data from cache, then add it back shallow
                                 // TODO: Means to iterate through blobs only including files
-                                cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
+                                await cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
                                     BlobLocation.BlobType.BackupRecord, true);
-                                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
+                                await Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
                                 dstindex += 1;
                                 // After insert and increment j still referes to the same backup (dstbr)
                                 cacheindex += 1;
@@ -90,7 +90,7 @@ namespace BackupCore
                         {
                             // Add (as shallow) backups in dst not present in cache
                             cachebset.Backups.Insert(cacheindex, (dstbset.Backups[dstindex].hash, true));
-                            Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
+                            await Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
                             cacheindex += 1;
                             dstindex += 1;
                             dstbr = null;
@@ -111,7 +111,7 @@ namespace BackupCore
                 if (cachebset.Backups[cacheindex].shallow)
                 {
                     // Remove shallow backups from cache not present in dst
-                    cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
+                    await cache.Dependencies.Blobs.DecrementReferenceCount(cachebsname, cachebset.Backups[cacheindex].hash,
                         BlobLocation.BlobType.BackupRecord, false);
                     cachebset.Backups.RemoveAt(cacheindex);
                 }
@@ -119,7 +119,7 @@ namespace BackupCore
                 {
                     // Add non shallow backups from cache not present in dst
                     dstbset.Backups.Add((cachebset.Backups[cacheindex].hash, false));
-                    cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, new BackupSetReference(bsname, false, false, false), cachebset.Backups[cacheindex].hash, true);
+                    await cache.Dependencies.Blobs.TransferBackup(Dependencies.Blobs, new BackupSetReference(bsname, false, false, false), cachebset.Backups[cacheindex].hash, true);
                     dstindex += 1;
                     // After insert and increment j still referes to the same backup (dstbr)
                     cacheindex += 1;
@@ -129,11 +129,11 @@ namespace BackupCore
             {
                 // Add (as shallow) backups in dst not present in cache
                 cachebset.Backups.Add((dstbset.Backups[dstindex].hash, true));
-                Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
+                await Dependencies.Blobs.TransferBackup(cache.Dependencies.Blobs, cachebsname, dstbset.Backups[dstindex].hash, false);
                 cacheindex += 1;
                 dstindex += 1;
             }
-            Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
+            await Dependencies.Blobs.CacheBlobList(bsname, cache.Dependencies.Blobs);
             return (dstbset, cachebset);
         }
 
@@ -143,7 +143,7 @@ namespace BackupCore
             foreach ((byte[] backupref, bool _) in bset.Backups)
             {
                 yield return HashTools.ByteArrayToHexViaLookup32(backupref);
-                foreach (byte[] reference in Dependencies.Blobs.GetAllBlobReferences(backupref, 
+                await foreach (byte[] reference in Dependencies.Blobs.GetAllBlobReferences(backupref, 
                     BlobLocation.BlobType.BackupRecord, false, false))
                 {
                     yield return HashTools.ByteArrayToHexViaLookup32(reference);
@@ -167,7 +167,7 @@ namespace BackupCore
             }
             BackupRecord newbackup = new(message, metadatatreehash, backupTime);
             byte[] brbytes = newbackup.Serialize();
-            byte[] backuphash = BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
+            byte[] backuphash = await BlobStore.StoreData(new List<BlobStore>(1) { Dependencies.Blobs }, bsname, brbytes);
             bset.Backups.Add((backuphash, bsname.Shallow));
             return backuphash;
         }
@@ -205,7 +205,7 @@ namespace BackupCore
                     break;
                 }
             }
-            Dependencies.Blobs.DecrementReferenceCount(bsname, backuphash, BlobLocation.BlobType.BackupRecord, !bset.Backups[i].shallow);
+            await Dependencies.Blobs.DecrementReferenceCount(bsname, backuphash, BlobLocation.BlobType.BackupRecord, !bset.Backups[i].shallow);
             bset.Backups.RemoveAt(i);
             await SaveBackupSet(bset, bsname);
         }
@@ -253,7 +253,7 @@ namespace BackupCore
             {
                 return await GetBackupRecord(bsname);
             }
-            return BackupRecord.Deserialize(Dependencies.Blobs.RetrieveData(hash));
+            return BackupRecord.Deserialize(await Dependencies.Blobs.RetrieveData(hash));
         }
 
         public async Task<(string, BackupRecord)> GetBackupHashAndRecord(BackupSetReference bsname, int offset = 0)
