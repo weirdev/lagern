@@ -262,7 +262,7 @@ namespace BackupConsole
         {
             try
             {
-                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, CWD, new DiskFSInterop(), opts.Cache);
+                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, CWD, new DiskFSInterop(), opts.Cache).Result;
 
                 if (opts.Cache != null)
                 {
@@ -278,7 +278,7 @@ namespace BackupConsole
         private static void AddDestination(AddDestinationOptions opts)
         {
             var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
-            var settings = srcdep.ReadSettings();
+            var settings = srcdep.ReadSettings().Result;
             bool cache_used = settings.ContainsKey(BackupSetting.cache);
             string bsname = GetBackupSetName(opts.BSName, srcdep);
 
@@ -296,11 +296,11 @@ namespace BackupConsole
                 {
                     throw new ArgumentException("Cloud config file needed to initialize backblaze backup.");
                 }
-                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password).Result, cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password).Result, cache_used).Wait();
             }
             else
             {
-                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password).Result, cache_used);
+                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password).Result, cache_used).Wait();
             }
 
 
@@ -318,7 +318,7 @@ namespace BackupConsole
 
             dsts_passopts_cc.Add(new string[] { destination, password != null ? "p" : "n",  opts.CloudConfigFile ?? ""});
             dstlistings = dsts_passopts_cc.Select(dpc => string.Join('|', dpc)).ToList();
-            srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings));
+            srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings)).Wait();
         }
 
         private static void ShowSettings(ShowOptions opts)
@@ -334,7 +334,7 @@ namespace BackupConsole
             else
             {
                 var core = LoadCore();
-                var settings = core.SrcDependencies.ReadSettings();
+                var settings = core.SrcDependencies.ReadSettings().Result;
                 if (settings != null)
                 {
                     foreach (var setval in settings)
@@ -513,7 +513,7 @@ namespace BackupConsole
                 var bcore = LoadCore();
                 string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 bcore.SyncCacheSaveBackupSets(bsname).Wait();
-                bcore.SaveBlobIndices();
+                bcore.SaveBlobIndices().Wait();
             }
             catch (Exception e)
             {
@@ -544,7 +544,7 @@ namespace BackupConsole
             string? destinations;
             try
             {
-                destinations = srcdep.ReadSetting(BackupSetting.dests);
+                destinations = srcdep.ReadSetting(BackupSetting.dests).Result;
             }
             catch (KeyNotFoundException)
             {
@@ -554,7 +554,7 @@ namespace BackupConsole
 
             try
             {
-                cache = srcdep.ReadSetting(BackupSetting.cache);
+                cache = srcdep.ReadSetting(BackupSetting.cache).Result;
             }
             catch (KeyNotFoundException)
             {
@@ -588,7 +588,7 @@ namespace BackupConsole
                 ICoreDstDependencies? cachedep = null;
                 if (cache != null)
                 {
-                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache).Result);
+                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache).Result).Result;
                 }
 
                 List<ICoreDstDependencies> dstdeps = new();
@@ -613,7 +613,7 @@ namespace BackupConsole
                             {
                                 throw new Exception("Backblaze backups require a cloud config file to be specified");
                             }
-                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password).Result, cache != null));
+                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password).Result, cache != null).Result);
                         }
                         catch
                         {
@@ -624,7 +624,7 @@ namespace BackupConsole
                     {
                         try
                         {
-                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password).Result, cache != null));
+                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password).Result, cache != null).Result);
                         }
                         catch (Exception)
                         {
@@ -668,14 +668,14 @@ namespace BackupConsole
             bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }).Result, true).Wait();
         }
 
-        public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key);
+        public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key).Result;
 
-        private static void WriteSetting(ICoreSrcDependencies src, BackupSetting key, string value) => src.WriteSetting(key, value);
+        private static void WriteSetting(ICoreSrcDependencies src, BackupSetting key, string value) => src.WriteSetting(key, value).Wait();
 
         private static void ClearSetting(ClearOptions opts)
         {
             Core core = LoadCore();
-            core.SrcDependencies.ClearSetting(opts.Setting);
+            core.SrcDependencies.ClearSetting(opts.Setting).Wait();
         }
 
         private static string GetBUSourceDir()

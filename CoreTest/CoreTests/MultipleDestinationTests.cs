@@ -25,14 +25,14 @@ namespace CoreTest.CoreTests
 
             // Add some more data
             var (hash, file) = CoreTest.MakeRandomFile(1000, r);
-            source.OverwriteOrCreateFile("mdTestFile", file);
+            source.OverwriteOrCreateFile("mdTestFile", file).Wait();
 
             // Backup to all
             core = new(source, destinations);
             core.RunBackup("test", "to all destinations").Wait();
 
             // Remove a file
-            source.DeleteFile("mdTestFile");
+            source.DeleteFile("mdTestFile").Wait();
 
             // Backup to destination #2
             core = new(source, destinations.GetRange(1, 1));
@@ -55,7 +55,7 @@ namespace CoreTest.CoreTests
 
             IDstFSInterop dstFSInterop = await VirtualFSInterop.InitializeNewDst(vfsroot, new BPlusTree<byte[]>(10), "");
 
-            return CoreDstDependencies.InitializeNew("test", false, dstFSInterop);
+            return CoreDstDependencies.InitializeNew("test", false, dstFSInterop).Result;
         }
 
         private static ICoreSrcDependencies CreateNewSrc(Random random)
@@ -68,7 +68,7 @@ namespace CoreTest.CoreTests
 
             IFSInterop srcFSInterop = new VirtualFSInterop(vfsroot, datastore);
 
-            return FSCoreSrcDependencies.InitializeNew("test", "", srcFSInterop);
+            return FSCoreSrcDependencies.InitializeNew("test", "", srcFSInterop).Result;
         }
     }
 }

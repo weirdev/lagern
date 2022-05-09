@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -10,9 +10,9 @@ namespace BackupCore
     // will be quite small
     public static class SettingsFileTools
     {
-        public static string ReadSetting(Stream settingsfile, BackupSetting key)
+        public static async Task<string> ReadSetting(Stream settingsfile, BackupSetting key)
         {
-            var settings = ReadSettings(settingsfile);
+            var settings = await ReadSettings(settingsfile);
             if (settings != null)
             {
                 if (settings.ContainsKey(key))
@@ -23,14 +23,14 @@ namespace BackupCore
             throw new KeyNotFoundException();
         }
 
-        public static byte[] WriteSetting(Stream? settingsfile, BackupSetting key, string value)
+        public static async Task<byte[]> WriteSetting(Stream? settingsfile, BackupSetting key, string value)
         {
             Dictionary<BackupSetting, string> settings;
             if (settingsfile != null)
             {
                 try
                 {
-                    settings = ReadSettings(settingsfile);
+                    settings = await ReadSettings(settingsfile);
                 }
                 catch
                 {
@@ -42,15 +42,15 @@ namespace BackupCore
                 settings = new Dictionary<BackupSetting, string>();
             }
             settings[key] = value;
-            return WriteSettings(settings);
+            return await WriteSettings(settings);
         }
 
-        public static byte[] ClearSetting(Stream settingsfile, BackupSetting key)
+        public static async Task<byte[]> ClearSetting(Stream settingsfile, BackupSetting key)
         {
             Dictionary<BackupSetting, string> settings;
             try
             {
-                settings = ReadSettings(settingsfile);
+                settings = await ReadSettings(settingsfile);
             }
             catch
             {
@@ -61,9 +61,9 @@ namespace BackupCore
                 if (settings.ContainsKey(key))
                 {
                     settings.Remove(key);
-                    return WriteSettings(settings);
+                    return await WriteSettings(settings);
                 }
-                MemoryStream ms = new MemoryStream();
+                MemoryStream ms = new();
                 settingsfile.CopyTo(ms);
                 return ms.ToArray();
             }
@@ -73,13 +73,13 @@ namespace BackupCore
             }
         }
 
-        public static Dictionary<BackupSetting, string> ReadSettings(Stream settingsfile)
+        public static async Task<Dictionary<BackupSetting, string>> ReadSettings(Stream settingsfile)
         {
-            Dictionary<BackupSetting, string> settings = new Dictionary<BackupSetting, string>();
-            using (StreamReader reader = new StreamReader(settingsfile))
+            Dictionary<BackupSetting, string> settings = new();
+            using (StreamReader reader = new(settingsfile))
             {
                 string? line;
-                while ((line = reader.ReadLine()) != null)
+                while ((line = await reader.ReadLineAsync()) != null)
                 {
                     string[] kv = line.Split(' ');
                     if (Enum.TryParse(kv[0], out BackupSetting key))
@@ -91,14 +91,14 @@ namespace BackupCore
             return settings;
         }
 
-        public static byte[] WriteSettings(Dictionary<BackupSetting, string> settings)
+        public static async Task<byte[]> WriteSettings(Dictionary<BackupSetting, string> settings)
         {
-            MemoryStream ms = new MemoryStream();
-            using (StreamWriter writer = new StreamWriter(ms))
+            MemoryStream ms = new();
+            using (StreamWriter writer = new(ms))
             {
                 foreach (var kv in settings)
                 {
-                    writer.WriteLine(kv.Key.ToString() + " " + kv.Value);
+                    await writer.WriteLineAsync(kv.Key.ToString() + " " + kv.Value);
                 }
             }
             return ms.ToArray();

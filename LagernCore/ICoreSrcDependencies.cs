@@ -1,32 +1,33 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
     public interface ICoreSrcDependencies
     {
-        FileMetadata GetFileMetadata(string relpath);
+        Task<FileMetadata> GetFileMetadata(string relpath);
 
-        IEnumerable<string> GetDirectoryFiles(string relpath);
+        Task<IEnumerable<string>> GetDirectoryFiles(string relpath);
 
-        IEnumerable<string> GetSubDirectories(string relpath);
+        Task<IEnumerable<string>> GetSubDirectories(string relpath);
 
-        Stream GetFileData(string relpath);
+        Task<Stream> GetFileData(string relpath);
 
-        void OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false);
+        Task OverwriteOrCreateFile(string path, byte[] data, FileMetadata? fileMetadata = null, bool absolutepath = false);
 
-        void DeleteFile(string path, bool absolutepath = false);
+        Task DeleteFile(string path, bool absolutepath = false);
 
-        void CreateDirectory(string path, bool absolutepath = false);
+        Task CreateDirectory(string path, bool absolutepath = false);
 
-        void WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false);
+        Task WriteOutMetadata(string path, FileMetadata metadata, bool absolutepath = false);
 
-        string ReadSetting(BackupSetting key);
+        Task<string> ReadSetting(BackupSetting key);
 
-        Dictionary<BackupSetting, string> ReadSettings();
+        Task<Dictionary<BackupSetting, string>> ReadSettings();
 
-        void WriteSetting(BackupSetting key, string value);
+        Task WriteSetting(BackupSetting key, string value);
 
-        void ClearSetting(BackupSetting key);
+        Task ClearSetting(BackupSetting key);
     }
 }

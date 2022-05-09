@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BackupCore
 {
@@ -18,14 +19,14 @@ namespace BackupCore
 
         IDstFSInterop DstFSInterop { get; }
 
-        void SaveBlobStoreIndex();
+        Task SaveBlobStoreIndex();
         
-        string ReadSetting(BackupSetting key);
+        Task<string> ReadSetting(BackupSetting key);
 
-        Dictionary<BackupSetting, string> ReadSettings();
+        Task<Dictionary<BackupSetting, string>> ReadSettings();
 
-        void WriteSetting(BackupSetting key, string value);
+        Task WriteSetting(BackupSetting key, string value);
 
-        void ClearSetting(BackupSetting key);
+        Task ClearSetting(BackupSetting key);
     }
 }
