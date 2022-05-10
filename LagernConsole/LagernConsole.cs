@@ -4,6 +4,7 @@ using System.Linq;
 using System.IO;
 using CommandLine;
 using BackupCore;
+using System.Threading.Tasks;
 
 namespace BackupConsole
 {
@@ -43,19 +44,19 @@ namespace BackupConsole
                 var p = Parser.Default.ParseArguments<InitOptions, AddDestinationOptions, ShowOptions, SetOptions, ClearOptions,
                     StatusOptions, RunOptions, DeleteOptions, RestoreOptions, ListOptions,
                     BrowseOptions, TransferOptions, SyncCacheOptions, ExitOptions>(args)
-                  .WithParsed<InitOptions>(opts => Initialize(opts))
-                  .WithParsed<AddDestinationOptions>(AddDestination)
-                  .WithParsed<ShowOptions>(opts => ShowSettings(opts))
-                  .WithParsed<SetOptions>(opts => SetSetting(opts))
-                  .WithParsed<ClearOptions>(opts => ClearSetting(opts))
-                  .WithParsed<StatusOptions>(opts => Status(opts))
-                  .WithParsed<RunOptions>(opts => RunBackup(opts))
-                  .WithParsed<DeleteOptions>(opts => DeleteBackup(opts))
-                  .WithParsed<RestoreOptions>(opts => RestoreFile(opts))
-                  .WithParsed<ListOptions>(opts => ListBackups(opts))
-                  .WithParsed<BrowseOptions>(opts => BrowseBackup(opts))
-                  .WithParsed<TransferOptions>(opts => TransferBackupStore(opts))
-                  .WithParsed<SyncCacheOptions>(opts => SyncCache(opts));
+                  .WithParsed<InitOptions>(opts => Initialize(opts).Wait())
+                  .WithParsed<AddDestinationOptions>(opts => AddDestination(opts).Wait())
+                  .WithParsed<ShowOptions>(opts => ShowSettings(opts).Wait())
+                  .WithParsed<SetOptions>(opts => SetSetting(opts).Wait())
+                  .WithParsed<ClearOptions>(opts => ClearSetting(opts).Wait())
+                  .WithParsed<StatusOptions>(opts => Status(opts).Wait())
+                  .WithParsed<RunOptions>(opts => RunBackup(opts).Wait())
+                  .WithParsed<DeleteOptions>(opts => DeleteBackup(opts).Wait())
+                  .WithParsed<RestoreOptions>(opts => RestoreFile(opts).Wait())
+                  .WithParsed<ListOptions>(opts => ListBackups(opts).Wait())
+                  .WithParsed<BrowseOptions>(opts => BrowseBackup(opts).Wait())
+                  .WithParsed<TransferOptions>(opts => TransferBackupStore(opts).Wait())
+                  .WithParsed<SyncCacheOptions>(opts => SyncCache(opts).Wait());
                 if (loop)
                 {
                     p.WithParsed<ExitOptions>(opts => Exit());
@@ -258,15 +259,15 @@ namespace BackupConsole
                 errs => 1);
         }*/
 
-        private static void Initialize(InitOptions opts)
+        private static async Task Initialize(InitOptions opts)
         {
             try
             {
-                ICoreSrcDependencies srcdep = FSCoreSrcDependencies.InitializeNew(opts.BSName, CWD, new DiskFSInterop(), opts.Cache).Result;
+                ICoreSrcDependencies srcdep = await FSCoreSrcDependencies.InitializeNew(opts.BSName, CWD, new DiskFSInterop(), opts.Cache);
 
                 if (opts.Cache != null)
                 {
-                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName, true, DiskDstFSInterop.InitializeNew(opts.Cache).Result, false);
+                    var cachedep = CoreDstDependencies.InitializeNew(opts.BSName, true, await DiskDstFSInterop.InitializeNew(opts.Cache), false);
                 }
             }
             catch (Exception e)
@@ -275,12 +276,12 @@ namespace BackupConsole
             }
         }
 
-        private static void AddDestination(AddDestinationOptions opts)
+        private static async Task AddDestination(AddDestinationOptions opts)
         {
             var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
-            var settings = srcdep.ReadSettings().Result;
+            var settings = await srcdep.ReadSettings();
             bool cache_used = settings.ContainsKey(BackupSetting.cache);
-            string bsname = GetBackupSetName(opts.BSName, srcdep);
+            string bsname = await GetBackupSetName(opts.BSName, srcdep);
 
             string? password = null;
             if (opts.PromptForPassword)
@@ -296,11 +297,11 @@ namespace BackupConsole
                 {
                     throw new ArgumentException("Cloud config file needed to initialize backblaze backup.");
                 }
-                CoreDstDependencies.InitializeNew(bsname, false, BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password).Result, cache_used).Wait();
+                await CoreDstDependencies.InitializeNew(bsname, false, await BackblazeDstInterop.InitializeNew(opts.CloudConfigFile, password), cache_used);
             }
             else
             {
-                CoreDstDependencies.InitializeNew(bsname, false, DiskDstFSInterop.InitializeNew(destination, password).Result, cache_used).Wait();
+                await CoreDstDependencies.InitializeNew(bsname, false, await DiskDstFSInterop.InitializeNew(destination, password), cache_used);
             }
 
 
@@ -318,14 +319,14 @@ namespace BackupConsole
 
             dsts_passopts_cc.Add(new string[] { destination, password != null ? "p" : "n",  opts.CloudConfigFile ?? ""});
             dstlistings = dsts_passopts_cc.Select(dpc => string.Join('|', dpc)).ToList();
-            srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings)).Wait();
+            await srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings));
         }
 
-        private static void ShowSettings(ShowOptions opts)
+        private static async Task ShowSettings(ShowOptions opts)
         {
             if (opts.Setting != null)
             {
-                var settingval = ReadSetting(LoadCore().SrcDependencies, opts.Setting.Value);
+                var settingval = await ReadSetting((await LoadCore()).SrcDependencies, opts.Setting.Value);
                 if (settingval != null)
                 {
                     Console.WriteLine(settingval);
@@ -333,8 +334,8 @@ namespace BackupConsole
             }
             else
             {
-                var core = LoadCore();
-                var settings = core.SrcDependencies.ReadSettings().Result;
+                var core = await LoadCore();
+                var settings = await core.SrcDependencies.ReadSettings();
                 if (settings != null)
                 {
                     foreach (var setval in settings)
@@ -345,29 +346,29 @@ namespace BackupConsole
             }
         }
 
-        private static void SetSetting(SetOptions opts)
+        private static async Task SetSetting(SetOptions opts)
         {
-            WriteSetting(LoadCore().SrcDependencies, opts.Setting, opts.Value);
+            await WriteSetting((await LoadCore()).SrcDependencies, opts.Setting, opts.Value);
         }
 
-        private static void Status(StatusOptions opts)
+        private static async Task Status(StatusOptions opts)
         {
             try
             {
-                var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                var bcore = await LoadCore();
+                string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 TablePrinter table = new();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile)).Result;
+                    trackclasses = await Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {
                     trackclasses = null;
                 }
-                foreach (var change in bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash).Result)
+                foreach (var change in await bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash))
                 {
                     table.AddBodyRow(new string[] { change.path, change.change.ToString() });
                 }
@@ -379,22 +380,22 @@ namespace BackupConsole
             }
         }
 
-        private static void RunBackup(RunOptions opts)
+        private static async Task RunBackup(RunOptions opts)
         {
             try
             {
-                var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                var bcore = await LoadCore();
+                string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 List<(int, string)>? trackclasses;
                 try
                 {
-                    trackclasses = Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile)).Result;
+                    trackclasses = await Core.ReadTrackClassFile(Path.Combine(GetBUSourceDir(), TrackClassFile));
                 }
                 catch
                 {
                     trackclasses = null;
                 }
-                bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string?> { opts.BackupHash }).Wait();
+                await bcore.RunBackup(bsname, opts.Message, true, !opts.Scan, trackclasses, new List<string?> { opts.BackupHash });
             }
             catch (Exception e)
             {
@@ -402,15 +403,15 @@ namespace BackupConsole
             }
         }
 
-        private static void DeleteBackup(DeleteOptions opts)
+        private static async Task DeleteBackup(DeleteOptions opts)
         {
             try
             { 
-                var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                var bcore = await LoadCore();
+                string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
-                    bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force).Wait();
+                    await bcore.RemoveBackup(bsname, opts.BackupHash, opts.Force);
                 }
                 catch (Core.BackupRemoveException ex)
                 {
@@ -423,12 +424,12 @@ namespace BackupConsole
             }
         }
 
-        public static void RestoreFile(RestoreOptions opts)
+        public static async Task RestoreFile(RestoreOptions opts)
         {
             try
             {
-                var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                var bcore = await LoadCore();
+                string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 string restorepath = opts.Path;
                 bool absolutepath = false;
                 if (opts.RestorePath != null)
@@ -436,7 +437,7 @@ namespace BackupConsole
                     restorepath = opts.RestorePath;
                     absolutepath = true;
                 }
-                bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath).Wait();
+                await bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath);
             }
             catch (Exception e)
             {
@@ -444,7 +445,7 @@ namespace BackupConsole
             }
         }
 
-        public static void ListBackups(ListNoNameOptions opts, string bsname, Core? bcore = null)
+        public static async Task ListBackups(ListNoNameOptions opts, string bsname, Core? bcore = null)
         {
             ListOptions opts2 = new()
             {
@@ -452,17 +453,17 @@ namespace BackupConsole
                 MaxBackups = opts.MaxBackups,
                 ShowSizes = opts.ShowSizes
             };
-            ListBackups(opts2, bcore);
+            await ListBackups(opts2, bcore);
         }
 
-        public static void ListBackups(ListOptions opts, Core? bcore = null)
+        public static async Task ListBackups(ListOptions opts, Core? bcore = null)
         {
             if (bcore == null)
             {
-                bcore = LoadCore();
+                bcore = await LoadCore();
             }
-            string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            (var backupsenum, bool cache) = bcore.GetBackups(bsname).Result;
+            string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+            (var backupsenum, bool cache) = await bcore.GetBackups(bsname);
             var backups = backupsenum.ToArray();
             var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
             show = backups.Length < show ? backups.Length : show;
@@ -472,7 +473,7 @@ namespace BackupConsole
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
                 for (int i = backups.Length - 1; i >= backups.Length - show; i--)
                 {
-                    var (allreferencesizes, uniquereferencesizes) = bcore.GetBackupSizes(bsname, backups[i].backuphash).Result;
+                    var (allreferencesizes, uniquereferencesizes) = await bcore.GetBackupSizes(bsname, backups[i].backuphash);
                     string message = backups[i].message;
                     int mlength = 40;
                     if (mlength > message.Length)
@@ -506,14 +507,14 @@ namespace BackupConsole
             Console.WriteLine(table);
         }
 
-        private static void SyncCache(SyncCacheOptions opts)
+        private static async Task SyncCache(SyncCacheOptions opts)
         {
             try
             {
-                var bcore = LoadCore();
-                string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-                bcore.SyncCacheSaveBackupSets(bsname).Wait();
-                bcore.SaveBlobIndices().Wait();
+                var bcore = await LoadCore();
+                string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+                await bcore.SyncCacheSaveBackupSets(bsname);
+                await bcore.SaveBlobIndices();
             }
             catch (Exception e)
             {
@@ -521,11 +522,11 @@ namespace BackupConsole
             }
         }
 
-        public static string GetBackupSetName(string? bsname, ICoreSrcDependencies srcDependencies)
+        public static async Task<string> GetBackupSetName(string? bsname, ICoreSrcDependencies srcDependencies)
         {
             if (bsname == null)
             {
-                bsname = ReadSetting(srcDependencies, BackupCore.BackupSetting.name);
+                bsname = await ReadSetting(srcDependencies, BackupSetting.name);
                 if (bsname == null)
                 {
                     Console.WriteLine("A backup store name must be specified with \"set name <name>\"");
@@ -536,7 +537,7 @@ namespace BackupConsole
             return bsname;
         }
 
-        public static Core LoadCore()
+        public static async Task<Core> LoadCore()
         {
             var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
             string? cache;
@@ -544,7 +545,7 @@ namespace BackupConsole
             string? destinations;
             try
             {
-                destinations = srcdep.ReadSetting(BackupSetting.dests).Result;
+                destinations = await srcdep.ReadSetting(BackupSetting.dests);
             }
             catch (KeyNotFoundException)
             {
@@ -554,7 +555,7 @@ namespace BackupConsole
 
             try
             {
-                cache = srcdep.ReadSetting(BackupSetting.cache).Result;
+                cache = await srcdep.ReadSetting(BackupSetting.cache);
             }
             catch (KeyNotFoundException)
             {
@@ -569,7 +570,7 @@ namespace BackupConsole
                     try
                     {
                         // TODO: password support here
-                        return Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null).Result;
+                        return await Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null);
                     }
                     catch
                     {
@@ -588,7 +589,7 @@ namespace BackupConsole
                 ICoreDstDependencies? cachedep = null;
                 if (cache != null)
                 {
-                    cachedep = CoreDstDependencies.Load(DiskDstFSInterop.Load(cache).Result).Result;
+                    cachedep = await CoreDstDependencies.Load(await DiskDstFSInterop.Load(cache));
                 }
 
                 List<ICoreDstDependencies> dstdeps = new();
@@ -613,7 +614,7 @@ namespace BackupConsole
                             {
                                 throw new Exception("Backblaze backups require a cloud config file to be specified");
                             }
-                            dstdeps.Add(CoreDstDependencies.Load(BackblazeDstInterop.Load(cloud_config, password).Result, cache != null).Result);
+                            dstdeps.Add(await CoreDstDependencies.Load(await BackblazeDstInterop.Load(cloud_config, password), cache != null));
                         }
                         catch
                         {
@@ -624,7 +625,7 @@ namespace BackupConsole
                     {
                         try
                         {
-                            dstdeps.Add(CoreDstDependencies.Load(DiskDstFSInterop.Load(dst_path, password).Result, cache != null).Result);
+                            dstdeps.Add(await CoreDstDependencies.Load(await DiskDstFSInterop.Load(dst_path, password), cache != null));
                         }
                         catch (Exception)
                         {
@@ -652,30 +653,30 @@ namespace BackupConsole
             return Console.ReadLine() ?? "";
         }
 
-        public static void BrowseBackup(BrowseOptions opts)
+        public static async Task BrowseBackup(BrowseOptions opts)
         {
-            Core bcore = LoadCore();
-            string bsname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            var browser = new BackupBrowser(bsname, opts.BackupHash, bcore);
+            Core bcore = await LoadCore();
+            string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+            var browser = await BackupBrowser.Initialize(bsname, opts.BackupHash, bcore);
             browser.CommandLoop();
         }
 
-        public static void TransferBackupStore(TransferOptions opts)
+        public static async Task TransferBackupStore(TransferOptions opts)
         {
-            var bcore = LoadCore();
-            string backupsetname = GetBackupSetName(opts.BSName, bcore.SrcDependencies);
+            var bcore = await LoadCore();
+            string backupsetname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            bcore.TransferBackupSet(backupsetname, Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }).Result, true).Wait();
+            await bcore.TransferBackupSet(backupsetname, await Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
         }
 
-        public static string ReadSetting(ICoreSrcDependencies src, BackupSetting key) => src.ReadSetting(key).Result;
+        public static async Task<string> ReadSetting(ICoreSrcDependencies src, BackupSetting key) => await src.ReadSetting(key);
 
-        private static void WriteSetting(ICoreSrcDependencies src, BackupSetting key, string value) => src.WriteSetting(key, value).Wait();
+        private static async Task WriteSetting(ICoreSrcDependencies src, BackupSetting key, string value) => await src.WriteSetting(key, value);
 
-        private static void ClearSetting(ClearOptions opts)
+        private static async Task ClearSetting(ClearOptions opts)
         {
-            Core core = LoadCore();
-            core.SrcDependencies.ClearSetting(opts.Setting).Wait();
+            Core core = await LoadCore();
+            await core.SrcDependencies.ClearSetting(opts.Setting);
         }
 
         private static string GetBUSourceDir()
