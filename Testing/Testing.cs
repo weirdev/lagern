@@ -1,15 +1,14 @@
 ﻿using System;
 using System.IO;
-using CoreTest;
 using System.Diagnostics;
-using System.Linq;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Testing
 {
     class Testing
     {
-        static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             //BPlusTreeTest bpt_test = new BPlusTreeTest();
             //bpt_test.TestSerializeDeserialize();
@@ -25,13 +24,13 @@ namespace Testing
             //bstest.TestSplitData();
             //bstest.TestBlobStoreDeserialize();
 
-            CoreTest.CoreTest ctest = new CoreTest.CoreTest();
+            CoreTest.CoreTest ctest = new();
             //ctest.TestCheckTrackFile();
             //ctest.TestCheckTrackAnyDirectoryChild();
             //ctest.TestInitializeNew();
             //ctest.TestRunBackup();
             //ctest.TestRestore();
-            ctest.TestRemoveBackup();
+            await ctest.TestRemoveBackup();
             //ctest.TestInitializeNew();
             //ctest.TestLoadCore_NewlyInitialized();
 
@@ -51,8 +50,8 @@ namespace Testing
 
             //var bbi = new BackupCore.BackblazeInterop();
             //(var hash, var data) = MakeRandomFile(30);
-            //Console.WriteLine(bbi.FileExists("hashindex").Result);
-            //Console.WriteLine(bbi.DownloadFile("hashindex").Result.Length);
+            //Console.WriteLine(await bbi.FileExists("hashindex"));
+            //Console.WriteLine((await bbi.DownloadFile("hashindex")).Length);
             //Console.ReadLine();
             
             /*
@@ -65,13 +64,13 @@ namespace Testing
             Console.ReadLine(); */
         }
 
-        static double BackupRun(string bsname, string src, string dst)
+        static async Task<double> BackupRun(string bsname, string src, string dst)
         {
-            var backupper = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }).Result; // Dont count initial setup in time
+            var backupper = await BackupCore.Core.LoadDiskCore(src, new List<(string, string?)>(1) { (dst, null) }); // Dont count initial setup in time
             Stopwatch stopwatch = Stopwatch.StartNew();
             //MakeRandomFile(@"C:\Users\Wesley\Desktop\test\src\random.dat");
             
-            backupper.RunBackup(bsname, null, true).Wait();
+            await backupper.RunBackup(bsname, "", true);
             //backupper.RunBackupSync(null);
             
             //Console.Out.WriteLine("Done.");
@@ -82,10 +81,10 @@ namespace Testing
             return stopwatch.ElapsedMilliseconds / 1000.0;
         }
 
-        static void GetStatus(string bsname, string src, string dst)
+        static async Task GetStatus(string bsname, string src, string dst)
         {
-            var core = BackupCore.Core.LoadDiskCore(src, new List<(string, string)>(1) { (dst, null) }).Result;
-            foreach (var (path, change) in core.GetWTStatus(bsname).Result)
+            var core = await BackupCore.Core.LoadDiskCore(src, new List<(string, string?)>(1) { (dst, null) });
+            foreach (var (path, change) in await core.GetWTStatus(bsname))
             {
                 Console.WriteLine(string.Format("{0}:\t{1}", path, change));
             }

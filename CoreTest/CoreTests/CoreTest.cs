@@ -126,14 +126,14 @@ namespace CoreTest
                 {
                     vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, cache).Result;
+                ICoreDstDependencies dstdeps = await CoreDstDependencies.InitializeNew("test", false, vfsidst, cache);
                 destinations.Add(dstdeps);
             }
             
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, vfsdatastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache").Result;
+            ICoreSrcDependencies srcdeps = await FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
+            if (cache) cachedeps = await CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
             Core core = new(srcdeps, destinations, cachedeps);
             return (core, verifyfilepaths, vfsroot, vfsdatastore);
         }
@@ -167,14 +167,14 @@ namespace CoreTest
                 {
                     vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", i.ToString()), "password");
                 }
-                destinations.Add(CoreDstDependencies.InitializeNew("test", false, vfsidst, true).Result);
+                destinations.Add(await CoreDstDependencies.InitializeNew("test", false, vfsidst, true));
             }
 
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc).Result;
+            ICoreSrcDependencies srcdeps = await FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc);
             if (cache)
             {
-                ICoreDstDependencies cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
+                ICoreDstDependencies cachedeps = await CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
                 _ = new Core(srcdeps, destinations, cachedeps);
             }
             else
@@ -184,10 +184,10 @@ namespace CoreTest
         }
 
         [TestMethod]
-        public void TestInitializeNew()
+        public async Task TestInitializeNew()
         {
-            InitializeNew(true, 1, 0).Wait();
-            InitializeNew(false, 0, 1).Wait();
+            await InitializeNew(true, 1, 0);
+            await InitializeNew(false, 0, 1);
         }
 
         public static async Task LoadCore_NewlyInitialized(bool encrypted, bool cache)
@@ -204,10 +204,10 @@ namespace CoreTest
                 vfsidst = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, Path.Combine("dst", "1"));
             }
             var vfsicache = await VirtualFSInterop.InitializeNewDst(vfsroot, datastore, "cache");
-            ICoreSrcDependencies srcdeps = FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache").Result;
-            ICoreDstDependencies dstdeps = CoreDstDependencies.InitializeNew("test", false, vfsidst, true).Result;
+            ICoreSrcDependencies srcdeps = await FSCoreSrcDependencies.InitializeNew("test", "src", vfsisrc, "cache");
+            ICoreDstDependencies dstdeps = await CoreDstDependencies.InitializeNew("test", false, vfsidst, true);
             ICoreDstDependencies? cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.InitializeNew("test", true, vfsicache, false).Result;
+            if (cache) cachedeps = await CoreDstDependencies.InitializeNew("test", true, vfsicache, false);
             Core core = new(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
             Assert.IsTrue(core.DefaultDstDependencies.Count == 1);
 
@@ -222,121 +222,121 @@ namespace CoreTest
             }
             vfsicache = await VirtualFSInterop.LoadDst(vfsroot, datastore, "cache");
             srcdeps = FSCoreSrcDependencies.Load("src", vfsisrc);
-            dstdeps = CoreDstDependencies.Load(vfsidst, true).Result;
+            dstdeps = await CoreDstDependencies.Load(vfsidst, true);
             cachedeps = null;
-            if (cache) cachedeps = CoreDstDependencies.Load(vfsicache, false).Result;
+            if (cache) cachedeps = await CoreDstDependencies.Load(vfsicache, false);
             _ = new Core(srcdeps, new List<ICoreDstDependencies>() { dstdeps }, cachedeps);
         }
 
         [TestMethod]
-        public void TestLoadCore_NewlyInitialized()
+        public async Task TestLoadCore_NewlyInitialized()
         {
-            LoadCore_NewlyInitialized(false, false).Wait();
-            LoadCore_NewlyInitialized(true, true).Wait();
+            await LoadCore_NewlyInitialized(false, false);
+            await LoadCore_NewlyInitialized(true, true);
         }
 
-        public static void RunBackup(bool cache, int nonencrypteddsts, int encrypteddsts)
+        public static async Task RunBackup(bool cache, int nonencrypteddsts, int encrypteddsts)
         {
             var (core, _, vfsroot, _) = 
-                InitializeNewCoreWithStandardFiles(nonencrypteddsts, encrypteddsts, cache: cache).Result;
+                await InitializeNewCoreWithStandardFiles(nonencrypteddsts, encrypteddsts, cache: cache);
 
-            core.RunBackup("test", "run1").Wait();
+            await core.RunBackup("test", "run1");
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            core.RunBackup("test", "run2").Wait();
+            await core.RunBackup("test", "run2");
         }
 
         [TestMethod]
-        public void TestRunBackup()
+        public async Task TestRunBackup()
         {
-            RunBackup(true, 1, 0);
-            RunBackup(false, 0, 1);
+            await RunBackup(true, 1, 0);
+            await RunBackup(false, 0, 1);
         }
 
         [TestMethod]
-        public void TestRunMultiBackup()
+        public async Task TestRunMultiBackup()
         {
-            RunBackup(true, 2, 2);
+            await RunBackup(true, 2, 2);
         }
 
-        public static void GetWTStatus(bool encrypted, bool cache)
+        public static async Task GetWTStatus(bool encrypted, bool cache)
         {
             (Core core, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted) {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
             }
 
-            testdata.core.GetWTStatus("test").Wait();
+            await testdata.core.GetWTStatus("test");
             // TODO: test output
         }
 
         [TestMethod]
-        public void TestGetWTStatus()
+        public async Task TestGetWTStatus()
         {
-            GetWTStatus(false, false);
-            GetWTStatus(true, true);
+            await GetWTStatus(false, false);
+            await GetWTStatus(true, true);
         }
 
-        public static void Restore(bool encrypted, bool cache)
+        public static async Task Restore(bool encrypted, bool cache)
         {
             (Core core, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(0, 1, cache: cache);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
             }
-            testdata.core.RunBackup("test", "run1").Wait();
+            await testdata.core.RunBackup("test", "run1");
 
-            testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true).Wait();
+            await testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
             // TODO: Check data match here as well
         }
         
         [TestMethod]
-        public void TestRestore()
+        public async Task TestRestore()
         {
-            Restore(false, true);
-            Restore(true, false);
+            await Restore(false, true);
+            await Restore(true, false);
         }
 
-        public static void RemoveBackup(bool encrypted, bool cache, Random? random = null)
+        public static async Task RemoveBackup(bool encrypted, bool cache, Random? random = null)
         {
             (Core core, Dictionary<string, byte[]> verifyfilepaths,
                 MetadataNode vfsroot, BPlusTree<byte[]> vfsdatastore) testdata;
             if (encrypted)
             {
-                testdata = InitializeNewCoreWithStandardFiles(0, 1, cache: cache, random: random).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(0, 1, cache: cache, random: random);
             }
             else
             {
-                testdata = InitializeNewCoreWithStandardFiles(1, 0, cache: cache, random: random).Result;
+                testdata = await InitializeNewCoreWithStandardFiles(1, 0, cache: cache, random: random);
             }
             var (core, _, vfsroot, _) = testdata;
 
-            var bh1 = core.RunBackup("test", "run1").Result;
+            var bh1 = await core.RunBackup("test", "run1");
 
             vfsroot.AddDirectory("src", VirtualFSInterop.MakeNewDirectoryMetadata("sub"));
-            var bh2 = core.RunBackup("test", "run2").Result;
+            var bh2 = await core.RunBackup("test", "run2");
 
             // Full hash test
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow())).Wait();
+            await core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh1.GetOrThrow()));
             // Just prefix
-            core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]).Wait();
+            await core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]);
             // All backups deleted
-            Assert.AreEqual(core.GetBackups("test").Result.backups.Count(), 0);
+            Assert.AreEqual((await core.GetBackups("test")).backups.Count(), 0);
         }
 
         [TestMethod]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0059:Unnecessary assignment of a value", Justification = "<Pending>")]
-        public void TestRemoveBackup()
+        public async Task TestRemoveBackup()
         {
             //RemoveBackup(false, false);
             int encryptedFails = 0;
@@ -348,7 +348,7 @@ namespace CoreTest
                 encrypt ^= true;
                 try
                 {
-                    RemoveBackup(encrypt, true, new Random(91));
+                    await RemoveBackup(encrypt, true, new Random(91));
                 }
                 catch (Exception e)
                 {
@@ -390,19 +390,19 @@ namespace CoreTest
             }
             var (dstCore, _, _, _) = testdata;
 
-            _ = srcCore.RunBackup("test", "run1").Result;
-            var e = srcCore.DefaultDstDependencies[0].DstFSInterop.Encryptor;
+            await srcCore.RunBackup("test", "run1");
+            //var e = srcCore.DefaultDstDependencies[0].DstFSInterop.Encryptor;
 
-            srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true).Wait();
+            await srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
         }
 
         [TestMethod]
-        public void TestTransferBackupSet()
+        public async Task TestTransferBackupSet()
         {
             for (int i = 0; i < 5; i++)
             {
-                TransferBackupSet(false, true, new Random(1000), 2).Wait();
-                TransferBackupSet(true, false, new Random(1000), 2).Wait();
+                await TransferBackupSet(false, true, new Random(1000), 2);
+                await TransferBackupSet(true, false, new Random(1000), 2);
             }
         }
 

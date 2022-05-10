@@ -27,11 +27,11 @@ namespace CoreTest
 
         // Runs before each test
         [TestInitialize]
-        public void Initialize()
+        public async Task Initialize()
         {
             VirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             VFSDataStore = new BPlusTree<byte[]>(10);
-            BS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(VirtualFS, VFSDataStore, "dst").Result));
+            BS = new BlobStore(new BlobStoreDependencies(await VirtualFSInterop.InitializeNewDst(VirtualFS, VFSDataStore, "dst")));
         }
 
         [TestMethod]
@@ -112,10 +112,10 @@ namespace CoreTest
         // TODO: test serialize and deserialize with explicitly added blobs of
         // all blob types as well as after backup
         [TestMethod]
-        public void TestBlobStoreSerializeDeserialize()
+        public async Task TestBlobStoreSerializeDeserialize()
         {
-            var (core, verifyfilepaths, vfsroot, vfsdatastore) = CoreTest.InitializeNewCoreWithStandardFiles(1, 0).Result;
-            core.RunBackup("test", "initialrun").Wait();
+            var (core, verifyfilepaths, vfsroot, vfsdatastore) = await CoreTest.InitializeNewCoreWithStandardFiles(1, 0);
+            await core.RunBackup("test", "initialrun");
             byte[] serialized = core.DefaultDstDependencies[0].Blobs.Serialize();
 
             // Test that something was serialized
@@ -133,15 +133,15 @@ namespace CoreTest
         }
 
         [TestMethod]
-        public void TestStoreBlobAndReferencesFile()
+        public async Task TestStoreBlobAndReferencesFile()
         {
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
             var bsetRef = new BackupSetReference("test", false, false, false);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob).Wait();
-            Assert.IsTrue(BS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
+            Assert.IsTrue((await BS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
             var bloc = BS.GetBlobLocation(smallFileHash);
             Assert.IsTrue(bloc.TotalNonShallowReferenceCount == 1);
             Assert.IsTrue(bloc.GetBSetReferenceCount(bsetRef) == 1);
@@ -149,9 +149,9 @@ namespace CoreTest
             // Likely multiblock
             randomFile = new byte[12_000_000];
             CoreTest.RandomData(randomFile, new Random(58));
-            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob).Wait();
-            Assert.IsTrue(BS.RetrieveData(fileHash).Result.SequenceEqual(randomFile));
+            byte[] fileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob);
+            Assert.IsTrue((await BS.RetrieveData(fileHash)).SequenceEqual(randomFile));
             bloc = BS.GetBlobLocation(fileHash);
             Assert.IsTrue(bloc.TotalNonShallowReferenceCount == 1);
             Assert.IsTrue(bloc.GetBSetReferenceCount(bsetRef) == 1);
@@ -160,20 +160,20 @@ namespace CoreTest
         }
 
         [TestMethod]
-        public void TestStoreBlobTwiceAndReferencesFile()
+        public async Task TestStoreBlobTwiceAndReferencesFile()
         {
             var bsetRef = new BackupSetReference("test", false, false, false);
 
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob).Wait();
-            Assert.IsTrue(BS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
+            Assert.IsTrue((await BS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
             
-            byte[] smallFileHashRound2 = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
+            byte[] smallFileHashRound2 = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
             Assert.IsTrue(smallFileHash.SequenceEqual(smallFileHashRound2));
-            BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob).Wait();
+            await BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
             var bloc = BS.GetBlobLocation(smallFileHash);
             Assert.IsTrue(bloc.TotalNonShallowReferenceCount == 2);
             Assert.IsTrue(bloc.GetBSetReferenceCount(bsetRef) == 2);
@@ -181,13 +181,13 @@ namespace CoreTest
             // Likely multiblock
             randomFile = new byte[12_000_000];
             CoreTest.RandomData(randomFile, new Random(58));
-            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob).Wait();
-            Assert.IsTrue(BS.RetrieveData(fileHash).Result.SequenceEqual(randomFile));
+            byte[] fileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob);
+            Assert.IsTrue((await BS.RetrieveData(fileHash)).SequenceEqual(randomFile));
 
-            byte[] largeFileHashRound2 = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
+            byte[] largeFileHashRound2 = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
             Assert.IsTrue(fileHash.SequenceEqual(largeFileHashRound2));
-            BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob).Wait();
+            await BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob);
             bloc = BS.GetBlobLocation(fileHash);
             Assert.IsTrue(bloc.TotalNonShallowReferenceCount == 2);
             Assert.IsTrue(bloc.GetBSetReferenceCount(bsetRef) == 2);
@@ -196,71 +196,72 @@ namespace CoreTest
         }
 
         [TestMethod]
-        public void TestTransferBlobAndReferencesFile()
+        public async Task TestTransferBlobAndReferencesFile()
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
+            var dstBS = new BlobStore(new BlobStoreDependencies(await VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
             var bsetRef = new BackupSetReference("test", false, false, false);
 
             // FileBlob
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob).Wait();
-            BS.TransferBlobAndReferences(dstBS, bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob, true).Wait();
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob);
+            await BS.TransferBlobAndReferences(dstBS, bsetRef, smallFileHash, BlobLocation.BlobType.FileBlob, true);
             var srcBloc = BS.GetBlobLocation(smallFileHash);
             var dstBloc = dstBS.GetBlobLocation(smallFileHash);
             Assert.IsTrue(dstBloc.TotalNonShallowReferenceCount == 1);
             Assert.IsTrue(dstBloc.GetBSetReferenceCount(bsetRef) == 1);
-            Assert.IsTrue(dstBS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            Assert.IsTrue((await dstBS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
 
             // Likely multiblock
             randomFile = new byte[12_000_000];
             CoreTest.RandomData(randomFile, new Random(58));
-            byte[] fileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile).Result;
-            BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob).Wait();
-            BS.TransferBlobAndReferences(dstBS, bsetRef, fileHash, BlobLocation.BlobType.FileBlob, true).Wait();
+            byte[] fileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, bsetRef, randomFile);
+            await BS.FinalizeBlobAddition(bsetRef, fileHash, BlobLocation.BlobType.FileBlob);
+            await BS.TransferBlobAndReferences(dstBS, bsetRef, fileHash, BlobLocation.BlobType.FileBlob, true);
             srcBloc = BS.GetBlobLocation(fileHash);
             dstBloc = dstBS.GetBlobLocation(fileHash);
             Assert.IsTrue(dstBloc.TotalNonShallowReferenceCount == 1);
             Assert.IsTrue(dstBloc.GetBSetReferenceCount(bsetRef) == 1);
             Assert.IsTrue(dstBloc.BlockHashes != null && srcBloc.BlockHashes.Count >= 1);
             Assert.IsTrue(dstBloc.BlockHashes.All(hash => dstBS.GetBlobLocation(hash).GetBSetReferenceCount(bsetRef) == 1));
-            Assert.IsTrue(dstBS.RetrieveData(fileHash).Result.SequenceEqual(randomFile));
+            Assert.IsTrue((await dstBS.RetrieveData(fileHash)).SequenceEqual(randomFile));
         }
 
         // TODO: Test transferring and then removing.
         [TestMethod]
-        public void TestTransferBlobAndReferencesMetadataNode()
+        public async Task TestTransferBlobAndReferencesMetadataNode()
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
+            var dstBS = new BlobStore(new BlobStoreDependencies(await VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
 
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile).Result;
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile);
             MetadataNode metadataNode = new(new FileMetadata("src", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), null);
             metadataNode.AddFile(new FileMetadata("smallFile", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, randomFile.Length, smallFileHash));
 
-            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = metadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data)).Result;
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), nodehash, BlobLocation.BlobType.MetadataNode, false).Wait();
+            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = 
+                await metadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data));
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), nodehash, BlobLocation.BlobType.MetadataNode, false);
             
-            MetadataNode deserializedNode = MetadataNode.Load(dstBS, nodehash, null).Result;
+            MetadataNode deserializedNode = await MetadataNode.Load(dstBS, nodehash, null);
             Assert.IsTrue(metadataNode.NodeEquals(deserializedNode));
-            Assert.ThrowsException<KeyNotFoundException>(() => dstBS.RetrieveData(deserializedNode.GetFile("smallFile").FileHash).GetAwaiter().GetResult());
+            await Assert.ThrowsExceptionAsync<KeyNotFoundException>(async () => await dstBS.RetrieveData(deserializedNode.GetFile("smallFile").FileHash));
             
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true).Wait();
-            Assert.IsTrue(dstBS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true);
+            Assert.IsTrue((await dstBS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
         }
 
         [TestMethod]
-        public void TestTransferBlobAndReferencesMetadataNodeTree()
+        public async Task TestTransferBlobAndReferencesMetadataNodeTree()
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
+            var dstBS = new BlobStore(new BlobStoreDependencies(await VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
 
             MetadataNode rootMetadataNode = new(new FileMetadata("src", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), null);
             MetadataNode level2MetadataNode = new(new FileMetadata("2", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), rootMetadataNode);
@@ -269,13 +270,14 @@ namespace CoreTest
             level2MetadataNode.Directories.TryAdd("3", level3MetadataNode);
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile).Result;
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile);
             level3MetadataNode.AddFile(new FileMetadata("smallFile", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, randomFile.Length, smallFileHash));
 
-            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = rootMetadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data)).Result;
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), nodehash, BlobLocation.BlobType.MetadataNode, false).Wait();
+            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = 
+                await rootMetadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data));
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), nodehash, BlobLocation.BlobType.MetadataNode, false);
             
-            MetadataNode deserializedNode = MetadataNode.Load(dstBS, nodehash, null).Result;
+            MetadataNode deserializedNode = await MetadataNode.Load(dstBS, nodehash, null);
             Assert.IsTrue(rootMetadataNode.NodeEquals(deserializedNode));
             MetadataNode? level2Deserialized = deserializedNode.GetDirectory("2");
             Assert.IsNotNull(level2Deserialized);
@@ -283,18 +285,18 @@ namespace CoreTest
             MetadataNode? level3Deserialized = level2Deserialized.GetDirectory("3");
             Assert.IsNotNull(level3Deserialized);
             Assert.IsTrue(level3Deserialized.NodeEquals(level3MetadataNode));
-            Assert.ThrowsException<KeyNotFoundException>(() => dstBS.RetrieveData(level3Deserialized.GetFile("smallFile").FileHash).GetAwaiter().GetResult());
+            await Assert.ThrowsExceptionAsync<KeyNotFoundException>(async () => await dstBS.RetrieveData(level3Deserialized.GetFile("smallFile").FileHash));
             
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true).Wait();
-            Assert.IsTrue(dstBS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true);
+            Assert.IsTrue((await dstBS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
         }
 
         [TestMethod]
-        public void TestTransferBlobAndReferencesBackupRecord()
+        public async Task TestTransferBlobAndReferencesBackupRecord()
         {
             var dstVirtualFS = new MetadataNode(VirtualFSInterop.MakeNewDirectoryMetadata("c"), null);
             var dstVFSDataStore = new BPlusTree<byte[]>(10);
-            var dstBS = new BlobStore(new BlobStoreDependencies(VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst").Result));
+            var dstBS = new BlobStore(new BlobStoreDependencies(await VirtualFSInterop.InitializeNewDst(dstVirtualFS, dstVFSDataStore, "dst")));
 
             MetadataNode rootMetadataNode = new(new FileMetadata("src", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), null);
             MetadataNode level2MetadataNode = new(new FileMetadata("2", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, 100, null), rootMetadataNode);
@@ -304,21 +306,22 @@ namespace CoreTest
             Random random = new(22);
             byte[] randomFile = new byte[100];
             CoreTest.RandomData(randomFile, random);
-            byte[] smallFileHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile).Result;
+            byte[] smallFileHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), randomFile);
             level3MetadataNode.AddFile(new FileMetadata("smallFile", DateTime.Now, DateTime.Now, DateTime.Now, FileAttributes.Normal, randomFile.Length, smallFileHash));
-            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = rootMetadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data)).Result;
+            (byte[] nodehash, BackupCore.Models.HashTreeNode node) = 
+                await rootMetadataNode.Store(data => BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), data));
             BackupRecord backupRecord = new("save dis", nodehash, DateTime.Now);
 
-            byte[] backupRecordHash = BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), backupRecord.Serialize()).Result;
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), backupRecordHash, BlobLocation.BlobType.BackupRecord, false).Wait();
+            byte[] backupRecordHash = await BlobStore.StoreData(new List<BlobStore>(1) { BS }, new BackupSetReference("test", false, false, false), backupRecord.Serialize());
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", true, false, false), backupRecordHash, BlobLocation.BlobType.BackupRecord, false);
 
             BlobLocation backupRecordLocation = dstBS.GetBlobLocation(backupRecordHash);
             Assert.AreEqual(0, backupRecordLocation.TotalNonShallowReferenceCount);
             Assert.AreEqual(1, backupRecordLocation.TotalReferenceCount);
 
-            BackupRecord deserializedBackupRecord = BackupRecord.Deserialize(dstBS.RetrieveData(backupRecordHash, backupRecordLocation).Result);
+            BackupRecord deserializedBackupRecord = BackupRecord.Deserialize(await dstBS.RetrieveData(backupRecordHash, backupRecordLocation));
             Assert.AreEqual(backupRecord, deserializedBackupRecord);
-            MetadataNode deserializedNode = MetadataNode.Load(dstBS, deserializedBackupRecord.MetadataTreeHash, null).Result;
+            MetadataNode deserializedNode = await MetadataNode.Load(dstBS, deserializedBackupRecord.MetadataTreeHash, null);
             Assert.IsTrue(rootMetadataNode.NodeEquals(deserializedNode));
             MetadataNode? level2Deserialized = deserializedNode.GetDirectory("2");
             Assert.IsNotNull(level2Deserialized);
@@ -326,10 +329,10 @@ namespace CoreTest
             MetadataNode? level3Deserialized = level2Deserialized.GetDirectory("3");
             Assert.IsNotNull(level3Deserialized);
             Assert.IsTrue(level3Deserialized.NodeEquals(level3MetadataNode));
-            Assert.ThrowsException<KeyNotFoundException>(() => dstBS.RetrieveData(level3Deserialized.GetFile("smallFile").FileHash).GetAwaiter().GetResult());
+            await Assert.ThrowsExceptionAsync<KeyNotFoundException>(async () => await dstBS.RetrieveData(level3Deserialized.GetFile("smallFile").FileHash));
 
-            BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true).Wait();
-            Assert.IsTrue(dstBS.RetrieveData(smallFileHash).Result.SequenceEqual(randomFile));
+            await BS.TransferBlobAndReferences(dstBS, new BackupSetReference("test", false, false, false), nodehash, BlobLocation.BlobType.MetadataNode, true);
+            Assert.IsTrue((await dstBS.RetrieveData(smallFileHash)).SequenceEqual(randomFile));
         }
 
         public static byte[] ConcenateFile(IEnumerable<byte[]> fileblocks)
