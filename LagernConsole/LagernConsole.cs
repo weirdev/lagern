@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 
 namespace BackupConsole
 {
-    // TODO: Replace custom parsing with CommandLine nuget library
-    // https://github.com/gsscoder/commandline
     public class LagernConsole
     {
         // Current directory (where user launches from)
@@ -301,6 +299,7 @@ namespace BackupConsole
             }
             else
             {
+                destination = new UriBuilder(destination).Uri.LocalPath;
                 await CoreDstDependencies.InitializeNew(bsname, false, await DiskDstFSInterop.InitializeNew(destination, password), cache_used);
             }
 
@@ -463,15 +462,15 @@ namespace BackupConsole
                 bcore = await LoadCore();
             }
             string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            (var backupsenum, bool cache) = await bcore.GetBackups(bsname);
-            var backups = backupsenum.ToArray();
-            var show = opts.MaxBackups == -1 ? backups.Length : opts.MaxBackups;
-            show = backups.Length < show ? backups.Length : show;
+            (var backupsenum, bool cache) = await bcore.GetBackups(bsname, 0);
+            List<(string backuphash, DateTime backuptime, string message)>? backups = backupsenum.ToList();
+            var show = opts.MaxBackups == -1 ? backups.Count : opts.MaxBackups;
+            show = backups.Count < show ? backups.Count : show;
             TablePrinter table = new();
             if (opts.ShowSizes)
             {
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
-                for (int i = backups.Length - 1; i >= backups.Length - show; i--)
+                for (int i = backups.Count - 1; i >= backups.Count - show; i--)
                 {
                     var (allreferencesizes, uniquereferencesizes) = await bcore.GetBackupSizes(bsname, backups[i].backuphash);
                     string message = backups[i].message;
@@ -480,7 +479,7 @@ namespace BackupConsole
                     {
                         mlength = message.Length;
                     }
-                    table.AddBodyRow(new string[] {backups[i].backuphash[..7],
+                    table.AddBodyRow(new string[] { backups[i].backuphash[..7],
                         backups[i].backuptime.ToLocalTime().ToString(), Utilities.BytesFormatter(allreferencesizes),
                         Utilities.BytesFormatter(uniquereferencesizes), message[..mlength] });
                 }
@@ -488,7 +487,7 @@ namespace BackupConsole
             else
             {
                 table.AddHeaderRow(new string[] { "Hash", "Saved", "Message" });
-                for (int i = backups.Length - 1; i >= backups.Length - show; i--)
+                for (int i = backups.Count - 1; i >= backups.Count - show; i--)
                 {
                     string message = backups[i].message;
                     int mlength = 40;
@@ -551,7 +550,6 @@ namespace BackupConsole
             {
                 destinations = null;
             }
-
 
             try
             {

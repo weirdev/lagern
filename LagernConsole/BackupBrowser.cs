@@ -86,7 +86,7 @@ namespace BackupConsole
                 {
                     cachewarning = "(cache)";
                 }
-                Console.Write(String.Format("backup {0}{1}:{2}> ", BackupHash[..hashdisplen], cachewarning, CurrentNode.Path));
+                Console.Write(string.Format("backup {0}{1}:{2}> ", BackupHash[..hashdisplen], cachewarning, CurrentNode.Path));
                 string[] args = LagernConsole.ReadArgs();
                 try
                 {
