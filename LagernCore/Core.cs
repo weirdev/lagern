@@ -584,7 +584,7 @@ namespace BackupCore
                 {
                     relpath = relpath[1..];
                 }
-                Stream readerbuffer = await SrcDependencies.GetFileData(relpath);
+                using Stream readerbuffer = await SrcDependencies.GetFileData(relpath);
                 byte[] filehash = await BlobStore.StoreData(
                     writedestinations.Select(difm => DefaultDstDependencies[difm.dstidx].Blobs), 
                     new BackupSetReference(backupset, false, false, false), readerbuffer);
@@ -604,7 +604,7 @@ namespace BackupCore
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public async Task<(IEnumerable<(string backuphash, DateTime backuptime, string message)> backups, bool cache)> GetBackups(
-            string backupsetname, int backupdst=0)
+            string backupsetname, int backupdst)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)

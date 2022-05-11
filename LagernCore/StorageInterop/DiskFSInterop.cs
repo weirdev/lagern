@@ -16,7 +16,7 @@ namespace BackupCore
 
         public Task<FileMetadata> GetFileMetadata(string absolutepath) => Task.Run(() => new FileMetadata(absolutepath));
 
-        public Task<Stream> GetFileData(string absolutepath) => Task.Run(() => (Stream) new FileStream(absolutepath, FileMode.OpenOrCreate));
+        public Task<Stream> GetFileData(string absolutepath) => Task.Run(() => (Stream)new FileStream(absolutepath, FileMode.OpenOrCreate));
 
         public Task<string[]> GetDirectoryFiles(string absolutepath) => Task.Run(() => Directory.GetFiles(absolutepath));
 
@@ -73,7 +73,7 @@ namespace BackupCore
             writer.Seek(byteposition, SeekOrigin.Begin);
             await writer.WriteAsync(data);
             writer.Flush();
-            writer.Close();
+            writer.Close(); // NOTE: Do we need to close this, given that we use `using`?
         }
     }
 }

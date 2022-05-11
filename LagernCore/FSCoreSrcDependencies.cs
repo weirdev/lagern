@@ -99,7 +99,8 @@ namespace BackupCore
         {
             if (AesTool != null)
             {
-                return AesTool.GetEncryptedStream(await GetRawFileData(relpath));
+                using Stream fileData = await GetRawFileData(relpath);
+                return AesTool.GetEncryptedStream(fileData);
             }
             return await GetRawFileData(relpath);
         }
@@ -246,7 +247,8 @@ namespace BackupCore
                 try
                 {
                     using MemoryStream ms = new();
-                    (await GetRawFileData(AesKeyFile)).CopyTo(ms);
+                    using Stream aesKeyFile = await GetRawFileData(AesKeyFile);
+                    aesKeyFile.CopyTo(ms);
                     AesTool = AesHelper.CreateFromKeyFile(ms.ToArray(), password);
                 }
                 // TODO: Special handling for wrong passwords, no keyfile present, etc.
