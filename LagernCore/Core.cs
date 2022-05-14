@@ -148,17 +148,18 @@ namespace BackupCore
                 {
                     MetadataNode previousmtree = await MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
                         previousbackup.MetadataTreeHash);
-                    deltatree = (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns,
-                        new List<(ICoreDstDependencies dst, MetadataNode? node)>() { (DefaultDstDependencies[0], previousmtree) }))[0].node; // TODO: Dont arbitrarily select the first destination
+                    deltatree = (await BackupCalculation.GetDeltaMetadataTrees(SrcDependencies, DestinationAvailable, backupsetname,
+                        new List<(ICoreDstDependencies dst, MetadataNode? node)>() { (DefaultDstDependencies[0], previousmtree) },
+                        trackpatterns))[0].node; // TODO: Dont arbitrarily select the first destination
                 }
                 else
                 {
-                    deltatree = (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns, null))[0].node;
+                    deltatree = (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns)).node;
                 }
             }
             else
             {
-                deltatree = (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns, null))[0].node;
+                deltatree = (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns)).node;
             }
             List<(string path, FileMetadata.FileStatus change)> changes = new();
             GetDeltaNodeChanges(Path.DirectorySeparatorChar.ToString(), deltatree, changes);
@@ -229,10 +230,11 @@ namespace BackupCore
         /// data appears not to have been modified based on its metadata, otherwise all file data is scanned.</param>
         /// <param name="trackpatterns">Rules determining which files</param>
         /// <param name="prev_backup_hash_prefixes">Optional list of backup hash prefixes, 
-        /// each index-aligned with a destination from DefaultDstDependencies</param>
+        /// each index-aligned with a destination from DefaultDstDependencies.
+        /// All destinations are backed up to regardless of the length of this list.</param>
         /// <returns>The hash of the new backup</returns>
         public async Task<Result<byte[], KeyNotFoundException>> RunBackup(
-            string backupsetname, string message, bool async = true, bool differential = true,
+            string backupsetname, string message, bool parallel = true, bool differential = true,
             List<(int trackclass, string pattern)>? trackpatterns = null,
             List<string?>? prev_backup_hash_prefixes = null)
         {
@@ -282,15 +284,13 @@ namespace BackupCore
 
             // Calculate the difference between the current file system state and each of the previous Metadata Trees
             List<(ICoreDstDependencies dst, MetadataNode node)> deltatrees = 
-                (await BackupCalculation.GetDeltaMetadataTree(SrcDependencies, DestinationAvailable, backupsetname, trackpatterns, previousMTrees))
-                        .Select(diffPair => (diffPair.dst ?? DefaultDstDependencies[0], diffPair.node)) // TODO: Currently the method contract for GetDeltaMetadataTree() allows for calls with previousMTrees = null to support diffing outside the context of a dst, forcing us to handle a null dst. We should split GetDeltaMetadataTree() into two different public method overloads with different return types.
-                        .ToList();
+                await BackupCalculation.GetDeltaMetadataTrees(SrcDependencies, DestinationAvailable, backupsetname, previousMTrees, trackpatterns);
 
             List<Task> backupops = new();
             await BackupDeltaNode(Path.DirectorySeparatorChar.ToString(),
-                deltatrees, backupsetname, async, backupops);
+                deltatrees, backupsetname, parallel, backupops);
             
-            if (async)
+            if (parallel)
             {
                 await Task.WhenAll(backupops.ToArray()); // These tasks should already be executing in parallel
                 // Another option could be something like:
@@ -339,7 +339,7 @@ namespace BackupCore
         }
 
         private async Task BackupDeltaNode(
-            string relpath, List<(ICoreDstDependencies dst, MetadataNode node)> indexednodes, string backupsetname, bool async,
+            string relpath, List<(ICoreDstDependencies dst, MetadataNode node)> indexednodes, string backupsetname, bool parallel,
             List<Task> backupops)
         {
             var allfiles = new Dictionary<string, List<(ICoreDstDependencies dst, FileMetadata fileMetadata)>>(); // Filename to destinations that need that file
@@ -373,9 +373,10 @@ namespace BackupCore
                     .Where(difm =>
                         difm.fileMetadata.Status == FileMetadata.FileStatus.New || 
                         difm.fileMetadata.Status == FileMetadata.FileStatus.DataModified)
-                    .Select((difm) => (difm.dst, difm.fileMetadata)).ToList();
+                    .Select((difm) => (difm.dst, difm.fileMetadata))
+                    .ToList();
 
-                if (async)
+                if (parallel)
                 {
                     backupops.Add(BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations));
                 }
@@ -411,7 +412,7 @@ namespace BackupCore
             foreach (var dir in alldirs)
             {
                 await BackupDeltaNode($"{Path.Combine(relpath, dir.Key)}{Path.DirectorySeparatorChar}", 
-                    dir.Value, backupsetname, async, backupops);
+                    dir.Value, backupsetname, parallel, backupops);
             }
         }
 
