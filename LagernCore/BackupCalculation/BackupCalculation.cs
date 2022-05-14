@@ -16,12 +16,47 @@ namespace LagernCore.BackupCalculation
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="trackpatterns"></param>
+        /// <returns>A delta tree mapping</returns>
+        public static async Task<(ICoreDstDependencies? dst, MetadataNode node)> GetDeltaMetadataTree(
+            ICoreSrcDependencies source, bool destinationAvailable, string backupsetname,
+            List<(int trackclass, string pattern)>? trackpatterns = null)
+        {
+            return (await GetDeltaMetadataTrees(source, destinationAvailable, backupsetname, trackpatterns, null))[0];
+        }
+
+        /// <summary>
+        /// Calculates the difference between the current filesystem status 
+        /// and the previously saved metadata trees, if any.
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <param name="previousmtrees">Optional list of previously backed up metadata trees,
+        /// each tree in the list is also optional.</param>
+        /// <param name="trackpatterns"></param>
+        /// <returns>A delta tree mapping</returns>
+        public static async Task<List<(ICoreDstDependencies dst, MetadataNode node)>> GetDeltaMetadataTrees(
+            ICoreSrcDependencies source, bool destinationAvailable, string backupsetname,
+            List<(ICoreDstDependencies dst, MetadataNode? node)> previousmtrees,
+            List<(int trackclass, string pattern)>? trackpatterns = null)
+        {
+            // The left item in the tuple (ICoreDstDependencies dst), is never null when we pass the private method a non-null list of previous mtrees
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+            return await GetDeltaMetadataTrees(source, destinationAvailable, backupsetname, trackpatterns, previousmtrees);
+#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
+        }
+
+        /// <summary>
+        /// Calculates the difference between the current filesystem status 
+        /// and the previously saved metadata trees, if any.
+        /// </summary>
+        /// <param name="backupsetname"></param>
+        /// <param name="trackpatterns"></param>
         /// <param name="previousmtrees">Optional list of previously backed up metadata trees,
         /// each tree in the list is also optional.</param>
         /// <returns>A delta tree mapping</returns>
-        public static async Task<List<(ICoreDstDependencies? dst, MetadataNode node)>> GetDeltaMetadataTree(
+        private static async Task<List<(ICoreDstDependencies? dst, MetadataNode node)>> GetDeltaMetadataTrees(
             ICoreSrcDependencies source, bool destinationAvailable, string backupsetname, 
-            List<(int trackclass, string pattern)>? trackpatterns = null, List<(ICoreDstDependencies dst, MetadataNode? node)>? previousmtrees = null) // TODO: Currently the method contract for GetDeltaMetadataTree() allows for calls with previousMTrees = null to support diffing outside the context of a dst, forcing us to handle a null dst.We should split GetDeltaMetadataTree() into two different public method overloads with different return types.
+            List<(int trackclass, string pattern)>? trackpatterns = null, 
+            List<(ICoreDstDependencies dst, MetadataNode? node)>? previousmtrees = null)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!destinationAvailable)
@@ -46,7 +81,9 @@ namespace LagernCore.BackupCalculation
 
             // Create a new tree to hold the deltas for each of the previous metadata trees
             List<(ICoreDstDependencies? dst, MetadataNode? previousMTree, MetadataNode diffMTree)> deltamtrees = previousMTreesToDiff
-                .Select(diffPair => diffPair != null ? (diffPair.Value.dst, diffPair.Value.node, new MetadataNode(rootdirmetadata, null)) : (null, null, new MetadataNode(rootdirmetadata, null)))
+                .Select(diffPair => diffPair != null ? 
+                    (diffPair.Value.dst, diffPair.Value.node, new MetadataNode(rootdirmetadata, null)) : 
+                    (null, null, new MetadataNode(rootdirmetadata, null)))
                 .ToList();
 
             // Now we will compare these delta trees to the current filesystem state.
