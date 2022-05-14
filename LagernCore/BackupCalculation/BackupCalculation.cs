@@ -19,34 +19,43 @@ namespace LagernCore.BackupCalculation
         /// <param name="previousmtrees">Optional list of previously backed up metadata trees,
         /// each tree in the list is also optional.</param>
         /// <returns>A delta tree mapping</returns>
-        public static async Task<List<MetadataNode>> GetDeltaMetadataTree(
-            Core core, string backupsetname, List<(int trackclass, string pattern)>? trackpatterns = null,
-            List<MetadataNode?>? previousmtrees = null)
+        public static async Task<List<(ICoreDstDependencies? dst, MetadataNode node)>> GetDeltaMetadataTree(
+            ICoreSrcDependencies source, bool destinationAvailable, string backupsetname, 
+            List<(int trackclass, string pattern)>? trackpatterns = null, List<(ICoreDstDependencies dst, MetadataNode? node)>? previousmtrees = null) // TODO: Currently the method contract for GetDeltaMetadataTree() allows for calls with previousMTrees = null to support diffing outside the context of a dst, forcing us to handle a null dst.We should split GetDeltaMetadataTree() into two different public method overloads with different return types.
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
-            if (!core.DestinationAvailable)
+            if (!destinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
             }
 
             // Non differential backup equivalent to differential backup to single destination without a previous tree
+            List<(ICoreDstDependencies dst, MetadataNode? node)?> previousMTreesToDiff;
             if (previousmtrees == null)
             {
-                previousmtrees = new List<MetadataNode?>() { null };
+                previousMTreesToDiff = new List<(ICoreDstDependencies dst, MetadataNode? node)?>() { null };
+            }
+            else
+            {
+                previousMTreesToDiff = previousmtrees
+                    .Select(val => ((ICoreDstDependencies dst, MetadataNode? node)?)val)
+                    .ToList();
             }
 
-            FileMetadata rootdirmetadata = await core.SrcDependencies.GetFileMetadata("");
+            FileMetadata rootdirmetadata = await source.GetFileMetadata("");
 
             // Create a new tree to hold the deltas for each of the previous metadata trees
-            List<MetadataNode> deltamtrees = previousmtrees.Select((_) => new MetadataNode(rootdirmetadata, null)).ToList();
+            List<(ICoreDstDependencies? dst, MetadataNode? previousMTree, MetadataNode diffMTree)> deltamtrees = previousMTreesToDiff
+                .Select(diffPair => diffPair != null ? (diffPair.Value.dst, diffPair.Value.node, new MetadataNode(rootdirmetadata, null)) : (null, null, new MetadataNode(rootdirmetadata, null)))
+                .ToList();
 
             // Now we will compare these delta trees to the current filesystem state.
             // This involves matching directories and files in the old tree to their new versions.
             // This is mostly done on the basis of the directory/file name, but there is some provision for detecting renames
 
-            foreach (var (previousmtree, deltamtree) in previousmtrees.Zip(deltamtrees))
+            foreach (var (dst, previousmtree, deltamtree) in deltamtrees)
             {
-                if (previousmtree != null)
+                if (dst != null && previousmtree != null)
                 {
                     // We always assume the matching of deltatree root to fs backup root is valid
                     // So make the name equal, and set status to metadatachange if they were different
@@ -74,8 +83,10 @@ namespace LagernCore.BackupCalculation
             while (deltaMNodeQueue.Count > 0)
             {
                 string reldirpath = deltaMNodeQueue.Dequeue();
-                List<MetadataNode?> posDeltaNodes = deltamtrees.Select(dmt => dmt.GetDirectory(reldirpath)).ToList();
-                List<MetadataNode?> previousMNodes = previousmtrees.Select(mt => mt?.GetDirectory(reldirpath)).ToList();
+                List<MetadataNode?> posDeltaNodes = deltamtrees.Select(dmt => dmt.diffMTree.GetDirectory(reldirpath)).ToList();
+                List<MetadataNode?> previousMNodes = previousMTreesToDiff
+                    .Select(mt => mt?.node?.GetDirectory(reldirpath))
+                    .ToList();
 
                 // Cleanup the previous metadata nodes we need to compare to
                 // Null delta nodes indicate that a directory is not to be backed up for that backup,
@@ -101,7 +112,7 @@ namespace LagernCore.BackupCalculation
                 List<string> fsFiles;
                 try
                 {
-                    fsFiles = new List<string>(await core.SrcDependencies.GetDirectoryFiles(reldirpath));
+                    fsFiles = new List<string>(await source.GetDirectoryFiles(reldirpath));
                     fsFiles.Sort();
                 }
                 catch (Exception e) when (e is DirectoryNotFoundException || e is UnauthorizedAccessException) // TODO: More user friendly output here
@@ -153,7 +164,7 @@ namespace LagernCore.BackupCalculation
                                         }
                                         else
                                         {
-                                            curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fileName));
+                                            curfm = await source.GetFileMetadata(Path.Combine(reldirpath, fileName));
                                             fileMetadataCache[fileName] = curfm;
                                         }
                                         // Create a copy FileMetada to hold the changes
@@ -251,7 +262,7 @@ namespace LagernCore.BackupCalculation
                                             }
                                             else
                                             {
-                                                curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                                curfm = await source.GetFileMetadata(Path.Combine(reldirpath, filename));
                                                 fileMetadataCache[filename] = curfm;
                                             }
                                             curfm = new FileMetadata(curfm)
@@ -307,7 +318,7 @@ namespace LagernCore.BackupCalculation
                                 }
                                 else
                                 {
-                                    curfm = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, filename));
+                                    curfm = await source.GetFileMetadata(Path.Combine(reldirpath, filename));
                                     fileMetadataCache[filename] = curfm;
                                 }
                                 curfm = new FileMetadata(curfm)
@@ -332,7 +343,7 @@ namespace LagernCore.BackupCalculation
                 try
                 {
                     // Use GetFileName because GetDirectories doesnt return trailing backslashes, so GetDirectoryName will return the partent directory
-                    fssubdirs = new List<string>(await core.SrcDependencies.GetSubDirectories(reldirpath));
+                    fssubdirs = new List<string>(await source.GetSubDirectories(reldirpath));
                     fssubdirs.Sort();
                 }
                 catch (UnauthorizedAccessException e)
@@ -382,7 +393,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                        fssubdirmetadata = await source.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     FileMetadata previousdirmetadata = previousmnode.Directories[dirname].DirMetadata;
@@ -440,7 +451,7 @@ namespace LagernCore.BackupCalculation
                                     }
                                     else
                                     {
-                                        fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                        fssubdirmetadata = await source.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                         dirmetadatacache[dirname] = fssubdirmetadata;
                                     }
                                     fssubdirmetadata = new FileMetadata(fssubdirmetadata)
@@ -488,7 +499,7 @@ namespace LagernCore.BackupCalculation
                             }
                             else
                             {
-                                fssubdirmetadata = await core.SrcDependencies.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
+                                fssubdirmetadata = await source.GetFileMetadata(Path.Combine(reldirpath, fssubdirs[fsidx]));
                                 dirmetadatacache[dirname] = fssubdirmetadata;
                             }
                             fssubdirmetadata = new FileMetadata(fssubdirmetadata)
@@ -507,7 +518,9 @@ namespace LagernCore.BackupCalculation
                     deltaMNodeQueue.Enqueue(Path.Combine(reldirpath, dirname));
                 }
             }
-            return deltamtrees;
+            return deltamtrees
+                .Select(diffTriple => (diffTriple.dst, diffTriple.diffMTree))
+                .ToList();
         }
 
         /// <summary>
