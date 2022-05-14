@@ -223,7 +223,7 @@ namespace BackupCore
             {
                 return await GetBackupRecord(bsname, bset.Backups[^1].hash);
             }
-            throw new Exception("Could not find backup record specified");
+            throw new IndexOutOfRangeException("No backup records present in this backup set");
         }
 
         public async Task<BackupRecord> GetBackupRecord(BackupSetReference bsname, string? prefix)

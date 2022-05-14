@@ -253,27 +253,32 @@ namespace BackupCore
             {
                 if (differential)
                 {
-                    if (prev_backup_hash_prefixes != null && 
-                        d < prev_backup_hash_prefixes.Count && 
-                        prev_backup_hash_prefixes[d] != null)
+                    if (prev_backup_hash_prefixes != null && d < prev_backup_hash_prefixes.Count && prev_backup_hash_prefixes[d] != null)
                     {
                         try
                         {
-                            BackupRecord previousbackup = 
+                            BackupRecord previousbackup =
                                 await dst.Backups.GetBackupRecord(backupSetReference, prev_backup_hash_prefixes[d]);
                             previousMTrees.Add((dst, await MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash)));
                         }
                         catch (KeyNotFoundException)
                         {
-                            // TODO: if user specifies a previous backup hash, we should probably fail if it is not found instead of defaulting to the last backup
-                            //return Result<byte[], KeyNotFoundException>.Err(new KeyNotFoundException("No backup matches the specified hash"));
-                            BackupRecord previousbackup = await dst.Backups.GetBackupRecord(backupSetReference);
-                            previousMTrees.Add((dst, await MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash)));
+                            return Result<byte[], KeyNotFoundException>.Err(new KeyNotFoundException("No backup matches the specified hash"));
                         }
                     }
                     else
                     {
-                        previousMTrees.Add((dst, null));
+                        try
+                        {
+                            // If null hash given, default to a differential backup relative to the last backup done in this destination
+                            BackupRecord previousbackup = await dst.Backups.GetBackupRecord(backupSetReference);
+                            previousMTrees.Add((dst, await MetadataNode.Load(dst.Blobs, previousbackup.MetadataTreeHash)));
+                        } 
+                        catch (IndexOutOfRangeException)
+                        {
+                            // No backup records in this destination, so do a non-differential backup
+                            previousMTrees.Add((dst, null));
+                        }
                     }
                 }
                 else
@@ -292,7 +297,7 @@ namespace BackupCore
             
             if (parallel)
             {
-                await Task.WhenAll(backupops.ToArray()); // These tasks should already be executing in parallel
+                await Task.WhenAll(backupops); // These tasks should already be executing in parallel
                 // Another option could be something like:
                 //await Parallel.ForEachAsync(backupops, (f, _) => f.Invoke()); // Using Parallel here should help us limit the degree of parallelism
                 // Where each item in backupops is a Func<ValueTask>
@@ -376,13 +381,16 @@ namespace BackupCore
                     .Select((difm) => (difm.dst, difm.fileMetadata))
                     .ToList();
 
-                if (parallel)
+                if (writedestinations.Any())
                 {
-                    backupops.Add(BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations));
-                }
-                else
-                {
-                    await BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations);
+                    if (parallel)
+                    {
+                        backupops.Add(BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations));
+                    }
+                    else
+                    {
+                        await BackupFileSync(backupsetname, Path.Combine(relpath, filename), writedestinations);
+                    }
                 }
             }
 

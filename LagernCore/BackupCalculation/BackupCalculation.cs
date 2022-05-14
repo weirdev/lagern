@@ -193,7 +193,7 @@ namespace LagernCore.BackupCalculation
                                 {
                                     if (trackClass != 0)
                                     {
-                                        FileMetadata prevfm = previousMNode.Files[fileName];
+                                        FileMetadata prevfm = previousMNode.Files[fileName]; // NOTE: This previous file always exists, see above
                                         FileMetadata curfm;
                                         if (fileMetadataCache.ContainsKey(fileName))
                                         {
@@ -218,6 +218,7 @@ namespace LagernCore.BackupCalculation
                                                 {
                                                     curfm.Status = FileMetadata.FileStatus.Unchanged;
                                                 }
+                                                curfm.FileHash = prevfm.FileHash;
                                                 break;
                                             case 2: // Dont scan if we have a previous version and its metadata indicates no change
                                                     // If file size and datemodified unchanged we assume no change
@@ -232,6 +233,7 @@ namespace LagernCore.BackupCalculation
                                                     {
                                                         curfm.Status = FileMetadata.FileStatus.Unchanged;
                                                     }
+                                                    curfm.FileHash = prevfm.FileHash;
                                                 }
                                                 else // May have been a change to data
                                                 {
