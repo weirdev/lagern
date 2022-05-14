@@ -27,7 +27,7 @@ namespace LagernCore.Utilities
                 if (exception == null)
                 {
                     throw new InvalidOperationException("Exception cannot be null when Result initialized with Result.Err()");
-                } 
+                }
                 else
                 {
                     this.value = null;
@@ -92,7 +92,7 @@ namespace LagernCore.Utilities
                     throw new InvalidOperationException("Value cannot be null when Result initialized with Result.Ok()");
                 }
                 return Result<T2, E>.Ok(func.Invoke(value));
-            } 
+            }
             else
             {
                 if (exception == null)

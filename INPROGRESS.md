@@ -1,23 +1,12 @@
-I intend to transition to githubs issue based project management eventually. 
-For now this will remain the home of the project backlog.
+The transition to github's issue based project management is in progress. 
+Until that is completed, this will remain the home of the project's low-priority backlog.
 
-===
-Review console support for backup up to multiple destinations
-===
-More tests for reference counting, ensure blobs stay present while a reference to them exists across multiple backups, transfers, backup deletions, etc
-	A quick manual verification of reference counting logic
-Create a helper method for verifying entire metadata trees and optionally child files are stored correctly in the blob store
-===
-Currently working on multiple backup destinations
-Verify that when backing up to multiple destinations, source file data is only read/processed once
-Multiple destinations may be missing different blobs existing in the current backup
-	If just one previous tree used to generate delta tree, we may not scan (and thus generate blobs for) a file that is in the previous selected tree but not in another destination. Thus we need to get blobs to the destination lacking them.
-	We dont want to do a general backup sync between destinations, because we may not want all backups on all destinations (ie. frequent backups to disk/local storage, infrequent backups to cloud)
-	Intersection tree--calculate tree of files/dirs in common between all destinations
-		Use this for delta tree => extra files get scanned, but all blobs get where they need to go with minimal code changes
-	Problem: Adding new destination (or effectively doing so by changing a bunch of data, backing up to D1, then to D1 and D2 together) incurs the same runtime as a brand new backup to D2 as every file gets scanned
-		Possible mitigation: Clone existing backupset/transfer to new backup set then run backup
-====
+---
+
+Currently working on [Lagern 1.0](https://github.com/weirdev/lagern/projects/1)
+  - See there for next issues to pickup
+
+---
 
 *Issues added to GitHub from top to bottom, new issues may exist only on GitHub
 *
@@ -42,6 +31,8 @@ Data integrity and encryption support
 	Verify on write?
 		Backing up
 		Restoring
+More tests for reference counting, ensure blobs stay present while a reference to them exists across multiple backups, transfers, backup deletions, etc
+	A quick manual verification of reference counting logic
 Project structure change
 	Better API compliance
 		Public api only in Core
