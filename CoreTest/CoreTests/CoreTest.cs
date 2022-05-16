@@ -331,7 +331,7 @@ namespace CoreTest
             // Just prefix
             await core.RemoveBackup("test", HashTools.ByteArrayToHexViaLookup32(bh2.GetOrThrow())[..10]);
             // All backups deleted
-            Assert.AreEqual((await core.GetBackups("test", 0)).backups.Count(), 0);
+            Assert.AreEqual((await core.GetBackups("test", core.DefaultDstDependencies[0])).backups.Count(), 0);
         }
 
         [TestMethod]

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -78,7 +77,7 @@ namespace BackupCore
             var file = VirtualFS.GetFile(absolutepath);
             if (file == null)
             {
-                throw new NullReferenceException("File not found");
+                throw new FileNotFoundException("File not found");
             }
             if (file.FileHash == null)
             {

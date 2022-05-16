@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LagernCore.Models;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,7 +11,9 @@ namespace BackupCore
     {
         public static readonly string SettingsDirectoryName = ".lagern";
 
-        public static readonly string SettingsFilename = ".settings";
+        private static readonly string SettingsFilename = ".settings";
+
+        private static readonly string SettingsV2Filename = "settings.toml";
 
         public static readonly string AesKeyFilename = ".keyfile";
 
@@ -20,6 +23,8 @@ namespace BackupCore
         private string? BackupPathSrc { get; set; }
         
         private string SrcSettingsFile { get; set; }
+
+        private string SrcSettingsFileV2 { get; set; }
 
         private string? AesKeyFile { get; set; }
 
@@ -32,6 +37,7 @@ namespace BackupCore
             FSInterop = fsinterop;
             BackupPathSrc = src;
             SrcSettingsFile = Path.Combine(SettingsDirectoryName, SettingsFilename);
+            SrcSettingsFileV2 = Path.Combine(SettingsDirectoryName, SettingsV2Filename);
         }
 
         public static FSCoreSrcDependencies Load(string? src, IFSInterop fsinterop)
@@ -207,6 +213,14 @@ namespace BackupCore
             return await SettingsFileTools.ReadSettings(fs);
         }
 
+        public async Task<SettingsFileModel> ReadSettingsV2()
+        {
+            using var fs = await GetSettingsV2FileStream();
+            using StreamReader reader = new(fs);
+            string text = await reader.ReadToEndAsync();
+            return Tomlyn.Toml.ToModel<SettingsFileModel>(text);
+        }
+
         public async Task WriteSetting(BackupSetting key, string value)
         {
             try
@@ -236,6 +250,18 @@ namespace BackupCore
             {
                 throw new Exception("Failed to load settings file", e);
             } 
+        }
+
+        private async Task<Stream> GetSettingsV2FileStream()
+        {
+            try
+            {
+                return await GetRawFileData(SrcSettingsFileV2);
+            }
+            catch (Exception e)
+            {
+                throw new Exception("Failed to load settings file", e);
+            }
         }
 
         private async Task WriteSettingsFileStream(byte[] data) => await OverwriteOrCreateFile(SrcSettingsFile, data);

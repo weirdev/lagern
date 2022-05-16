@@ -564,11 +564,11 @@ namespace BackupCore
         /// </summary>
         /// <param name="backuphashstring"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public async Task<(int allreferencesizes, int uniquereferencesizes)> GetBackupSizes(
-            BackupSetReference bsname, string backuphashstring, int backupdst=0)
+        public static async Task<(int allreferencesizes, int uniquereferencesizes)> GetBackupSizes(
+            BackupSetReference bsname, string backuphashstring, ICoreDstDependencies destination)
         {
-            var br = await DefaultDstDependencies[backupdst].Backups.GetBackupRecord(bsname, backuphashstring);
-            return await DefaultDstDependencies[backupdst].Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
+            var br = await destination.Backups.GetBackupRecord(bsname, backuphashstring);
+            return await destination.Blobs.GetSizes(br.MetadataTreeHash, BlobLocation.BlobType.MetadataNode);
         }
 
         /// <summary>
@@ -576,10 +576,10 @@ namespace BackupCore
         /// </summary>
         /// <param name="backuphashstring"></param>
         /// <returns>(Size of all referenced blobs, size of blobs referenced only by the given hash and its children)</returns>
-        public async Task<(int allreferencesizes, int uniquereferencesizes)> GetBackupSizes(
-            string bsname, string backuphashstring, int backupdst = 0)
+        public static async Task<(int allreferencesizes, int uniquereferencesizes)> GetBackupSizes(
+            string bsname, string backuphashstring, ICoreDstDependencies destination)
         {
-            return await GetBackupSizes(new BackupSetReference(bsname, false, false, false), backuphashstring, backupdst);
+            return await GetBackupSizes(new BackupSetReference(bsname, false, false, false), backuphashstring, destination);
         }
 
         /// <summary>
@@ -616,22 +616,22 @@ namespace BackupCore
         /// </summary>
         /// <returns>A list of tuples representing the backup times and their associated messages.</returns>
         public async Task<(IEnumerable<(string backuphash, DateTime backuptime, string message)> backups, bool cache)> GetBackups(
-            string backupsetname, int backupdst)
+            string backupsetname, ICoreDstDependencies backupdst)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
-            if (!DestinationAvailable)
+            if (backupdst == CacheDependencies) // TODO: Should have an IsCache property in the dest dependencies
             {
                 backupSetReference = backupSetReference with { Cache = true };
             }
 
             List<(string, DateTime, string)> backups = new();
-            foreach (var (hash, _) in (await DefaultDstDependencies[backupdst].Backups.LoadBackupSet(backupSetReference)).Backups)
+            foreach (var (hash, _) in (await backupdst.Backups.LoadBackupSet(backupSetReference)).Backups)
             {
-                var br = await DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupSetReference, hash);
+                var br = await backupdst.Backups.GetBackupRecord(backupSetReference, hash);
                 backups.Add((HashTools.ByteArrayToHexViaLookup32(hash).ToLower(),
                     br.BackupTime, br.BackupMessage));
             }
-            return (backups, !DestinationAvailable);
+            return (backups, backupdst == CacheDependencies);
         }
 
         /// <summary>
