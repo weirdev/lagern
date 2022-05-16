@@ -5,6 +5,7 @@ using System.IO;
 using CommandLine;
 using BackupCore;
 using System.Threading.Tasks;
+using static LagernCore.Models.SettingsFileModel;
 
 namespace BackupConsole
 {
@@ -117,14 +118,14 @@ namespace BackupConsole
         class ShowOptions
         {
             [Value(0, Required = false, HelpText = "The setting to show")]
-            public BackupCore.BackupSetting? Setting { get; set; }
+            public BackupSetting? Setting { get; set; }
         }
 
         [Verb("set", HelpText = "Set a lagern setting")]
         class SetOptions
         {
             [Value(0, Required = true, HelpText = "The setting to set")]
-            public BackupCore.BackupSetting Setting { get; set; }
+            public BackupSetting Setting { get; set; }
 
             [Value(0, Required = true, HelpText = "The value to give setting")]
             #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
@@ -136,7 +137,7 @@ namespace BackupConsole
         class ClearOptions
         {
             [Value(0, Required = true, HelpText = "The setting to clear")]
-            public BackupCore.BackupSetting Setting { get; set; }
+            public BackupSetting Setting { get; set; }
         }
 
         [Verb("status", HelpText = "Show the working tree status")]
@@ -162,9 +163,10 @@ namespace BackupConsole
             public bool Scan { get; set; }
 
             [Option('m', "message", Default = "", HelpText = "A message describing the backup")]
-            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
-            public string Message { get; set; }
-            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+            public string Message { get; set; } = "";
+
+            [Option('d', "destinations", Separator = ',', Default = null, Required = false, HelpText = "Comma separated list of backup destinations to backup to")] // TODO: Null default not currently being applied
+            public IEnumerable<string>? Destinations { get; set; }
         }
 
         [Verb("delete", HelpText = "Delete a backup")]
@@ -208,6 +210,9 @@ namespace BackupConsole
 
             [Option('m', "maxbackups", Required = false, Default = 10, HelpText = "The maximum number of backups to show, default 10")]
             public int MaxBackups { get; set; }
+
+            [Option('d', "destinations", Separator = ',', Default = null, Required = false, HelpText = "Comma separated list of backup destinations for which to list backups")]  // TODO: Null default not currently being applied
+            public IEnumerable<string>? Destinations { get; set; }
         }
 
         [Verb("list", HelpText = "List saved backups")]
@@ -316,7 +321,7 @@ namespace BackupConsole
 
             List<string[]> dsts_passopts_cc = dstlistings.Select(dl => dl.Split('|')).ToList();
 
-            dsts_passopts_cc.Add(new string[] { destination, password != null ? "p" : "n",  opts.CloudConfigFile ?? ""});
+            dsts_passopts_cc.Add(new string[] { destination, password != null ? "p" : "n", opts.CloudConfigFile ?? ""});
             dstlistings = dsts_passopts_cc.Select(dpc => string.Join('|', dpc)).ToList();
             await srcdep.WriteSetting(BackupSetting.dests, string.Join(';', dstlistings));
         }
@@ -325,7 +330,7 @@ namespace BackupConsole
         {
             if (opts.Setting != null)
             {
-                var settingval = await ReadSetting((await LoadCore()).SrcDependencies, opts.Setting.Value);
+                var settingval = await ReadSetting((await LoadCore()).core.SrcDependencies, opts.Setting.Value);
                 if (settingval != null)
                 {
                     Console.WriteLine(settingval);
@@ -333,7 +338,7 @@ namespace BackupConsole
             }
             else
             {
-                var core = await LoadCore();
+                var core = (await LoadCore()).core;
                 var settings = await core.SrcDependencies.ReadSettings();
                 if (settings != null)
                 {
@@ -347,14 +352,14 @@ namespace BackupConsole
 
         private static async Task SetSetting(SetOptions opts)
         {
-            await WriteSetting((await LoadCore()).SrcDependencies, opts.Setting, opts.Value);
+            await WriteSetting((await LoadCore()).core.SrcDependencies, opts.Setting, opts.Value);
         }
 
         private static async Task Status(StatusOptions opts)
         {
             try
             {
-                var bcore = await LoadCore();
+                var bcore = (await LoadCore()).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 TablePrinter table = new();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
@@ -383,7 +388,7 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = await LoadCore();
+                var bcore = (await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null)).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 List<(int, string)>? trackclasses;
                 try
@@ -406,7 +411,7 @@ namespace BackupConsole
         {
             try
             { 
-                var bcore = await LoadCore();
+                var bcore = (await LoadCore()).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
@@ -427,7 +432,7 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = await LoadCore();
+                var bcore = (await LoadCore()).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 string restorepath = opts.Path;
                 bool absolutepath = false;
@@ -444,7 +449,7 @@ namespace BackupConsole
             }
         }
 
-        public static async Task ListBackups(ListNoNameOptions opts, string bsname, Core? bcore = null)
+        public static async Task ListBackups(ListNoNameOptions opts, string bsname, (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
         {
             ListOptions opts2 = new()
             {
@@ -452,65 +457,84 @@ namespace BackupConsole
                 MaxBackups = opts.MaxBackups,
                 ShowSizes = opts.ShowSizes
             };
-            await ListBackups(opts2, bcore);
+            await ListBackups(opts2, coreAndDestinations);
         }
 
-        public static async Task ListBackups(ListOptions opts, Core? bcore = null)
+        public static async Task ListBackups(ListOptions opts, (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
         {
-            if (bcore == null)
+            if (coreAndDestinations == null)
             {
-                bcore = await LoadCore();
+                coreAndDestinations = await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null);
             }
+            var bcore = coreAndDestinations.Value.core;
             string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            (var backupsenum, bool cache) = await bcore.GetBackups(bsname, 0);
-            List<(string backuphash, DateTime backuptime, string message)>? backups = backupsenum.ToList();
-            var show = opts.MaxBackups == -1 ? backups.Count : opts.MaxBackups;
-            show = backups.Count < show ? backups.Count : show;
-            TablePrinter table = new();
-            if (opts.ShowSizes)
+
+            IEnumerable<(string, ICoreDstDependencies)> destinations;
+            if (coreAndDestinations.Value.destinations.Any())
             {
-                table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
-                for (int i = backups.Count - 1; i >= backups.Count - show; i--)
-                {
-                    var (allreferencesizes, uniquereferencesizes) = await bcore.GetBackupSizes(bsname, backups[i].backuphash);
-                    string message = backups[i].message;
-                    int mlength = 40;
-                    if (mlength > message.Length)
-                    {
-                        mlength = message.Length;
-                    }
-                    table.AddBodyRow(new string[] { backups[i].backuphash[..7],
-                        backups[i].backuptime.ToLocalTime().ToString(), Utilities.BytesFormatter(allreferencesizes),
-                        Utilities.BytesFormatter(uniquereferencesizes), message[..mlength] });
-                }
+                destinations = coreAndDestinations.Value.destinations
+                    .Select(destination => (destination.Key.Name ?? "", destination.Value));
+            }
+            else if (bcore.CacheDependencies != null)
+            {
+                destinations = new List<(string, ICoreDstDependencies)>() { ("(cache)", bcore.CacheDependencies) };
             }
             else
             {
-                table.AddHeaderRow(new string[] { "Hash", "Saved", "Message" });
-                for (int i = backups.Count - 1; i >= backups.Count - show; i--)
-                {
-                    string message = backups[i].message;
-                    int mlength = 40;
-                    if (mlength > message.Length)
-                    {
-                        mlength = message.Length;
-                    }
-                    table.AddBodyRow(new string[] { backups[i].backuphash[..7],
-                        backups[i].backuptime.ToLocalTime().ToString(), message[..mlength] });
-                }
+                Console.WriteLine("No destinations for which to list backups");
+                return;
             }
-            if (cache)
+
+            foreach (var destination in coreAndDestinations.Value.destinations)
             {
-                Console.WriteLine("(cache)");
+                Console.WriteLine($"Destination \"{destination.Key.Name}\"");
+
+                (var backupsenum, bool cache) = await bcore.GetBackups(bsname, destination.Value);
+                List<(string backuphash, DateTime backuptime, string message)>? backups = backupsenum.ToList();
+                var show = opts.MaxBackups == -1 ? backups.Count : opts.MaxBackups;
+                show = backups.Count < show ? backups.Count : show;
+                TablePrinter table = new();
+                if (opts.ShowSizes)
+                {
+                    table.AddHeaderRow(new string[] { "Hash", "Saved", "RestoreSize", "BackupSize", "Message" });
+                    for (int i = backups.Count - 1; i >= backups.Count - show; i--)
+                    {
+                        var (allreferencesizes, uniquereferencesizes) = await Core.GetBackupSizes(bsname, backups[i].backuphash, destination.Value);
+                        string message = backups[i].message;
+                        int mlength = 40;
+                        if (mlength > message.Length)
+                        {
+                            mlength = message.Length;
+                        }
+                        table.AddBodyRow(new string[] { backups[i].backuphash[..7],
+                        backups[i].backuptime.ToLocalTime().ToString(), Utilities.BytesFormatter(allreferencesizes),
+                        Utilities.BytesFormatter(uniquereferencesizes), message[..mlength] });
+                    }
+                }
+                else
+                {
+                    table.AddHeaderRow(new string[] { "Hash", "Saved", "Message" });
+                    for (int i = backups.Count - 1; i >= backups.Count - show; i--)
+                    {
+                        string message = backups[i].message;
+                        int mlength = 40;
+                        if (mlength > message.Length)
+                        {
+                            mlength = message.Length;
+                        }
+                        table.AddBodyRow(new string[] { backups[i].backuphash[..7],
+                        backups[i].backuptime.ToLocalTime().ToString(), message[..mlength] });
+                    }
+                }
+                Console.WriteLine(table);
             }
-            Console.WriteLine(table);
         }
 
         private static async Task SyncCache(SyncCacheOptions opts)
         {
             try
             {
-                var bcore = await LoadCore();
+                var bcore = (await LoadCore()).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 await bcore.SyncCacheSaveBackupSets(bsname);
                 await bcore.SaveBlobIndices();
@@ -536,39 +560,105 @@ namespace BackupConsole
             return bsname;
         }
 
-        public static async Task<Core> LoadCore()
+        public static async Task<(Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)> LoadCore(HashSet<string>? includeDestinations = null)
         {
             var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
-            string? cache;
 
-            string? destinations;
+            List<BackupDestinationSpecification>? destinationSpecifications = null;
+            BackupDestinationSpecification? cacheSpecification = null;
             try
             {
-                destinations = await srcdep.ReadSetting(BackupSetting.dests);
+                var settings = await srcdep.ReadSettingsV2();
+                destinationSpecifications = settings.Destinations;
+                cacheSpecification = settings.Cache;
             }
-            catch (KeyNotFoundException)
+            catch (Exception) // V2 not available, read old settings file into new model
             {
-                destinations = null;
+                string? cache;
+                string? destinations;
+                try
+                {
+                    destinations = await srcdep.ReadSetting(BackupSetting.dests);
+                }
+                catch (KeyNotFoundException)
+                {
+                    destinations = null;
+                }
+
+                try
+                {
+                    cache = await srcdep.ReadSetting(BackupSetting.cache);
+                }
+                catch (KeyNotFoundException)
+                {
+                    cache = null;
+                }
+
+                if (destinations != null)
+                {
+                    if (cache != null)
+                    {
+                        cacheSpecification = new();
+                        cacheSpecification.Name = "cache";
+                        cacheSpecification.Type = DestinationType.Filesystem;
+                        cacheSpecification.Path = cache;
+                    }
+
+                    Dictionary<DestinationType, int> unnamedDestinationTypeCounts = new();
+                    destinationSpecifications = new();
+                    foreach (var destination in destinations.Split(';'))
+                    {
+                        BackupDestinationSpecification destinationSpecification = new();
+                        string[] dst_passopt_cc = destination.Split('|');
+                        string dst_path = dst_passopt_cc[0].Trim();
+                        if (dst_path.ToLower() == "backblaze")
+                        {
+                            destinationSpecification.Type = DestinationType.Backblaze;
+                            destinationSpecification.CloudConfig = dst_passopt_cc[2].Trim() == "" ? null : dst_passopt_cc[2].Trim();
+
+                            if (!unnamedDestinationTypeCounts.ContainsKey(DestinationType.Backblaze))
+                            {
+                                unnamedDestinationTypeCounts[DestinationType.Backblaze] = 1;
+                            }
+                            else
+                            {
+                                unnamedDestinationTypeCounts[DestinationType.Backblaze]++;
+                            }
+                            destinationSpecification.Name = $"Unnamed backblaze destination #{unnamedDestinationTypeCounts[DestinationType.Backblaze]}";
+                        }
+                        else
+                        {
+                            destinationSpecification.Type = DestinationType.Filesystem;
+                            destinationSpecification.Path = dst_path;
+                            destinationSpecification.Name = destinationSpecification.Path;
+                        }
+                        destinationSpecification.UsePassword = dst_passopt_cc[1].Trim().ToLower() == "p";
+
+                        destinationSpecifications.Add(destinationSpecification);
+                    }
+                }
             }
 
-            try
-            {
-                cache = await srcdep.ReadSetting(BackupSetting.cache);
-            }
-            catch (KeyNotFoundException)
-            {
-                cache = null;
-            }
-
-            if (destinations == null)
+            if (destinationSpecifications == null)
             {
                 string? destination = GetBUDestinationDir();
                 if (destination != null) // We are in a backup destination
                 {
+                    BackupDestinationSpecification destinationSpecification = new();
+                    destinationSpecification.Name = destination;
+                    destinationSpecification.Type = DestinationType.Filesystem;
+                    destinationSpecification.Path = destination;
+
                     try
                     {
                         // TODO: password support here
-                        return await Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null);
+                        var core = await Core.LoadDiskCore(null, new List<(string, string?)>(1) { (destination, null) }, null);
+                        return 
+                            (core, 
+                            new Dictionary<BackupDestinationSpecification, ICoreDstDependencies>
+                            {
+                                { destinationSpecification, core.DefaultDstDependencies[0] }
+                            });
                     }
                     catch
                     {
@@ -581,38 +671,46 @@ namespace BackupConsole
                     Console.WriteLine("or this command must be run from an existing backup destination.");
                     throw new Exception(); // TODO: more specific exceptions
                 }
-            }
+            } 
             else
             {
                 ICoreDstDependencies? cachedep = null;
-                if (cache != null)
+                if (cacheSpecification != null)
                 {
-                    cachedep = await CoreDstDependencies.Load(await DiskDstFSInterop.Load(cache));
+                    if (cacheSpecification.Type != DestinationType.Filesystem || cacheSpecification.Path == null)
+                    {
+                        throw new Exception("Cache must be of type filesystem and provide a path");
+                    }
+                    cachedep = await CoreDstDependencies.Load(await DiskDstFSInterop.Load(cacheSpecification.Path));
                 }
 
-                List<ICoreDstDependencies> dstdeps = new();
-                foreach (var destination in destinations.Split(';'))
+                IEnumerable<BackupDestinationSpecification> selectedDestinations;
+                if (includeDestinations != null)
                 {
-                    string[] dst_passopt_cc = destination.Split('|');
-                    string dst_path = dst_passopt_cc[0].Trim();
-                    bool use_pass = dst_passopt_cc[1].Trim().ToLower() == "p";
-                    string? cloud_config = dst_passopt_cc[2].Trim() == "" ? null : dst_passopt_cc[2].Trim();
-
+                    selectedDestinations = destinationSpecifications.Where(d => d.Name != null && includeDestinations.Contains(d.Name));
+                }
+                else
+                {
+                    selectedDestinations = destinationSpecifications;
+                }
+                Dictionary<BackupDestinationSpecification, ICoreDstDependencies> dstdeps = new();
+                foreach (var destination in selectedDestinations)
+                {
                     string? password = null;
-                    if (use_pass)
+                    if (destination.UsePassword)
                     {
                         password = PasswordPrompt();
                     }
 
-                    if (dst_path.ToLower() == "backblaze") // TODO: Backblaze should be a specific implementation of general cloud sync support
+                    if (destination.Type == DestinationType.Backblaze) // TODO: Backblaze should be a specific implementation of general cloud sync support
                     {
                         try
                         {
-                            if (cloud_config == null)
+                            if (destination.CloudConfig == null)
                             {
                                 throw new Exception("Backblaze backups require a cloud config file to be specified");
                             }
-                            dstdeps.Add(await CoreDstDependencies.Load(await BackblazeDstInterop.Load(cloud_config, password), cache != null));
+                            dstdeps.Add(destination, await CoreDstDependencies.Load(await BackblazeDstInterop.Load(destination.CloudConfig, password), cacheSpecification != null));
                         }
                         catch
                         {
@@ -621,17 +719,21 @@ namespace BackupConsole
                     }
                     else
                     {
+                        if (destination.Path == null)
+                        {
+                            throw new Exception("Path must be provided with filesystem type destination");
+                        }
                         try
                         {
-                            dstdeps.Add(await CoreDstDependencies.Load(await DiskDstFSInterop.Load(dst_path, password), cache != null));
+                            dstdeps.Add(destination, await CoreDstDependencies.Load(await DiskDstFSInterop.Load(destination.Path, password), cacheSpecification != null));
                         }
                         catch (Exception)
                         {
-                            Console.WriteLine($"Failed to load {dst_path}");
+                            Console.WriteLine($"Failed to load {destination.Name}");
                         }
                     }
                 }
-                return new Core(srcdep, dstdeps, cachedep);
+                return (new Core(srcdep, dstdeps.Values.ToList(), cachedep), dstdeps);
             }
         }
 
@@ -653,15 +755,15 @@ namespace BackupConsole
 
         public static async Task BrowseBackup(BrowseOptions opts)
         {
-            Core bcore = await LoadCore();
+            var (bcore, dests) = await LoadCore();
             string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            var browser = await BackupBrowser.Initialize(bsname, opts.BackupHash, bcore);
+            var browser = await BackupBrowser.Initialize(bsname, opts.BackupHash, bcore, dests);
             browser.CommandLoop();
         }
 
         public static async Task TransferBackupStore(TransferOptions opts)
         {
-            var bcore = await LoadCore();
+            var bcore = (await LoadCore()).core;
             string backupsetname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
             await bcore.TransferBackupSet(backupsetname, await Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
@@ -673,7 +775,7 @@ namespace BackupConsole
 
         private static async Task ClearSetting(ClearOptions opts)
         {
-            Core core = await LoadCore();
+            Core core = (await LoadCore()).core;
             await core.SrcDependencies.ClearSetting(opts.Setting);
         }
 

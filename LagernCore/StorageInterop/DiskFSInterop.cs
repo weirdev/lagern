@@ -16,7 +16,7 @@ namespace BackupCore
 
         public Task<FileMetadata> GetFileMetadata(string absolutepath) => Task.Run(() => new FileMetadata(absolutepath));
 
-        public Task<Stream> GetFileData(string absolutepath) => Task.Run(() => (Stream)new FileStream(absolutepath, FileMode.OpenOrCreate));
+        public Task<Stream> GetFileData(string absolutepath) => Task.Run(() => (Stream)new FileStream(absolutepath, FileMode.Open));
 
         public Task<string[]> GetDirectoryFiles(string absolutepath) => Task.Run(() => Directory.GetFiles(absolutepath));
 

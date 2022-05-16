@@ -5,6 +5,8 @@ using System.IO;
 using CommandLine;
 using LagernCore.Models;
 using System.Threading.Tasks;
+using static LagernCore.Models.SettingsFileModel;
+using BackupCore;
 
 namespace BackupConsole
 {
@@ -12,20 +14,29 @@ namespace BackupConsole
     {
         // Current directory (where user launches from)
         public static string cwd = Environment.CurrentDirectory;
-        
-        BackupCore.Core BCore { get; set; }
+
+        Core BCore { get; set; }
+
+        Dictionary<BackupDestinationSpecification, ICoreDstDependencies> Destinations { get; set; }
+
         string BackupHash { get; set; }
+
         string BackupSet { get; set; }
-        BackupCore.MetadataNode BackupTree { get; set; }
-        BackupCore.MetadataNode CurrentNode { get; set; }
+
+        MetadataNode BackupTree { get; set; }
+
+        MetadataNode CurrentNode { get; set; }
+
         bool ContinueLoop { get; set; }
         
         int BackupDst { get; set; }
         
-        private BackupBrowser(BackupSetReference backupSetReference, string hash, BackupCore.Core bcore, BackupCore.MetadataNode backupTree, int backupdst=0)
+        private BackupBrowser(BackupSetReference backupSetReference, string hash, Core bcore, 
+            Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations, MetadataNode backupTree, int backupdst=0)
         {
             ContinueLoop = true;
             BCore = bcore;
+            Destinations = destinations;
             BackupDst = backupdst;
             BackupHash = hash;
             BackupSet = backupSetReference.BackupSetName;
@@ -33,14 +44,15 @@ namespace BackupConsole
             CurrentNode = backupTree;
         }
 
-        public static async Task<BackupBrowser> Initialize(string backupset, string? backuphash, BackupCore.Core bcore, int backupdst = 0)
+        public static async Task<BackupBrowser> Initialize(string backupset, string? backuphash, Core bcore, 
+            Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations, int backupdst = 0)
         {
             BackupSetReference backupSetReference = new(backupset, false, false, false);
             if (!bcore.DestinationAvailable)
             {
                 backupSetReference = backupSetReference with { Cache = true };
             }
-            (string hash, BackupCore.BackupRecord record) targetbackuphashandrecord;
+            (string hash, BackupRecord record) targetbackuphashandrecord;
             if (backuphash == null)
             {
                 targetbackuphashandrecord = await bcore.DefaultDstDependencies[backupdst].Backups.GetBackupHashAndRecord(backupSetReference);
@@ -49,9 +61,9 @@ namespace BackupConsole
             {
                 targetbackuphashandrecord = await bcore.DefaultDstDependencies[backupdst].Backups.GetBackupHashAndRecord(backupSetReference, backuphash, 0);
             }
-            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.record;
-            var backupTree = await BackupCore.MetadataNode.Load(bcore.DefaultDstDependencies[backupdst].Blobs, backuprecord.MetadataTreeHash);
-            return new BackupBrowser(backupSetReference, targetbackuphashandrecord.hash, bcore, backupTree, backupdst);
+            BackupRecord backuprecord = targetbackuphashandrecord.record;
+            var backupTree = await MetadataNode.Load(bcore.DefaultDstDependencies[backupdst].Blobs, backuprecord.MetadataTreeHash);
+            return new BackupBrowser(backupSetReference, targetbackuphashandrecord.hash, bcore, destinations, backupTree, backupdst);
         }
 
         [Verb("cd", HelpText = "Change the current directory")]
@@ -96,7 +108,7 @@ namespace BackupConsole
                         .WithParsed<LagernConsole.ExitOptions>(opts => ContinueLoop = false)
                         .WithParsed<LagernConsole.RestoreOptions>(opts => LagernConsole.RestoreFile(opts).Wait())
                         .WithParsed<CBOptions>(opts => ChangeBackup(opts).Wait())
-                        .WithParsed<LagernConsole.ListNoNameOptions>(opts => LagernConsole.ListBackups(opts, BackupSet, BCore).Wait());
+                        .WithParsed<LagernConsole.ListNoNameOptions>(opts => LagernConsole.ListBackups(opts, BackupSet, (BCore, Destinations)).Wait());
                 }
                 catch (ChangeBackupException ex)
                 {
@@ -121,10 +133,10 @@ namespace BackupConsole
 
         private void ListDirectory()
         {
-            BackupCore.MetadataNode dir = CurrentNode;
+            MetadataNode dir = CurrentNode;
 
-            List<BackupCore.MetadataNode> childdirectories = new(from cdir in dir.Directories select cdir.Value);
-            childdirectories.Sort(delegate (BackupCore.MetadataNode x, BackupCore.MetadataNode y)
+            List<MetadataNode> childdirectories = new(from cdir in dir.Directories select cdir.Value);
+            childdirectories.Sort(delegate (MetadataNode x, MetadataNode y)
             {
                return x.DirMetadata.FileName.CompareTo(y.DirMetadata.FileName);
             });
@@ -133,8 +145,8 @@ namespace BackupConsole
                 Console.WriteLine(childdir.DirMetadata.FileName + Path.DirectorySeparatorChar.ToString());
             }
 
-            List<BackupCore.FileMetadata> childfiles = new(dir.Files.Values);
-            childfiles.Sort(delegate (BackupCore.FileMetadata x, BackupCore.FileMetadata y)
+            List<FileMetadata> childfiles = new(dir.Files.Values);
+            childfiles.Sort(delegate (FileMetadata x, FileMetadata y)
             {
                 return x.FileName.CompareTo(y.FileName);
             });
@@ -146,7 +158,7 @@ namespace BackupConsole
 
         private void ChangeDirectory(CDOptions opts)
         {
-            BackupCore.MetadataNode? dir;
+            MetadataNode? dir;
             try
             {
                 if (opts.Directory.StartsWith(Path.DirectorySeparatorChar.ToString()))
@@ -192,9 +204,9 @@ namespace BackupConsole
             }
             var targetbackuphashandrecord = await BCore.DefaultDstDependencies[BackupDst].Backups.GetBackupHashAndRecord(new BackupSetReference(BackupSet, false, false, false), backuphash, opts.Offset);
             BackupHash = targetbackuphashandrecord.Item1;
-            BackupCore.BackupRecord backuprecord = targetbackuphashandrecord.Item2;
-            BackupTree = await BackupCore.MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
-            BackupCore.MetadataNode ? curnode = BackupTree.GetDirectory(curpath);
+            BackupRecord backuprecord = targetbackuphashandrecord.Item2;
+            BackupTree = await MetadataNode.Load(BCore.DefaultDstDependencies[BackupDst].Blobs, backuprecord.MetadataTreeHash);
+            MetadataNode? curnode = BackupTree.GetDirectory(curpath);
             if (curnode != null)
             {
                 CurrentNode = curnode;
