@@ -207,6 +207,9 @@ namespace BackupConsole
             #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Path { get; set; }
             #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+
+            [Option('d', "destination", Default = null, Required = false, HelpText = "Backup destination to restore file from. Defaults to first configured destination.")]
+            public string? Destination { get; set; }
         }
 
         [Verb("list", HelpText = "List saved backups")]
@@ -237,6 +240,9 @@ namespace BackupConsole
 
             [Option('b', "backup", Required = false, HelpText = "The hash of the backup to restore from, defaults to most recent backup")]
             public string? BackupHash { get; set; }
+
+            [Option('d', "destination", Default = null, Required = false, HelpText = "Backup destination to browse, defaults to first configured destination.")]
+            public string? Destination { get; set; }
         }
 
         [Verb("transfer", HelpText = "Transfer a backup store to another location")]
@@ -246,9 +252,13 @@ namespace BackupConsole
             public string? BSName { get; set; }
 
             [Value(0, Required = true, HelpText = "The destination which to transfer the backup store")]
-            #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
-            public string Destination { get; set; }
-            #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+
+#pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+            public string ToDestination { get; set; }
+#pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
+
+            [Option('s', "source", Default = null, Required = false, HelpText = "Backup destination to from which to source the transfer.")]
+            public string? FromDestination { get; set; }
         }
 
         [Verb("synccache", HelpText = "Sync the cache to the destination")]
@@ -256,6 +266,9 @@ namespace BackupConsole
         {
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string? BSName { get; set; }
+
+            [Option('d', "destinations", Separator = ',', Default = null, Required = false, HelpText = "Comma separated list of backup destinations to sync with cache")]  // TODO: Null default not currently being applied
+            public IEnumerable<string>? Destinations { get; set; }
         }
 
         /*
@@ -371,8 +384,8 @@ namespace BackupConsole
         {
             try
             {
-                var (bcore, dests) = (await LoadCore(opts.Destination != null ? new HashSet<string> { opts.Destination } : null));
-                if (dests.Count == 0)
+                var bcore = (await LoadCore(opts.Destination != null ? new HashSet<string> { opts.Destination } : null)).core;
+                if (bcore.DefaultDstDependencies.Count == 0)
                 {
                     Console.WriteLine("No destination available");
                     return;
@@ -428,7 +441,7 @@ namespace BackupConsole
         {
             try
             { 
-                var bcore = (await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null)).core;
+                var (bcore, destinations) = await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null);
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
@@ -449,7 +462,7 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = (await LoadCore()).core;
+                var bcore = (await LoadCore(opts.Destination != null ? new HashSet<string> { opts.Destination } : null)).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 string restorepath = opts.Path;
                 bool absolutepath = false;
@@ -458,7 +471,7 @@ namespace BackupConsole
                     restorepath = opts.RestorePath;
                     absolutepath = true;
                 }
-                await bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, opts.BackupHash, absolutepath);
+                await bcore.RestoreFileOrDirectory(bsname, opts.Path, restorepath, bcore.DefaultDstDependencies[0], opts.BackupHash, absolutepath); // TODO: Defaulting using dest order in core, should explicitly rely on dest order in settings file
             }
             catch (Exception e)
             {
@@ -553,7 +566,7 @@ namespace BackupConsole
         {
             try
             {
-                var bcore = (await LoadCore()).core;
+                var bcore = (await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null)).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 await bcore.SyncCacheSaveBackupSets(bsname);
                 await bcore.SaveBlobIndices();
@@ -579,7 +592,8 @@ namespace BackupConsole
             return bsname;
         }
 
-        public static async Task<(Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)> LoadCore(HashSet<string>? includeDestinations = null)
+        public static async Task<(Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)> LoadCore(
+            HashSet<string>? includeDestinations = null)
         {
             var srcdep = FSCoreSrcDependencies.Load(CWD, new DiskFSInterop());
 
@@ -617,10 +631,7 @@ namespace BackupConsole
                 {
                     if (cache != null)
                     {
-                        cacheSpecification = new();
-                        cacheSpecification.Name = "cache";
-                        cacheSpecification.Type = DestinationType.Filesystem;
-                        cacheSpecification.Path = cache;
+                        cacheSpecification = CreateCacheSpecification(cache);
                     }
 
                     Dictionary<DestinationType, int> unnamedDestinationTypeCounts = new();
@@ -774,18 +785,26 @@ namespace BackupConsole
 
         public static async Task BrowseBackup(BrowseOptions opts)
         {
-            var (bcore, dests) = await LoadCore();
+            var (bcore, dests) = await LoadCore(opts.Destination != null ? new HashSet<string> { opts.Destination } : null);
+            if (!dests.Any() && bcore.CacheDependencies == null)
+            {
+                throw new Exception("No available destination or cache");
+            }
+
             string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
-            var browser = await BackupBrowser.Initialize(bsname, opts.BackupHash, bcore, dests);
+            #pragma warning disable CS8604 // Possible null reference argument.
+            var destination = dests.FirstOrDefault(new KeyValuePair<BackupDestinationSpecification, ICoreDstDependencies>(CreateCacheSpecification(""), bcore.CacheDependencies));
+            #pragma warning restore CS8604 // Possible null reference argument.
+            var browser = await BackupBrowser.Initialize(bsname, opts.BackupHash, bcore, destination.Key, destination.Value);
             browser.CommandLoop();
         }
 
         public static async Task TransferBackupStore(TransferOptions opts)
         {
-            var bcore = (await LoadCore()).core;
+            var bcore = (await LoadCore(opts.FromDestination != null ? new HashSet<string> { opts.FromDestination } : null)).core;
             string backupsetname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
             // TODO: password support
-            await bcore.TransferBackupSet(backupsetname, await Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.Destination, null) }), true);
+            await Core.TransferBackupSet(backupsetname, await Core.InitializeNewDiskCore(backupsetname, null, new List<(string, string?)>(1) { (opts.ToDestination, null) }), true, bcore.DefaultDstDependencies[0]); // TODO: Defaulting using dest order in core, should explicitly rely on dest order in settings file
         }
 
         public static async Task<string> ReadSetting(ICoreSrcDependencies src, BackupSetting key) => await src.ReadSetting(key);
@@ -796,6 +815,16 @@ namespace BackupConsole
         {
             Core core = (await LoadCore()).core;
             await core.SrcDependencies.ClearSetting(opts.Setting);
+        }
+
+        private static BackupDestinationSpecification CreateCacheSpecification(string cachePath)
+        {
+            BackupDestinationSpecification cacheSpecification = new();
+            cacheSpecification.Name = "cache";
+            cacheSpecification.Type = DestinationType.Filesystem;
+            cacheSpecification.Path = cachePath;
+
+            return cacheSpecification;
         }
 
         private static string GetBUSourceDir()
