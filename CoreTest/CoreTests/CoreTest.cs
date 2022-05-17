@@ -295,7 +295,7 @@ namespace CoreTest
             }
             await testdata.core.RunBackup("test", "run1");
 
-            await testdata.core.RestoreFileOrDirectory("test", "2b", "2b", null, true);
+            await testdata.core.RestoreFileOrDirectory("test", "2b", "2b", testdata.core.DefaultDstDependencies[0], null, true);
             Assert.IsTrue(testdata.vfsroot.Files.ContainsKey("2b"));
             // TODO: Check data match here as well
         }
@@ -393,7 +393,7 @@ namespace CoreTest
             await srcCore.RunBackup("test", "run1");
             //var e = srcCore.DefaultDstDependencies[0].DstFSInterop.Encryptor;
 
-            await srcCore.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true);
+            await Core.TransferBackupSet(new BackupSetReference("test", false, false, false), dstCore, true, srcCore.DefaultDstDependencies[0]);
         }
 
         [TestMethod]

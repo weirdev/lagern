@@ -481,8 +481,8 @@ namespace BackupCore
         /// <param name="relfilepath"></param>
         /// <param name="restorepath"></param>
         /// <param name="backupindex"></param>
-        public async Task RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath, 
-            string? backuphashprefix=null, bool absoluterestorepath=false, int backupdst=0)
+        public async Task RestoreFileOrDirectory(string backupsetname, string relfilepath, string restorepath,
+            ICoreDstDependencies destination, string? backuphashprefix=null, bool absoluterestorepath=false)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             if (!DestinationAvailable)
@@ -492,8 +492,8 @@ namespace BackupCore
 
             try
             {
-                var backup = await DefaultDstDependencies[backupdst].Backups.GetBackupRecord(backupSetReference, backuphashprefix);
-                MetadataNode mtree = await MetadataNode.Load(DefaultDstDependencies[backupdst].Blobs, backup.MetadataTreeHash);
+                var backup = await destination.Backups.GetBackupRecord(backupSetReference, backuphashprefix);
+                MetadataNode mtree = await MetadataNode.Load(destination.Blobs, backup.MetadataTreeHash);
                 FileMetadata? filemeta = mtree.GetFile(relfilepath);
                 if (filemeta != null)
                 {
@@ -501,7 +501,7 @@ namespace BackupCore
                     {
                         throw new Exception("FileMetadata of stored files should always contain the files hash");
                     }
-                    byte[] filedata = await DefaultDstDependencies[backupdst].Blobs.RetrieveData(filemeta.FileHash);
+                    byte[] filedata = await destination.Blobs.RetrieveData(filemeta.FileHash);
                     await SrcDependencies.OverwriteOrCreateFile(restorepath, filedata, filemeta, absoluterestorepath);
                 }
                 else
@@ -513,12 +513,12 @@ namespace BackupCore
                         foreach (var childfile in dir.Files.Values)
                         {
                             await RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childfile.FileName), 
-                                Path.Combine(restorepath, childfile.FileName), backuphashprefix, absoluterestorepath);
+                                Path.Combine(restorepath, childfile.FileName), destination, backuphashprefix, absoluterestorepath);
                         }
                         foreach (var childdir in dir.Directories.Keys)
                         {
                             await RestoreFileOrDirectory(backupsetname, Path.Combine(relfilepath, childdir), 
-                                Path.Combine(restorepath, childdir), backuphashprefix, absoluterestorepath);
+                                Path.Combine(restorepath, childdir), destination, backuphashprefix, absoluterestorepath);
                         }
                         await SrcDependencies.WriteOutMetadata(restorepath, dir.DirMetadata, absoluterestorepath); // Set metadata after finished changing contents (postorder)
                     }
@@ -635,16 +635,19 @@ namespace BackupCore
         }
 
         /// <summary>
-        /// Remove a backup from the BackupStore and its data from the BlobStore.
+        /// Remove a backup from the BackupStore and its data from the BlobStore. Applies to every destination.
         /// </summary>
         /// <param name="backupsetname"></param>
         /// <param name="backuphashprefix"></param>
-        public async Task RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false, int backupdst = 0)
+        public async Task RemoveBackup(string backupsetname, string backuphashprefix, bool forcedelete = false)
         {
             BackupSetReference backupSetReference = new(backupsetname, false, false, false);
             await SyncCacheSaveBackupSets(backupsetname); // Sync cache first to prevent deletion of data in dst relied on by an unmerged backup in cache
-            await DefaultDstDependencies[backupdst].Backups.RemoveBackup(backupSetReference, backuphashprefix, 
-                DestinationAvailable && CacheDependencies == null, forcedelete);
+            foreach (var dest in DefaultDstDependencies)
+            {
+                await dest.Backups.RemoveBackup(backupSetReference, backuphashprefix,
+                    DestinationAvailable && CacheDependencies == null, forcedelete);
+            }
             await SyncCacheSaveBackupSets(backupsetname);
             await SaveBlobIndices();
         }
@@ -654,17 +657,17 @@ namespace BackupCore
         /// </summary>
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
-        public async Task TransferBackupSet(BackupSetReference backupsetname, Core dstCore, bool includefiles, 
-            int backupDstTransferSrc=0, int backupDstTransferDst=0)
+        public static async Task TransferBackupSet(BackupSetReference backupsetname, Core dstCore, bool includefiles,
+            ICoreDstDependencies backupDstTransferSrc, int backupDstTransferDst=0)
         {
             // TODO: This function probably makes more sense transferring between backup destinations within the current Core object
-            BackupSet backupSet = await DefaultDstDependencies[backupDstTransferSrc].Backups.LoadBackupSet(backupsetname);
+            BackupSet backupSet = await backupDstTransferSrc.Backups.LoadBackupSet(backupsetname);
             // Transfer backup set
             await dstCore.DefaultDstDependencies[backupDstTransferDst].Backups.SaveBackupSet(backupSet, backupsetname);
             // Transfer backing data
             foreach (var (hash, shallow) in backupSet.Backups)
             {
-                await DefaultDstDependencies[backupDstTransferSrc].Blobs.TransferBackup(
+                await backupDstTransferSrc.Blobs.TransferBackup(
                     dstCore.DefaultDstDependencies[backupDstTransferDst].Blobs, backupsetname, hash, includefiles & !shallow);
             }
             await dstCore.DefaultDstDependencies[backupDstTransferDst].SaveBlobStoreIndex();
@@ -675,8 +678,8 @@ namespace BackupCore
         /// </summary>
         /// <param name="src">The Core containing the backup store (and backing blobstore) to be transferred.</param>
         /// <param name="dst">The lagern directory you wish to transfer to.</param>
-        public async Task TransferBackupSet(string backupsetname, Core dstCore, bool includefiles,
-            int backupDstTransferSrc = 0, int backupDstTransferDst = 0)
+        public static async Task TransferBackupSet(string backupsetname, Core dstCore, bool includefiles,
+            ICoreDstDependencies backupDstTransferSrc, int backupDstTransferDst = 0)
         {
             await TransferBackupSet(new BackupSetReference(backupsetname, false, false, false), dstCore, includefiles, backupDstTransferSrc, backupDstTransferDst);
         }
