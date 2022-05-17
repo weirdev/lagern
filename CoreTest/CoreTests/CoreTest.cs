@@ -270,7 +270,7 @@ namespace CoreTest
                 testdata = await InitializeNewCoreWithStandardFiles(1, 0, cache: cache);
             }
 
-            await testdata.core.GetWTStatus("test");
+            await testdata.core.GetWTStatus("test", testdata.core.DefaultDstDependencies[0]);
             // TODO: test output
         }
 
