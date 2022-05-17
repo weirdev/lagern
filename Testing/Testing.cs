@@ -84,7 +84,7 @@ namespace Testing
         static async Task GetStatus(string bsname, string src, string dst)
         {
             var core = await BackupCore.Core.LoadDiskCore(src, new List<(string, string?)>(1) { (dst, null) });
-            foreach (var (path, change) in await core.GetWTStatus(bsname))
+            foreach (var (path, change) in await core.GetWTStatus(bsname, core.DefaultDstDependencies[0]))
             {
                 Console.WriteLine(string.Format("{0}:\t{1}", path, change));
             }

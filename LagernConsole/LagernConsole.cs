@@ -128,6 +128,7 @@ namespace BackupConsole
             public BackupSetting Setting { get; set; }
 
             [Value(0, Required = true, HelpText = "The value to give setting")]
+
             #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Value { get; set; }
             #pragma warning restore CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
@@ -146,8 +147,11 @@ namespace BackupConsole
             [Option('n', "bsname", Required = false, HelpText = "The name of the backup set")]
             public string? BSName { get; set; }
 
-            [Option('b', "backup", Required = false, HelpText = "The hash of the backup to use for a differential backup")]
+            [Option('b', "backup", Required = false, HelpText = "The hash of the backup to use for a differential comparison with the working tree. Defaults to the last backup.")]
             public string? BackupHash { get; set; }
+
+            [Option('d', "destination", Default = null, Required = false, HelpText = "Backup destination to use for differential comparison. Defaults to the first configured destination.")]
+            public string? Destination { get; set; }
         }
 
         [Verb("run", HelpText = "Run a backup.")]
@@ -182,6 +186,9 @@ namespace BackupConsole
 
             [Option('f', "force", Required = false, Default = false, HelpText = "Force deleting backup from destination when destination inaccessible")]
             public bool Force { get; set; }
+
+            [Option('d', "destinations", Separator = ',', Default = null, Required = false, HelpText = "Comma separated list of backup destinations to remove the backup from")] // TODO: Null default not currently being applied
+            public IEnumerable<string>? Destinations { get; set; }
         }
 
         [Verb("restore", HelpText = "Restore a file or directory")]
@@ -355,11 +362,21 @@ namespace BackupConsole
             await WriteSetting((await LoadCore()).core.SrcDependencies, opts.Setting, opts.Value);
         }
 
+        /// <summary>
+        /// Displays the working tree status relative to a single backup.
+        /// </summary>
+        /// <param name="opts"></param>
+        /// <returns></returns>
         private static async Task Status(StatusOptions opts)
         {
             try
             {
-                var bcore = (await LoadCore()).core;
+                var (bcore, dests) = (await LoadCore(opts.Destination != null ? new HashSet<string> { opts.Destination } : null));
+                if (dests.Count == 0)
+                {
+                    Console.WriteLine("No destination available");
+                    return;
+                }
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 TablePrinter table = new();
                 table.AddHeaderRow(new string[] { "Path", "Status" });
@@ -372,7 +389,7 @@ namespace BackupConsole
                 {
                     trackclasses = null;
                 }
-                foreach (var change in await bcore.GetWTStatus(bsname, true, trackclasses, opts.BackupHash))
+                foreach (var change in await bcore.GetWTStatus(bsname, bcore.DefaultDstDependencies[0], true, trackclasses, opts.BackupHash)) // TODO: Defaulting using dest order in core, should explicitly rely on dest order in settings file
                 {
                     table.AddBodyRow(new string[] { change.path, change.change.ToString() });
                 }
@@ -411,7 +428,7 @@ namespace BackupConsole
         {
             try
             { 
-                var bcore = (await LoadCore()).core;
+                var bcore = (await LoadCore(opts.Destinations != null && opts.Destinations.Any() ? opts.Destinations.ToHashSet() : null)).core;
                 string bsname = await GetBackupSetName(opts.BSName, bcore.SrcDependencies);
                 try
                 {
@@ -449,7 +466,8 @@ namespace BackupConsole
             }
         }
 
-        public static async Task ListBackups(ListNoNameOptions opts, string bsname, (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
+        public static async Task ListBackups(ListNoNameOptions opts, string bsname, 
+            (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
         {
             ListOptions opts2 = new()
             {
@@ -460,7 +478,8 @@ namespace BackupConsole
             await ListBackups(opts2, coreAndDestinations);
         }
 
-        public static async Task ListBackups(ListOptions opts, (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
+        public static async Task ListBackups(ListOptions opts, 
+            (Core core, Dictionary<BackupDestinationSpecification, ICoreDstDependencies> destinations)? coreAndDestinations = null)
         {
             if (coreAndDestinations == null)
             {

@@ -112,7 +112,7 @@ namespace BackupCore
         /// <param name="prev_backup_hash_prefix"></param>
         /// <returns></returns>
         public async Task<List<(string path, FileMetadata.FileStatus change)>> GetWTStatus(
-            string backupsetname, bool differentialbackup = true,
+            string backupsetname, ICoreDstDependencies destination, bool differentialbackup = true,
             List<(int trackclass, string pattern)>? trackpatterns = null, 
             string? prev_backup_hash_prefix = null)
         {
@@ -130,14 +130,14 @@ namespace BackupCore
                 try
                 {
                     // Assume all destinations have the same most recent backup, so just use the first backup
-                    previousbackup = await DefaultDstDependencies[0].Backups
+                    previousbackup = await destination.Backups
                         .GetBackupRecord(backupSetReference, prev_backup_hash_prefix);
                 }
                 catch
                 {
                     try
                     {
-                        previousbackup = await DefaultDstDependencies[0].Backups.GetBackupRecord(backupSetReference);
+                        previousbackup = await destination.Backups.GetBackupRecord(backupSetReference);
                     }
                     catch
                     {
@@ -146,10 +146,10 @@ namespace BackupCore
                 }
                 if (previousbackup != null)
                 {
-                    MetadataNode previousmtree = await MetadataNode.Load(DefaultDstDependencies[0].Blobs, 
+                    MetadataNode previousmtree = await MetadataNode.Load(destination.Blobs, 
                         previousbackup.MetadataTreeHash);
                     deltatree = (await BackupCalculation.GetDeltaMetadataTrees(SrcDependencies, DestinationAvailable, backupsetname,
-                        new List<(ICoreDstDependencies dst, MetadataNode? node)>() { (DefaultDstDependencies[0], previousmtree) },
+                        new List<(ICoreDstDependencies dst, MetadataNode? node)>() { (destination, previousmtree) },
                         trackpatterns))[0].node; // TODO: Dont arbitrarily select the first destination
                 }
                 else
