@@ -127,7 +127,7 @@ namespace BackupConsole
             [Value(0, Required = true, HelpText = "The setting to set")]
             public BackupSetting Setting { get; set; }
 
-            [Value(0, Required = true, HelpText = "The value to give setting")]
+            [Value(1, Required = true, HelpText = "The value to give setting")]
 
             #pragma warning disable CS8618 // Non-nullable field is uninitialized. Consider declaring as nullable.
             public string Value { get; set; }
@@ -324,7 +324,7 @@ namespace BackupConsole
             }
             else
             {
-                destination = new UriBuilder(destination).Uri.LocalPath;
+                destination = new UriBuilder("file://" + destination).Uri.LocalPath;
                 await CoreDstDependencies.InitializeNew(bsname, false, await DiskDstFSInterop.InitializeNew(destination, password), cache_used);
             }
 
