@@ -102,9 +102,9 @@ namespace BackupCore
             await OverwriteOrCreateFileAsync(GetIndexFilePath(bsname, fileType), data);
         }
 
-        private static Task<byte[]> LoadFileAsync(string absolutepath)
+        private static async Task<byte[]> LoadFileAsync(string absolutepath)
         {
-            return Task.Run(() => File.ReadAllBytes(absolutepath));
+            return await File.ReadAllBytesAsync(absolutepath);
         }
 
         public static async Task OverwriteOrCreateFileAsync(string absolutepath, byte[] data)
