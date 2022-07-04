@@ -3,73 +3,11 @@ Until that is completed, this will remain the home of the project's low-priority
 
 ---
 
-Currently working on [Lagern 1.0](https://github.com/weirdev/lagern/projects/1)
-  - See there for next issues to pickup
-
 ---
 
 *Issues added to GitHub from top to bottom, new issues may exist only on GitHub
 *
 
-Add ignore rule for "only update file once per day/week/month..."
-Better support for large backup sets
-	Optimize B+ tree BlobStore
-		optimize node size
-			Make BlobLocations a set size?
-				BlobLocations can currently hold variable length hash lists
-					Need recursive hash lists forming binary or b-tree?
-						Use this structure to store all references (ie files and dirs in mdtrees)?
-					Or store hash lists as blobs?
-		store some nodes out of memory?
-	Test large backups
-		Identify bottlenecks
-Data integrity and encryption support
-	Channel codes for backupset and blobstore files
-	Channel codes for blobs?
-		Make optional?
-		blob hash would have to be calculated from (blobdata + redundant bits) so entire file can easily be hash checked when using online services
-	Verify on write?
-		Backing up
-		Restoring
-More tests for reference counting, ensure blobs stay present while a reference to them exists across multiple backups, transfers, backup deletions, etc
-	A quick manual verification of reference counting logic
-Project structure change
-	Better API compliance
-		Public api only in Core
-	ICoreSrcDependencies and ICoreDstDependencies become IBackupSourceDependencies and IBackupDestinationDependencies
-	Remove Core and split its API between new classes BackupSource and BackupDestination as approperiate
-		BackupSource may have list of destinations it backs up to
-Delete HashBlobPair class?
-	Replace with tuples
-MetadataNode
-	Improve semantics of serializing/deserializing
-		Better handling of difference between loading the entire tree into memory and loading single node
-Backblaze support
-	Single queue for pending transmissions?
-	Ability to stall main thread from queuing more uploads?
-		Need to limit number of file blocks loaded into memory?
-			Dont worry about this for now but definitely test at some point
-			SemaphoreSlim class to limit number of files being uploaded at a time?
-	If receive Retry-After header, use specified time
-		Currently not bothering
-	init backblaze -n test -c C:\Users\Wesley\Desktop\test\cache --cloud-config C:\Users\Wesley\Desktop\test\src\BBConnection.json
-Replace custom settings file format with YAML
-	Rework how readsetting, etc are called
-Add more unit tests
-	Verify more conditions in existing unit tests
-"Enhanced data"
-	NTFS Permissions support
-		Ability to escalate this application's own permissions
-			Only when needed
-	NTFS extended attributes
-	Ability to save/restore enhanced or "dumb" data
-		Save/restore w/ & w/o permissions
-			Detect restore to machine without user/group corresponding to permissions being applied
-		Save/restore w/ & w/o extended attributes
-	Special link support
-	Generic permissions support ie. Linux (POSIX)
-		Handle restoring to different OS/permissions scheme than saved to
-Support deleting entire backup sets (at dest)
 Handle common things that could go wrong
 	better handling when reading a file fails
 		after failure, option to ignore file in .track file
@@ -89,7 +27,6 @@ ArgParser
 	can require only one or at least one of a set of options
 		'|' or '^' between options
 		options inside [] ?
-Use Result as method output type instead of an expected exception output
 Replace ArgParser with Knack?
 	https://github.com/Microsoft/knack
 More flexible "list" command

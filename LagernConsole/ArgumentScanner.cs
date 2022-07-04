@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BackupConsole
 {
@@ -12,7 +9,6 @@ namespace BackupConsole
     // <Key=subcommand, [requiredparam1, requiredparam2], {a:"", b:null, d:""}, <Key=null, [optionalparam1, optionalparam2], {}, <Key=null, [optionalparam3], {c:null}, null>>>
     // Valid command line input:
     // subcommand val val -b -a val val val val -c (no d)
-
     class ArgumentScanner
     {
         public List<string> CommandStrings { get; set; } = new List<string>();
